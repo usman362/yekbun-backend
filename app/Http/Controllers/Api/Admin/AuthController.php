@@ -1,0 +1,105 @@
+<?php
+
+namespace App\Http\Controllers\Api\Admin;
+
+use App\Helpers\ResponseHelper;
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Facades\JWTAuth;
+
+class AuthController extends Controller
+{
+    public function login(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email'    => 'required|email',
+            'password' => 'required|string|min:6',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation failed',
+                false,
+                422
+            );
+        }
+
+        $email = strtolower($request->email);
+        $user = User::where('email', $email)->first();
+
+        if (!$user) {
+            return ResponseHelper::sendResponse([], 'Invalid credentials.', false, 401);
+        }
+
+        if (!$user->is_admin_user && !$user->is_superadmin) {
+            return ResponseHelper::sendResponse([], 'Access denied. Admin privileges required.', false, 403);
+        }
+
+        if ($user->status == 0) {
+            return ResponseHelper::sendResponse([], 'Your account has been deactivated.', false, 403);
+        }
+
+        if (!Auth::attempt(['email' => $email, 'password' => $request->password])) {
+            return ResponseHelper::sendResponse([], 'Invalid credentials.', false, 401);
+        }
+
+        try {
+            $token = JWTAuth::fromUser($user);
+        } catch (JWTException $e) {
+            return ResponseHelper::sendResponse([], 'Could not create token.', false, 500);
+        }
+
+        return ResponseHelper::sendResponse([
+            'token' => $token,
+            'user'  => [
+                'id'        => $user->_id,
+                'name'      => $user->name,
+                'email'     => $user->email,
+                'username'  => $user->username,
+                'image'     => $user->image,
+                'role'      => $user->is_superadmin ? 'superadmin' : 'admin',
+            ],
+        ], 'Login successful.');
+    }
+
+    public function me(Request $request)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        return ResponseHelper::sendResponse([
+            'id'        => $user->_id,
+            'name'      => $user->name,
+            'email'     => $user->email,
+            'username'  => $user->username,
+            'image'     => $user->image,
+            'role'      => $user->is_superadmin ? 'superadmin' : 'admin',
+        ], 'User details fetched.');
+    }
+
+    public function logout()
+    {
+        try {
+            JWTAuth::invalidate(JWTAuth::getToken());
+        } catch (JWTException $e) {
+            // Token already invalid — that's fine
+        }
+
+        return ResponseHelper::sendResponse([], 'Logged out successfully.');
+    }
+
+    public function refresh()
+    {
+        try {
+            $newToken = JWTAuth::parseToken()->refresh();
+        } catch (JWTException $e) {
+            return ResponseHelper::sendResponse([], 'Could not refresh token.', false, 401);
+        }
+
+        return ResponseHelper::sendResponse(['token' => $newToken], 'Token refreshed.');
+    }
+}

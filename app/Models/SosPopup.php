@@ -1,0 +1,16 @@
+<?php
+
+namespace App\Models;
+
+use MongoDB\Laravel\Eloquent\Model;
+
+class SosPopup extends Model
+{
+    protected $connection = 'mongodb';
+    protected $collection = 'sos_popups';
+
+    protected $fillable = ['user_id', 'sos_id'];
+
+    public function user() { return $this->belongsTo(User::class, 'user_id'); }
+    public function sos() { return $this->belongsTo(PopFeeds::class, 'sos_id', '_id')->where('type', 'SOS'); }
+}
