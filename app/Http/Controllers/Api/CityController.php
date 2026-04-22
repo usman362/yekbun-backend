@@ -80,7 +80,7 @@ class CityController extends Controller
     {
         $country = Country::where('name', $request->country_name)->first();
         if (!$country) return ResponseHelper::sendResponse([], 'Invalid Country', false, 422);
-        $cities = City::where('country_id', $country->_id)->select('name', 'country_id')->get();
+        $cities = City::where('country_id', $country->getKey())->select('name', 'country_id')->get();
         return ResponseHelper::sendResponse($cities, 'Cities have been fetched successfully');
     }
 }
