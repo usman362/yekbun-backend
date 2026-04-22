@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\City;
+use App\Models\Cities;
 use App\Models\Region;
 use App\Models\Country;
+use App\Models\Countries;
 use Illuminate\Http\Request;
 
 class CityController extends Controller
@@ -78,9 +80,11 @@ class CityController extends Controller
 
     public function allCities(Request $request)
     {
-        $country = Country::where('name', $request->country_name)->first();
+        $country = Countries::where('name', $request->country_name)->first();
         if (!$country) return ResponseHelper::sendResponse([], 'Invalid Country', false, 422);
-        $cities = City::where('country_id', $country->conid)->select('name', 'country_id')->get();
+        $cities = Cities::select(['name', 'country_id'])
+            ->where('country_id', $country->conid)
+            ->get();
         return ResponseHelper::sendResponse($cities, 'Cities have been fetched successfully');
     }
 }
