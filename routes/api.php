@@ -39,6 +39,40 @@ use App\Http\Controllers\Api\CheckoutApiController;
 use App\Http\Controllers\Api\WalletApiController;
 use App\Http\Controllers\Api\KycApiController;
 use App\Http\Controllers\Api\PurchaseVerificationController;
+use App\Http\Controllers\Api\VotingReactionController;
+use App\Http\Controllers\Api\UserProfileController;
+use App\Http\Controllers\Api\UserSuggestionController;
+use App\Http\Controllers\Api\AvatarsController;
+use App\Http\Controllers\Api\TVController;
+use App\Http\Controllers\Api\NewsController;
+use App\Http\Controllers\Api\NewsCategoryController;
+use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\PostGalleryController;
+use App\Http\Controllers\Api\BazarController;
+use App\Http\Controllers\Api\BazarSubCategoryController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\FanPageController;
+use App\Http\Controllers\Api\ManageFanPageController;
+use App\Http\Controllers\Api\DonationController;
+use App\Http\Controllers\Api\DiamondUserController;
+use App\Http\Controllers\Api\FlaggedUserController;
+use App\Http\Controllers\Api\PremiumUserController;
+use App\Http\Controllers\Api\StandardUserController;
+use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\EventCategoryController;
+use App\Http\Controllers\Api\VotingCategoryController;
+use App\Http\Controllers\Api\HistoryCategoryController;
+use App\Http\Controllers\Api\UploadMovieController;
+use App\Http\Controllers\Api\UploadMovieCategoryController;
+use App\Http\Controllers\Api\ContactUsController;
+use App\Http\Controllers\Api\FeedBackgroundImageController;
+use App\Http\Controllers\Api\UserSettingController;
+use App\Http\Controllers\Api\UploadMediaController;
+use App\Http\Controllers\Api\UpgradeAccountController;
+use App\Http\Controllers\Api\MarketServiceContorller;
+use App\Http\Controllers\Api\ReactionController;
+use App\Http\Controllers\Api\UserRolesController;
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\Admin\UsersController as AdminUsersController;
@@ -254,6 +288,121 @@ Route::post('/stripe/checkout', [StripeController::class, 'index']);
 Route::get('/stripe/update-transaction', [StripeController::class, 'update']);
 Route::get('/stripe/update-success', [StripeController::class, 'success']);
 
+// ─── Mobile: Avatars Feeds ───
+Route::get('/getfeeds', [AvatarsController::class, 'getfeeds']);
+Route::post('/postfeed', [AvatarsController::class, 'postfeed']);
+
+// ─── Mobile: Zarok (TV) ───
+Route::get('/getzarokstories', [TVController::class, 'zarokStories']);
+Route::get('/getzarokvideos', [TVController::class, 'zarokVideos']);
+Route::get('/getzarokmovies', [TVController::class, 'zarokMovies']);
+Route::get('/getzarokseries', [TVController::class, 'zarokSeries']);
+Route::get('/zarok-series-season/{id}', [TVController::class, 'zarokSeriesSeason']);
+Route::get('/zarok-series-episodes/{id}', [TVController::class, 'zarokSeriesEpisodes']);
+Route::post('/zarokStoriesPost', [TVController::class, 'zarokStoriesPost']);
+
+// ─── Mobile: Posts ───
+Route::resource('posts', PostController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Flagged users ───
+Route::resource('flagged-users', FlaggedUserController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Reports ───
+Route::resource('reports', ReportController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Organizations ───
+Route::resource('organizations', OrganizationController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Donations ───
+Route::resource('donations', DonationController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Event Categories ───
+Route::resource('event-categories', EventCategoryController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Tickets ───
+Route::resource('tickets', TicketController::class)->except(['create', 'edit']);
+
+// ─── Mobile: Users (classification) ───
+Route::prefix('/users')->group(function () {
+    Route::post('{id}/block/', [StandardUserController::class, 'block'])->name('block');
+    Route::post('{id}/warn/', [StandardUserController::class, 'warn'])->name('warn');
+    Route::post('{id}/upgrade/', [StandardUserController::class, 'upgrade'])->name('upgrade');
+    Route::resource('educated', StandardUserController::class);
+    Route::resource('cultivated', PremiumUserController::class);
+    Route::resource('academic', DiamondUserController::class);
+});
+
+// ─── Mobile: User Roles ───
+Route::prefix('user-roles')->group(function () {
+    Route::get('/educated', [UserRolesController::class, 'educated'])->name('educated');
+    Route::get('/cultivated', [UserRolesController::class, 'cultivated'])->name('cultivated');
+    Route::get('/academic', [UserRolesController::class, 'academic'])->name('academic');
+});
+Route::get('user-prices/{userLevel}', [UserRolesController::class, 'prices']);
+
+// ─── Mobile: News ───
+Route::resource('news', NewsController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+Route::resource('news-category', NewsCategoryController::class)->only(['index', 'store', 'update', 'show', 'destroy']);
+Route::get('/category-news/{id}', [NewsController::class, 'category_news']);
+Route::get('/news-cover', [NewsController::class, 'cover_news']);
+Route::get('/news-category', [NewsController::class, 'categories']);
+Route::get('/news-detail/{id}', [NewsController::class, 'detail']);
+Route::post('/news-search', [NewsController::class, 'search']);
+
+// ─── Mobile: Fan Pages ───
+Route::resource('fan-page', FanPageController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+Route::resource('manage-fanpage', ManageFanPageController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+
+// ─── Mobile: Voting Category ───
+Route::resource('voting-category', VotingCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+
+// ─── Mobile: History Category ───
+Route::resource('history-category', HistoryCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+
+// ─── Mobile: Bazar ───
+Route::resource('bazar-subcategory', BazarSubCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+Route::resource('bazar', BazarController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+
+// ─── Mobile: Movies ───
+Route::resource('movie-category', UploadMovieCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+Route::resource('movie', UploadMovieController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
+
+// ─── Mobile: Contact Us ───
+Route::post('/contact-us', [ContactUsController::class, 'contact_us'])->name('contact-us');
+
+// ─── Mobile: User Setting ───
+Route::post('/user-setting/{user_id}', [UserSettingController::class, 'index'])->name('user-setting');
+Route::post('/user-setting/save', [UserSettingController::class, 'save'])
+    ->name('user-setting-save')
+    ->middleware('auth:sanctum');
+
+// ─── Mobile: Upload Media ───
+Route::post('/upload-media', [UploadMediaController::class, 'index']);
+
+// ─── Mobile: Feed Background Image ───
+Route::post('/upload-background', [FeedBackgroundImageController::class, 'upload'])->name('upload-background');
+Route::get('/get-background', [FeedBackgroundImageController::class, 'get'])->name('get-background');
+
+// ─── Mobile: Upgrade Account ───
+Route::get('get_account_price', [UpgradeAccountController::class, 'price_upgrade'])->name('get_account_price');
+Route::post('/account-upgrade', [UpgradeAccountController::class, 'account_upgrade'])
+    ->name('account-upgrade')
+    ->middleware('auth:sanctum');
+
+// ─── Mobile: Reaction ───
+Route::post('/store-reaction', [ReactionController::class, 'store_reaction'])->name('store-reaction');
+
+// ─── Mobile: Market Services ───
+Route::post('/market-services', [MarketServiceContorller::class, 'market_services'])->name('market-services');
+
+// ─── Mobile: Post Gallery ───
+Route::post('/get-gallery', [PostGalleryController::class, 'get_gallery']);
+
+// ─── Mobile: Authenticated User ───
+Route::get('/user', function (Request $request) {
+    return $request->user();
+});
+
 // ─── Zercash (Public) ───
 Route::get('zercash/products', [ZercashApiController::class, 'products']);
 Route::get('zercash/products/{id}', [ZercashApiController::class, 'productDetail']);
@@ -341,15 +490,21 @@ Route::middleware('jwt.custom')->group(function () {
 
     // ─── Voting ───
     Route::resource('voting', VotingController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-    Route::post('/voting/reaction', [VotingController::class, 'storeReaction']);
+    Route::post('/voting/reaction', [VotingReactionController::class, 'store']);
     Route::get('/most-view-votes', [VotingController::class, 'mostViews']);
     Route::get('/latest-votes', [VotingController::class, 'latestVotes']);
     Route::get('/previous-votes', [VotingController::class, 'previousVotes']);
     Route::get('/already-voted-votes', [VotingController::class, 'alreadyVoted']);
     Route::get('/waiting-votes', [VotingController::class, 'waitingVote']);
-    Route::get('/voting/{voting_id}/reactions', [VotingController::class, 'getReactions']);
-    Route::post('/voting-views', [VotingController::class, 'votingViews']);
-    Route::delete('/voting/reaction/{id}', [VotingController::class, 'destroyReaction']);
+    Route::get('/voting/{voting_id}/reactions', [VotingReactionController::class, 'index']);
+    Route::post('/voting-views', [VotingReactionController::class, 'votingViews']);
+    Route::delete('/voting/reaction/{id}', [VotingReactionController::class, 'destroy']);
+
+    // ─── User Profile ───
+    Route::post('/user/profile/store', [UserProfileController::class, 'store'])->name('user_profile.store');
+
+    // ─── User Suggestions ───
+    Route::get('/user-suggestions', [UserSuggestionController::class, 'index']);
 
     // ─── Multimedia / Artists ───
     Route::get('/get-artists', [MultimediaController::class, 'getArtists']);
