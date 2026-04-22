@@ -9,7 +9,7 @@ class Language extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'languages';
+    protected $table = 'languages';
 
     protected $guarded = [];
 

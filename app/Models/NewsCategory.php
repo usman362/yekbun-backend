@@ -9,7 +9,7 @@ class NewsCategory extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'news_categories';
+    protected $table = 'news_categories';
 
     protected $fillable = ['name', 'status'];
 

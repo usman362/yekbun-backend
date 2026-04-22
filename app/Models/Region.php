@@ -9,7 +9,7 @@ class Region extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'regions';
+    protected $table = 'regions';
 
     protected $fillable = ['name', 'country_id', 'shortcode', 'status'];
 

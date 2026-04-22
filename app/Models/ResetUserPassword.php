@@ -9,7 +9,7 @@ class ResetUserPassword extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'reset_user_passwords';
+    protected $table = 'reset_user_passwords';
 
     protected $fillable = [
         'user_id',

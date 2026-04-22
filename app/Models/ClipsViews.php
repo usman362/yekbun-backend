@@ -9,7 +9,7 @@ class ClipsViews extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'clips_views';
+    protected $table = 'clips_views';
 
     protected $guarded = [];
 

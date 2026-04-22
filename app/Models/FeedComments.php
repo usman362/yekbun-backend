@@ -10,7 +10,7 @@ class FeedComments extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'feed_comments';
+    protected $table = 'feed_comments';
 
     protected $fillable = [
         'user_id', 'feed_id', 'comment', 'parent_id',

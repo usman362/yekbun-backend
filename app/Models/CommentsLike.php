@@ -9,7 +9,7 @@ class CommentsLike extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'comments_likes';
+    protected $table = 'comments_likes';
 
     protected $fillable = ['comment_id', 'user_id', 'emoji'];
 

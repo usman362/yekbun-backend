@@ -9,7 +9,7 @@ class Event extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'events';
+    protected $table = 'events';
 
     protected $fillable = [
         'title', 'description', 'event_category_id', 'user_id', 'user_type',

@@ -9,7 +9,7 @@ class FeedLikes extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'feed_likes';
+    protected $table = 'feed_likes';
 
     protected $fillable = ['user_id', 'feed_id', 'feed_type'];
 

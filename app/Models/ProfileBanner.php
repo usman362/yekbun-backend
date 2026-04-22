@@ -9,7 +9,7 @@ class ProfileBanner extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'profile_banners';
+    protected $table = 'profile_banners';
 
     protected $fillable = ['image', 'status'];
 }

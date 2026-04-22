@@ -9,7 +9,7 @@ class MultimediaViews extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'multimedia_views';
+    protected $table = 'multimedia_views';
 
     protected $fillable = ['user_id', 'media_id', 'media_type'];
 

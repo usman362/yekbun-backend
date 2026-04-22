@@ -9,7 +9,7 @@ class Ringtone extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'ringtones';
+    protected $table = 'ringtones';
 
     protected $fillable = ['fileName', 'filePath', 'fileSize', 'ringType'];
 }

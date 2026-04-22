@@ -9,7 +9,7 @@ class VideoClip extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'video_clips';
+    protected $table = 'video_clips';
 
     protected $fillable = [
         'name', 'video_file_name', 'category_id', 'music_id', 'artist_id',

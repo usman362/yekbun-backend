@@ -9,7 +9,7 @@ class Translation extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'translations';
+    protected $table = 'translations';
 
     protected $fillable = ['text_id', 'translation', 'language_id', 'language_code', 'keyword', 'translated'];
 

@@ -9,7 +9,7 @@ class AppVersion extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'app_versions';
+    protected $table = 'app_versions';
 
     protected $fillable = ['version_number'];
 }

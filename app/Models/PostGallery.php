@@ -10,7 +10,7 @@ class PostGallery extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'post_galleries';
+    protected $table = 'post_galleries';
 
     protected $guarded = [];
 

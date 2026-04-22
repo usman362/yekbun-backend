@@ -9,7 +9,7 @@ class ReportUsers extends Eloquent // ✅ Use MongoDB Eloquent Model
 {
     use HasFactory;
 
-    protected $collection = 'report_users'; // Optional, 'table' is fine too
+    protected $table = 'report_users'; // Optional, 'table' is fine too
 
     protected $fillable = [
         'report_by',

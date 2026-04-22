@@ -9,7 +9,7 @@ class PolicyAndTerm extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'policy_and_terms';
+    protected $table = 'policy_and_terms';
 
     protected $fillable = ['name', 'privacy_policy', 'disclaimer'];
 }

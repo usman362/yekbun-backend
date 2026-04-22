@@ -9,7 +9,7 @@ class Emoji extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'emojis';
+    protected $table = 'emojis';
 
     protected $fillable = ['name', 'image'];
 }

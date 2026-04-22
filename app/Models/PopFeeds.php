@@ -9,7 +9,7 @@ class PopFeeds extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'pop_feeds';
+    protected $table = 'pop_feeds';
 
     protected $fillable = [
         'user_id', 'title', 'date_start', 'date_ends', 'image', 'audio', 'video',

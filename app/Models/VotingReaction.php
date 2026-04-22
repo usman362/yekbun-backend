@@ -9,7 +9,7 @@ class VotingReaction extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'voting_reactions';
+    protected $table = 'voting_reactions';
 
     protected $fillable = ['user_id', 'voting_id', 'type'];
 

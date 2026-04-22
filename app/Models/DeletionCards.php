@@ -9,7 +9,7 @@ class DeletionCards extends Model
 {
     use HasFactory;
 
-    protected $collection = 'deletion_cards';
+    protected $table = 'deletion_cards';
 
     // Add the $fillable property to allow mass assignment
     protected $fillable = [

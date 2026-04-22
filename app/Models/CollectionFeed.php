@@ -9,7 +9,7 @@ class CollectionFeed extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'collection_feeds';
+    protected $table = 'collection_feeds';
 
     protected $fillable = ['collection_id', 'feed_id'];
 }

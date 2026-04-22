@@ -9,7 +9,7 @@ class UserRequest extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_requests';
+    protected $table = 'user_requests';
 
     protected $fillable = [
         'user_id',

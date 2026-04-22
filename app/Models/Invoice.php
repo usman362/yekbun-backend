@@ -9,6 +9,6 @@ class Invoice extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'invoices';
+    protected $table = 'invoices';
     protected $guarded = [];
 }

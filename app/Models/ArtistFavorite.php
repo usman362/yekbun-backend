@@ -9,7 +9,7 @@ class ArtistFavorite extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'artist_favorites';
+    protected $table = 'artist_favorites';
 
     protected $fillable = ['user_id', 'artist_id'];
 }

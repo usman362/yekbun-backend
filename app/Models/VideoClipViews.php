@@ -9,7 +9,7 @@ class VideoClipViews extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'video_clip_views';
+    protected $table = 'video_clip_views';
 
     protected $fillable = ['user_id', 'artist_id'];
 }

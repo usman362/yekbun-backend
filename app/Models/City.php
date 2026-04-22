@@ -9,7 +9,7 @@ class City extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'cities_orig';
+    protected $table = 'cities_orig';
 
     protected $fillable = ['name', 'country_id', 'region_id', 'zipcode', 'status'];
 

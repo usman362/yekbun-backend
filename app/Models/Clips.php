@@ -9,7 +9,7 @@ class Clips extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'clips';
+    protected $table = 'clips';
 
     protected $guarded = [];
 

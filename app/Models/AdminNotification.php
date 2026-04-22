@@ -9,7 +9,7 @@ class AdminNotification extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'admin_notifications';
+    protected $table = 'admin_notifications';
 
     protected $fillable = [
         'otp',

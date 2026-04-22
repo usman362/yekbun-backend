@@ -9,7 +9,7 @@ class Wallet extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'wallets';
+    protected $table = 'wallets';
 
     protected $fillable = [
         'user_id',

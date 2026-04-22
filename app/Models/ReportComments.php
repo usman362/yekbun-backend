@@ -9,7 +9,7 @@ class ReportComments extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'report_comments';
+    protected $table = 'report_comments';
 
     protected $fillable = ['user_id', 'report_type', 'comment_id', 'status'];
 

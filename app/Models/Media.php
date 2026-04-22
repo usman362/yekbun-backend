@@ -9,7 +9,7 @@ class Media extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'media';
+    protected $table = 'media';
 
     protected $fillable = ['title', 'category_id', 'images'];
 

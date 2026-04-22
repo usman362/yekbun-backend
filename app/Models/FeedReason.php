@@ -9,7 +9,7 @@ class FeedReason extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'feed_reasons';
+    protected $table = 'feed_reasons';
 
     protected $fillable = ['title', 'reason'];
 }

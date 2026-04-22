@@ -9,7 +9,7 @@ class Collection extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'collections';
+    protected $table = 'collections';
 
     protected $fillable = ['title', 'image', 'user_id'];
 

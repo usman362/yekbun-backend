@@ -9,7 +9,7 @@ class UserPlaylistGroup extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_playlist_groups';
+    protected $table = 'user_playlist_groups';
 
     protected $fillable = ['user_id', 'title', 'bg_image', 'type', 'limit'];
 

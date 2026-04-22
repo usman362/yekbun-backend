@@ -9,7 +9,7 @@ class Notifications extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'notifications';
+    protected $table = 'notifications';
 
     protected $guarded = [];
 }

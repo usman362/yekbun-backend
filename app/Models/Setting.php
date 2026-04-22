@@ -9,7 +9,7 @@ class Setting extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'settings';
+    protected $table = 'settings';
 
     protected $guarded = [];
 }

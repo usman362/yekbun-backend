@@ -9,7 +9,7 @@ class KycVerification extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'kyc_verifications';
+    protected $table = 'kyc_verifications';
 
     protected $fillable = [
         'user_id',

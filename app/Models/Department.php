@@ -9,7 +9,7 @@ class Department extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'departments';
+    protected $table = 'departments';
 
     protected $fillable = ['name', 'thumbnail_path', 'parent_id'];
 

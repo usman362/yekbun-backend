@@ -10,7 +10,7 @@ class Voting extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'votings';
+    protected $table = 'votings';
 
     protected $fillable = ['name', 'category_id', 'description', 'image', 'options'];
 

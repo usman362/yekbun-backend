@@ -9,7 +9,7 @@ class UserImage extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_images';
+    protected $table = 'user_images';
 
     protected $fillable = ['user_id', 'image', 'type'];
 }

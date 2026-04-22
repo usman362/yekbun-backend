@@ -9,7 +9,7 @@ class AIVideo extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'ai_videos';
+    protected $table = 'ai_videos';
 
     protected $fillable = ['title', 'category_id', 'language', 'image', 'video'];
 

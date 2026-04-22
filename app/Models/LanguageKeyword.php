@@ -9,7 +9,7 @@ class LanguageKeyword extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'language_keywords';
+    protected $table = 'language_keywords';
 
     protected $fillable = [
         'language_id', 'alert', 'upgrade', 'premium', 'vip', 'monthly', 'feeds',

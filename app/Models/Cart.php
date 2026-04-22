@@ -9,6 +9,6 @@ class Cart extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'carts';
+    protected $table = 'carts';
     protected $guarded = [];
 }

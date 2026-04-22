@@ -9,7 +9,7 @@ class ReportFeeds extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'report_feeds';
+    protected $table = 'report_feeds';
 
     protected $fillable = ['user_id', 'report_type', 'feed_id', 'status'];
 

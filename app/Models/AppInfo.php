@@ -9,7 +9,7 @@ class AppInfo extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'app_info';
+    protected $table = 'app_info';
 
     protected $fillable = [
         'city_zipcode', 'zipcode', 'company_name',

@@ -9,7 +9,7 @@ class Donation extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'donations';
+    protected $table = 'donations';
 
     protected $fillable = [
         'title', 'description', 'organization_id',

@@ -9,7 +9,7 @@ class TicketSale extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'ticket_sales';
+    protected $table = 'ticket_sales';
 
     protected $fillable = ['event_id', 'user_id', 'total'];
 }

@@ -9,7 +9,7 @@ class News extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'news';
+    protected $table = 'news';
 
     protected $fillable = [
         'title', 'description', 'user_type', 'image', 'image_type',

@@ -9,7 +9,7 @@ class BackgroundFeed extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'background_feeds';
+    protected $table = 'background_feeds';
 
     protected $fillable = ['name', 'image'];
 }

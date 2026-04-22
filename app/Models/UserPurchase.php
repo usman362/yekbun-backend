@@ -9,7 +9,7 @@ class UserPurchase extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_purchases';
+    protected $table = 'user_purchases';
 
     protected $fillable = [
         'user_id',

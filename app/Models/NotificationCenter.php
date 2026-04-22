@@ -9,7 +9,7 @@ class NotificationCenter extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'notifications_center';
+    protected $table = 'notifications_center';
 
     protected $fillable = ['title', 'description', 'user_id', 'send_by_id', 'user_image', 'type', 'is_read', 'read_at'];
 

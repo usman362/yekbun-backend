@@ -9,7 +9,7 @@ class Order extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'orders';
+    protected $table = 'orders';
     protected $guarded = [];
 
     public static function generateOrderNumber()

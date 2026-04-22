@@ -9,7 +9,7 @@ class UserFriends extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_friends';
+    protected $table = 'user_friends';
 
     protected $fillable = [
         'user_id',

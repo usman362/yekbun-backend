@@ -10,7 +10,7 @@ class ZarokMovies extends Model
     use HasFactory;
 
     protected $connection = 'mongodb';
-    protected $collection = 'zarok_movies';
+    protected $table = 'zarok_movies';
 
     protected $fillable = [
         'name',

@@ -9,7 +9,7 @@ class HistoryCategory extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'history_categories';
+    protected $table = 'history_categories';
 
     protected $fillable = ['name'];
 }

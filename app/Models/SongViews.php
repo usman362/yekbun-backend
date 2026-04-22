@@ -9,6 +9,6 @@ class SongViews extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'song_views';
+    protected $table = 'song_views';
     protected $fillable = ['user_id', 'artist_id'];
 }

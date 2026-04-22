@@ -9,7 +9,7 @@ class MusicCategory extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'music_categories';
+    protected $table = 'music_categories';
 
     protected $fillable = ['name', 'status'];
 }

@@ -9,7 +9,7 @@ class UserImei extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_imeis';
+    protected $table = 'user_imeis';
 
     protected $fillable = [
         'user_id',

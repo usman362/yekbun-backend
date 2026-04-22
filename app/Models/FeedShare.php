@@ -9,7 +9,7 @@ class FeedShare extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'feed_share';
+    protected $table = 'feed_share';
 
     protected $fillable = ['user_id', 'feed_id', 'feed_type'];
 

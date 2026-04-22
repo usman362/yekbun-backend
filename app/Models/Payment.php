@@ -9,6 +9,6 @@ class Payment extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'payments';
+    protected $table = 'payments';
     protected $guarded = [];
 }

@@ -9,7 +9,7 @@ class Artist extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'artists';
+    protected $table = 'artists';
 
     protected $fillable = ['name', 'city', 'dob', 'gender', 'image', 'status', 'province_id', 'total_views'];
 

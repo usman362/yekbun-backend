@@ -9,7 +9,7 @@ class UserCode extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'user_codes';
+    protected $table = 'user_codes';
 
     protected $fillable = [
         'user_id',

@@ -9,7 +9,7 @@ class SosPopup extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'sos_popups';
+    protected $table = 'sos_popups';
 
     protected $fillable = ['user_id', 'sos_id'];
 

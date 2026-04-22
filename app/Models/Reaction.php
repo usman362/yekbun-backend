@@ -9,7 +9,7 @@ class Reaction extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'reactions';
+    protected $table = 'reactions';
 
     protected $fillable = ['user_id', 'emoji_id', 'feed_id', 'news_id', 'history_id', 'vote_id', 'music_id'];
 

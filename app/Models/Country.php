@@ -9,7 +9,7 @@ class Country extends Model
 {
     use UsesLegacyId;
     protected $connection = 'mongodb';
-    protected $collection = 'countries_orig';
+    protected $table = 'countries_orig';
 
     protected $fillable = [
         'name', 'code', 'flag_path', 'image_path',
