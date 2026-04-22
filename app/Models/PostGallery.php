@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 use Illuminate\Support\Facades\Storage;
 
 class PostGallery extends Model
 {
+    use UsesLegacyId;
     protected $connection = 'mongodb';
     protected $collection = 'post_galleries';
 

@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class FeedShare extends Model
 {
+    use UsesLegacyId;
     protected $connection = 'mongodb';
     protected $collection = 'feed_share';
 
