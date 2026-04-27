@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Country;
+use App\Models\Countries;
+use App\Models\Citylocations;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -51,17 +53,19 @@ class CountryController extends Controller
 
     public function allCountries()
     {
-        $countries = Country::select('name', 'flag_path')->orderBy('name', 'ASC')->get();
+        $countries = Countries::select(['conid', 'name'])
+            ->with(['cities:name,country_id'])
+            ->get();
         return ResponseHelper::sendResponse($countries, 'Countries fetched successfully');
     }
 
     public function search_location(Request $request)
     {
         $searchval = $request->search;
-        $results = \App\Models\City::where('name', 'like', '%' . $searchval . '%')->orderBy('name', 'asc')->get();
+        $results = Citylocations::where('name', 'like', '%' . $searchval . '%')->orderBy('name', 'asc')->get();
         $array = [];
         foreach ($results as $row) {
-            $array[] = optional($row->country)->name . ' ' . optional($row->region)->name . ' ' . $row->name;
+            $array[] = optional($row->country)->name . ' ' . optional($row->state)->name . ' ' . $row->name;
         }
         return response()->json(['message' => 'Ok', 'locations' => $array], 201);
     }
