@@ -217,11 +217,22 @@ class UsersController extends Controller
         return ResponseHelper::sendResponse($videos, 'User Videos Fetch Successfully');
     }
 
-    public function getLoginImage()
+    public function getLoginImage(Request $request)
     {
-        $setting = Setting::first();
-        $data = $setting ? ($setting->login_image ?? null) : null;
-        return ResponseHelper::sendResponse($data, 'Login Image Fetched');
+        if (empty($request->device_imei)) {
+            return ResponseHelper::sendResponse(null, 'Device Imei Not Found!', false, 404);
+        }
+        $user = User::where('device_imei', $request->device_imei)->first();
+        if ($user) {
+            $data = [
+                'image' => $user->image ?? null,
+                'status' => $user->status,
+                'email' => $user->email,
+            ];
+            return ResponseHelper::sendResponse($data, 'User Image Fetched!');
+        } else {
+            return ResponseHelper::sendResponse(null, 'User Not Found!', false, 404);
+        }
     }
 
     public function getProfileBanners()
