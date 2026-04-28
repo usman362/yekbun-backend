@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use App\Traits\UsesLegacyId;
 
 class Song extends Model
@@ -15,5 +16,5 @@ class Song extends Model
 
     public function category() { return $this->belongsTo(MusicCategory::class, 'category_id'); }
     public function artist() { return $this->belongsTo(Artist::class, 'artist_id'); }
-    public function playlists() { return $this->hasMany(UserPlaylist::class, 'media_id'); }
+    public function playlists() { return $this->hasMany(UserPlaylist::class, 'media_id')->where('user_id', Auth::id()); }
 }

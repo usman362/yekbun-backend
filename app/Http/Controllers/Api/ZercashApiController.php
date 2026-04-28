@@ -8,43 +8,90 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ZercashApiController extends Controller
 {
     public function products(Request $request)
     {
-        // ZercashProduct model placeholder - return empty for now
-        return ResponseHelper::sendResponse([], 'Products fetched successfully.');
+        $query = DB::connection('mongodb')->collection('zercash_products')
+            ->where('status', 'active');
+
+        if ($request->has('category')) {
+            $query->where('category', $request->category);
+        }
+
+        $products = $query->orderBy('sort_order', 'asc')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return ResponseHelper::sendResponse($products, 'Products fetched successfully.');
     }
 
     public function productDetail($id)
     {
-        return ResponseHelper::sendResponse([], 'Product not found.', false, 404);
+        $product = DB::connection('mongodb')->collection('zercash_products')
+            ->where('_id', $id)
+            ->first();
+
+        if (!$product) {
+            return ResponseHelper::sendResponse([], 'Product not found.', false, 404);
+        }
+
+        return ResponseHelper::sendResponse($product, 'Product fetched successfully.');
     }
 
     public function categories()
     {
-        return ResponseHelper::sendResponse([], 'Categories fetched successfully.');
+        $categories = DB::connection('mongodb')->collection('zercash_products')
+            ->where('status', 'active')
+            ->distinct('category');
+
+        return ResponseHelper::sendResponse($categories, 'Categories fetched successfully.');
     }
 
     public function settings()
     {
-        return ResponseHelper::sendResponse([], 'Settings fetched successfully.');
+        $settings = DB::connection('mongodb')->collection('zercash_settings')
+            ->where('is_active', true)
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        return ResponseHelper::sendResponse($settings, 'Settings fetched successfully.');
     }
 
     public function plans()
     {
-        return ResponseHelper::sendResponse([], 'Plans fetched successfully.');
+        $plans = DB::connection('mongodb')->collection('zercash_products')
+            ->where('category', 'choose_your_plan')
+            ->where('status', 'active')
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        return ResponseHelper::sendResponse($plans, 'Plans fetched successfully.');
     }
 
     public function shops(Request $request)
     {
-        return ResponseHelper::sendResponse([], 'Shops fetched successfully.');
+        $query = DB::connection('mongodb')->collection('shops');
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $shops = $query->orderBy('created_at', 'desc')->get();
+
+        return ResponseHelper::sendResponse($shops, 'Shops fetched successfully.');
     }
 
     public function saleManagers()
     {
-        return ResponseHelper::sendResponse([], 'Sale managers fetched successfully.');
+        $managers = DB::connection('mongodb')->collection('zercash_sale_managers')
+            ->where('status', 'active')
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        return ResponseHelper::sendResponse($managers, 'Sale managers fetched successfully.');
     }
 
     public function wallet()
@@ -52,11 +99,20 @@ class ZercashApiController extends Controller
         $user = User::find(Auth::id());
         if (!$user) return ResponseHelper::sendResponse([], 'User not found.', false, 404);
 
+        $setting = DB::connection('mongodb')->collection('zercash_settings')
+            ->where('key', 'general')
+            ->where('is_active', true)
+            ->first();
+
         $wallet = [
             'balance' => $user->wallet_balance ?? 0,
             'zer_balance' => $user->zer_balance ?? 0,
-            'currency' => 'EUR',
+            'cashback_percent' => $setting['transaction_fee_percent'] ?? 5,
+            'currency' => $setting['default_currency'] ?? 'EUR',
+            'zer_to_euro' => $setting['zer_to_euro'] ?? 0.01,
+            'zer_to_dollar' => $setting['zer_to_dollar'] ?? 0,
         ];
+
         return ResponseHelper::sendResponse($wallet, 'Wallet fetched successfully.');
     }
 
@@ -87,11 +143,23 @@ class ZercashApiController extends Controller
 
     public function faqs(Request $request)
     {
-        return ResponseHelper::sendResponse([], 'FAQs fetched successfully.');
+        $query = DB::connection('mongodb')->collection('faqs')
+            ->where('status', 'active');
+
+        if ($request->has('category')) {
+            $query->where('category', $request->category);
+        }
+
+        $faqs = $query->orderBy('sort_order', 'asc')->get();
+
+        return ResponseHelper::sendResponse($faqs, 'FAQs fetched successfully.');
     }
 
     public function siteSettings()
     {
-        return ResponseHelper::sendResponse([], 'Site settings fetched successfully.');
+        $rows = DB::connection('mongodb')->collection('site_settings')->get();
+        $settings = collect($rows)->pluck('value', 'key');
+
+        return ResponseHelper::sendResponse($settings, 'Site settings fetched successfully.');
     }
 }

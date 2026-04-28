@@ -96,6 +96,19 @@ class ClipsController extends Controller
         $clip->voice_comments_count = 0;
         $clip->save();
 
+        Helpers::userMedia(
+            $clip->_id,
+            $clip->clip,
+            $clip->comments_count,
+            $clip->voice_comments_count,
+            $clip->likes_count,
+            $clip->views_count,
+            $clip->user_id,
+            $clip->text,
+            $request->text_properties,
+            'clips'
+        );
+
         $description = Auth::user()->name . ' ' . Auth::user()->last_name . ' has posted new Clip.';
         $users = User::where('_id', '!=', Auth::id())->whereNotNull('fcm_token')->whereIn('info_banner', ['banner', 'alert'])->get();
         foreach ($users as $user) {
@@ -146,6 +159,18 @@ class ClipsController extends Controller
         $clip = Clips::find($request->clip_id);
         $clip->views_count = $clip->views->count();
         $clip->save();
+        Helpers::userMedia(
+            $clip->_id,
+            $clip->clip,
+            $clip->comments_count,
+            $clip->voice_comments_count,
+            $clip->likes_count,
+            $clip->views_count,
+            $clip->user_id,
+            $clip->text,
+            $clip->text_properties,
+            'clips'
+        );
         return ResponseHelper::sendResponse([], 'Clip Viewed Successfully');
     }
 
@@ -176,6 +201,18 @@ class ClipsController extends Controller
         $clip = Clips::find($request->clip_id);
         $clip->likes_count = $clip->likes->count();
         $clip->save();
+        Helpers::userMedia(
+            $clip->_id,
+            $clip->clip,
+            $clip->comments_count,
+            $clip->voice_comments_count,
+            $clip->likes_count,
+            $clip->views_count,
+            $clip->user_id,
+            $clip->text,
+            $clip->text_properties,
+            'clips'
+        );
         return ResponseHelper::sendResponse([], 'Clip Unliked Successfully');
     }
 }

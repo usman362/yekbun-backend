@@ -59,10 +59,9 @@ class TwoFactorController extends Controller
                 'title' => 'Mail from Yekbun.com',
                 'code' => $code
             ];
-            $notify = AdminNotification::first();
-            if ($notify && $notify->otp == 1) {
-                Mail::to($user->email)->send(new SendCodeMail($details));
-            }
+
+            Mail::to($user->email)->send(new SendCodeMail($details));
+
             return response()->json(['success' => true, "message" => "Email successfully resent."]);
         } catch (\Exception $e) {
             info("Error: " . $e->getMessage());

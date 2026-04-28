@@ -32,13 +32,10 @@ class AccountSettingController extends Controller
     public function send_old_email_code(Request $request)
     {
         $request->validate([
-            'oldEmail' => 'required|email',
+            'oldEmail' => 'required|email|exists:users,email',
         ]);
 
         $user = User::where('email', $request->oldEmail)->first();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'User not found.']);
-        }
 
         $code = rand(1000, 9999);
         UserCode::updateOrCreate(
@@ -57,7 +54,7 @@ class AccountSettingController extends Controller
     public function send_new_email_code(Request $request)
     {
         $request->validate([
-            'newEmail' => 'required|email',
+            'newEmail' => 'required|email|unique:users,email',
         ]);
 
         $code = rand(1000, 9999);
@@ -83,8 +80,8 @@ class AccountSettingController extends Controller
     public function change_email(Request $request)
     {
         $request->validate([
-            'oldEmail' => 'required|email',
-            'newEmail' => 'required|email',
+            'oldEmail' => 'required|email|exists:users,email',
+            'newEmail' => 'required|email|unique:users,email',
             'newOtp' => 'required|digits:4',
         ]);
 
@@ -107,13 +104,13 @@ class AccountSettingController extends Controller
         $request->validate([
             'user_id' => 'required',
         ]);
-        $user = UserCode::where('user_id', $request->user_id)->first();
+        $user = UserCode::with('user')->where('user_id', $request->user_id)->first();
         $code = rand(1000, 9999);
         try {
             $details = [
                 'title' => 'Mail from Yekbun.org',
                 'code' => $code,
-                'username' => '',
+                'username' => $user->user->username ?? '',
             ];
             Mail::to($request->NewEmail)->send(new SendCodeMail($details));
             $user->code = $code;

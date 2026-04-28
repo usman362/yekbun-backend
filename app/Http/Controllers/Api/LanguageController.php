@@ -75,16 +75,19 @@ class LanguageController extends Controller
 
     public function keywords($id)
     {
-        $language = Language::with('translations')->find($id);
-        if (!$language) return response()->json(['success' => false, 'message' => 'Language not found.'], 404);
-        return response()->json(['success' => true, 'data' => $language->translations]);
+        $keywords = \App\Models\Translation::where('language_id', $id)
+            ->get(['section_name', 'keyword', 'translated']);
+        return response()->json(['keywords' => $keywords], 200);
     }
 
     public function keyword($id, $keyword)
     {
-        $language = Language::find($id);
-        if (!$language) return response()->json(['success' => false, 'message' => 'Language not found.'], 404);
-        $translation = $language->translations()->where('keyword', $keyword)->first();
-        return response()->json(['success' => true, 'data' => $translation]);
+        $row = \App\Models\Translation::where('language_id', $id)
+            ->where('keyword', $keyword)
+            ->first(['section_name', 'keyword', 'translated']);
+        if (!empty($row)) {
+            return response()->json(['keyword' => $row], 200);
+        }
+        return response()->json(['message' => 'Not Found!'], 404);
     }
 }

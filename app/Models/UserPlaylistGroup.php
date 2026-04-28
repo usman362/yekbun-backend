@@ -13,5 +13,7 @@ class UserPlaylistGroup extends Model
 
     protected $fillable = ['user_id', 'title', 'bg_image', 'type', 'limit'];
 
-    public function playlists() { return $this->hasMany(UserPlaylist::class, 'playlist_id'); }
+    public function playlists() { return $this->hasMany(UserPlaylist::class, 'playlist_id')->where('type', 'audio'); }
+
+    public function clip_playlists() { return $this->hasMany(UserPlaylist::class, 'playlist_id')->where('type', 'video'); }
 }

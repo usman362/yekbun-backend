@@ -9,10 +9,12 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserPlaylistGroup;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PaymentController extends Controller
@@ -48,7 +50,20 @@ class PaymentController extends Controller
 
     public function paymentList()
     {
-        $payments = Payment::where('user_id', Auth::id())->orderBy('created_at', 'desc')->get();
+        // Mirror old project: return grouped payment method records
+        // (apple_pay, bank_transfer, google_pay, paypal) — mobile parses these keys.
+        $applePays = collect(DB::connection('mongodb')->collection('apple_pays')->get());
+        $bankTransfers = collect(DB::connection('mongodb')->collection('bank_transfers')->get());
+        $googlePays = collect(DB::connection('mongodb')->collection('google_pays')->get());
+        $payPal = collect(DB::connection('mongodb')->collection('paypals')->get());
+
+        $payments = [
+            'apple_pay' => $applePays,
+            'bank_transfer' => $bankTransfers,
+            'google_pay' => $googlePays,
+            'paypal' => $payPal,
+        ];
+
         return ResponseHelper::sendResponse($payments, 'Payments List Fetch');
     }
 
@@ -84,7 +99,7 @@ class PaymentController extends Controller
             }
 
             $invoice = new Invoice();
-            $invoice->user_id = $user->_id ?? $request->user_id;
+            $invoice->user_id = $user ? $user->getKey() : $request->user_id;
             $invoice->first_name = $user->name ?? '';
             $invoice->last_name = $user->last_name ?? '';
             $invoice->email = $user->email ?? '';
@@ -144,10 +159,17 @@ class PaymentController extends Controller
     {
         $carts = Cart::where('user_id', Auth::id())->get();
         if ($carts->isNotEmpty()) {
+            $lastCart = null;
             foreach ($carts as $cart) {
+                $playlist = UserPlaylistGroup::find($cart->data_id);
+                if ($playlist) {
+                    $playlist->type = 'free';
+                    $playlist->save();
+                }
+                $lastCart = $cart;
                 $cart->delete();
             }
-            return ResponseHelper::sendResponse([], 'Cart Payment has been paid successfully!');
+            return ResponseHelper::sendResponse($lastCart, 'Cart Payment has been paid successfully!');
         }
         return ResponseHelper::sendResponse([], 'Cart is Empty!', false, 404);
     }

@@ -171,16 +171,18 @@ class MultimediaController extends Controller
 
     public function updateArtist(Request $request, $id)
     {
-        $request->validate(['name' => 'required', 'gender' => 'required']);
+        $request->validate(['name' => 'required', 'gender' => 'required', 'image' => 'required']);
         try {
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $imagePath = Helpers::fileUpload($request->image, 'images');
+            }
             $artist = Artist::find($id);
             $artist->name = $request->name;
             $artist->gender = $request->gender;
             $artist->status = $request->status;
             $artist->province_id = $request->province;
-            if ($request->hasFile('image')) {
-                $artist->image = Helpers::fileUpload($request->image, 'images');
-            }
+            $artist->image = $imagePath;
             $artist->save();
             return ResponseHelper::sendResponse($artist, 'Artist has been Updated successfully!');
         } catch (Exception $e) {
@@ -191,8 +193,15 @@ class MultimediaController extends Controller
     public function deleteArtist($id)
     {
         $artist = Artist::findOrFail($id);
-        if ($artist->delete()) {
-            return ResponseHelper::sendResponse([], 'Artist has been deleted successfully!');
+        if ($artist->image) {
+            $image_path = public_path('storage/' . $artist->image);
+            if (file_exists($image_path)) {
+                unlink($image_path);
+            }
+        }
+
+        if ($artist->delete($artist->id)) {
+            return ResponseHelper::sendResponse([], 'Artist  has been deleted successfully!');
         }
         return ResponseHelper::sendResponse([], 'Failed to Delete Artist!', false, 403);
     }
@@ -414,7 +423,7 @@ class MultimediaController extends Controller
     public function getClipsPlaylist(Request $request)
     {
         $userId = Auth::id();
-        $playlists = UserPlaylistGroup::with(['playlists' => fn($q) => $q->where('type', 'video')->with(['video' => fn($a) => $a->with('artist')])])
+        $playlists = UserPlaylistGroup::with(['clip_playlists' => fn($q) => $q->with(['video' => fn($a) => $a->with('artist')])])
             ->where('user_id', $userId)->get();
 
         if ($playlists->isEmpty()) {
@@ -427,7 +436,7 @@ class MultimediaController extends Controller
             foreach ($defaults as $d) {
                 UserPlaylistGroup::create(array_merge($d, ['user_id' => $userId]));
             }
-            $playlists = UserPlaylistGroup::with(['playlists' => fn($q) => $q->where('type', 'video')->with(['video' => fn($a) => $a->with('artist')])])
+            $playlists = UserPlaylistGroup::with(['clip_playlists' => fn($q) => $q->with(['video' => fn($a) => $a->with('artist')])])
                 ->where('user_id', $userId)->get();
         }
 
@@ -446,7 +455,7 @@ class MultimediaController extends Controller
                 'user_id' => Auth::id(), 'media_id' => $request->media_id,
                 'playlist_id' => $request->playlist_id, 'type' => 'video'
             ]);
-            $playlists = UserPlaylistGroup::with(['playlists' => fn($q) => $q->where('type', 'video')->with(['video' => fn($a) => $a->with('artist')])])
+            $playlists = UserPlaylistGroup::with(['clip_playlists' => fn($q) => $q->with(['video' => fn($a) => $a->with('artist')])])
                 ->where('user_id', Auth::id())->get();
             return ResponseHelper::sendResponse($playlists, 'Clips Playlist has been Created Successfully!');
         } catch (Exception $e) {

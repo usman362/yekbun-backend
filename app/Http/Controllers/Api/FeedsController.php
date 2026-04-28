@@ -226,6 +226,23 @@ class FeedsController extends Controller
         $feeds->save();
         $feed = Feed::with('user')->find($feeds->id);
 
+        if (!empty($feed->videos)) {
+            foreach ($feed->videos as $video) {
+                Helpers::userMedia(
+                    $feed->_id,
+                    $video->path ?? $video['path'],
+                    $feed->comments_count,
+                    $feed->voice_comments_count,
+                    $feed->likes_count,
+                    $feed->views_count,
+                    $feed->user_id,
+                    $feed->description,
+                    null,
+                    'user_feeds'
+                );
+            }
+        }
+
         if ($feeds->save()) {
             $notification = Notifications::first();
             $notify = AdminNotification::first();
@@ -273,6 +290,19 @@ class FeedsController extends Controller
         $feed->views_count = $feed->views->count();
         $feed->shares_count = $feed->shares->count();
         $feed->save();
+
+        Helpers::userMedia(
+            $feed->_id,
+            'exists',
+            $feed->comments_count,
+            $feed->voice_comments_count,
+            $feed->likes_count,
+            $feed->views_count,
+            $feed->user_id,
+            $feed->description,
+            $feed->text_properties,
+            'user_feeds'
+        );
 
         $sharedFeed = Feed::with(['user', 'shareUser'])->find($newFeed->_id);
         return response()->json(['message' => 'Feed has been shared Successfully', 'feed' => $sharedFeed, 'success' => true], 201);
@@ -560,6 +590,21 @@ class FeedsController extends Controller
             $feed->save();
         }
 
+        if ($feed && $request->feed_type !== 'admin_feeds') {
+            Helpers::userMedia(
+                $feed->_id,
+                'exists',
+                $feed->comments_count,
+                $feed->voice_comments_count,
+                $feed->likes_count,
+                $feed->views_count,
+                $feed->user_id,
+                $feed->description,
+                null,
+                $request->feed_type
+            );
+        }
+
         return ResponseHelper::sendResponse($data, 'Comment has been successfully sent');
     }
 
@@ -693,11 +738,36 @@ class FeedsController extends Controller
             $feed->save();
         }
 
+        if ($feed && $request->feed_type !== 'admin_feeds') {
+            Helpers::userMedia(
+                $feed->_id,
+                'exists',
+                $feed->comments_count,
+                $feed->voice_comments_count,
+                $feed->likes_count,
+                $feed->views_count,
+                $feed->user_id,
+                $feed->description,
+                null,
+                $request->feed_type
+            );
+        }
+
         return ResponseHelper::sendResponse(['liked' => $liked, 'like_count' => $likeCount], 'Like has been successfully Saved');
     }
 
     public function getfeedLike(Request $request, $id)
     {
+        $allowRequest = PermissionHelper::checkPermission(Auth::user()->level, 'feed_like_button');
+        $allowHistoryRequest = PermissionHelper::checkPermission(Auth::user()->level, 'history_like_button');
+
+        if ($request->feed_type == 'user_feeds' && $allowRequest !== true) {
+            return ResponseHelper::sendResponse([], 'You are not Allowed to Like Feed.', false, 409);
+        }
+        if ($request->feed_type == 'history' && $allowHistoryRequest !== true) {
+            return ResponseHelper::sendResponse([], 'You are not Allowed to Like Feed.', false, 409);
+        }
+
         $request->validate(['feed_type' => 'required']);
         $user = Auth::user();
         if (!$user) return ResponseHelper::sendResponse([], 'User not authenticated!', false, 403);
@@ -717,6 +787,21 @@ class FeedsController extends Controller
             $feed->views_count = $feed->views->count();
             $feed->shares_count = $feed->shares->count();
             $feed->save();
+        }
+
+        if ($feed && $request->feed_type !== 'admin_feeds') {
+            Helpers::userMedia(
+                $feed->_id,
+                'exists',
+                $feed->comments_count,
+                $feed->voice_comments_count,
+                $feed->likes_count,
+                $feed->views_count,
+                $feed->user_id,
+                $feed->description,
+                null,
+                $request->feed_type
+            );
         }
 
         return ResponseHelper::sendResponse([

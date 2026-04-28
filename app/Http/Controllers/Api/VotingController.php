@@ -101,7 +101,13 @@ class VotingController extends Controller
         $vote->category_id = $request->category_id ?? $vote->category_id;
         $vote->description = $request->description ?? $vote->description;
         if ($request->hasFile('image')) {
-            $vote->banner = $request->file('image')->store('/images/voting', 'public');
+            if (isset($vote->banner)) {
+                $image_path = public_path('storage/' . $vote->banner);
+                if (file_exists($image_path)) {
+                    unlink($image_path);
+                }
+                $vote->banner = $request->file('image')->store('/images/voting', 'public');
+            }
         }
         if ($vote->update()) return response()->json('Voting Updated Successfully', 200);
         return response()->json('Failed to updated voting', 400);
@@ -110,6 +116,12 @@ class VotingController extends Controller
     public function destroy($id)
     {
         $vote = Voting::find($id);
+        if ($vote->banner) {
+            $image_path = public_path('storage/' . $vote->banner);
+            if (file_exists($image_path)) {
+                unlink($image_path);
+            }
+        }
         if ($vote->delete()) return response()->json('Voting Deleted Successfully', 200);
         return response()->json('Failed to delete vote', 400);
     }

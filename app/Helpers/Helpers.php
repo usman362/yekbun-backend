@@ -2,6 +2,7 @@
 
 namespace App\Helpers;
 
+use App\Models\Media;
 use App\Services\BunnyCDNService;
 use Exception;
 use Illuminate\Support\Str;
@@ -90,5 +91,34 @@ class Helpers
         -f mp4 {$outputPath} 2>&1";
         exec($cmd, $output, $returnCode);
         return $returnCode === 0;
+    }
+
+    public static function userMedia(
+        $media_id,
+        $uri,
+        $commentCount,
+        $voiceCount,
+        $emojisCount,
+        $seenCount,
+        $user_id,
+        $text,
+        $text_properties,
+        $type
+    ) {
+        $media = Media::where('media_id', $media_id)->first();
+        if (!$media) {
+            $media = new Media();
+        }
+        $media->media_id = $media_id;
+        $media->uri = $uri == 'exists' ? $media->uri : $uri;
+        $media->commentCount = $commentCount;
+        $media->voiceCount = $voiceCount;
+        $media->emojisCount = $emojisCount;
+        $media->seenCount = $seenCount;
+        $media->user_id = $user_id;
+        $media->text = $text;
+        $media->text_properties = $text_properties;
+        $media->type = $type;
+        $media->save();
     }
 }
