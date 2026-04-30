@@ -4,18 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
-use App\Models\KycVerification;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\Transaction;
+use App\Models\KycVerification;
+use App\Models\ZercashSetting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class WalletApiController extends Controller
 {
+
     public function createWallet(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -23,27 +24,35 @@ class WalletApiController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation error.', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
         }
 
         $user = Auth::user();
+
         if (!$user) {
             return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
         }
 
-        $wallet = Wallet::where('user_id', $user->getKey())->first();
+        $wallet = Wallet::where('user_id', $user->_id)->first();
+
         if ($wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet already exists.', false, 400);
         }
 
         $wallet = new Wallet();
-        $wallet->user_id = $user->getKey();
+        $wallet->user_id = $user->_id;
         $wallet->pin = bcrypt($request->pin);
         $wallet->status = 'under_review';
         $wallet->created_at = Carbon::now();
         $wallet->save();
 
-        $user->wallet_id = $wallet->getKey();
+        // Save wallet_id on user for userDetails response
+        $user->wallet_id = $wallet->_id;
         $user->wallet_status = 'under_review';
         $user->save();
 
@@ -53,6 +62,7 @@ class WalletApiController extends Controller
         ], 'Wallet created successfully.');
     }
 
+
     public function activateWallet(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -60,10 +70,16 @@ class WalletApiController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation error.', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
         }
 
         $wallet = Wallet::where('user_id', $request->user_id)->first();
+
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found.', false, 404);
         }
@@ -72,6 +88,7 @@ class WalletApiController extends Controller
         $wallet->activated_at = Carbon::now();
         $wallet->save();
 
+        // Sync wallet status on user
         $user = User::find($request->user_id);
         if ($user) {
             $user->wallet_status = 'activated';
@@ -84,6 +101,7 @@ class WalletApiController extends Controller
         ], 'Wallet activated.');
     }
 
+
     public function verifyPin(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -91,11 +109,18 @@ class WalletApiController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation error.', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
         }
 
         $user = Auth::user();
-        $wallet = Wallet::where('user_id', $user->getKey())->first();
+
+        $wallet = Wallet::where('user_id', $user->_id)->first();
+
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found.', false, 404);
         }
@@ -116,7 +141,7 @@ class WalletApiController extends Controller
 
             // Create bonus transaction
             $transaction = new Transaction();
-            $transaction->user_id = $user->getKey();
+            $transaction->user_id = $user->_id;
             $transaction->transaction_type = 'deposit';
             $transaction->category = 'welcome_bonus';
             $transaction->amount = $bonusAmount;
@@ -138,6 +163,7 @@ class WalletApiController extends Controller
         ], $bonusGiven ? 'PIN verified. Welcome bonus added!' : 'PIN verified.');
     }
 
+
     public function changePin(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -146,11 +172,18 @@ class WalletApiController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation error.', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
         }
 
         $user = Auth::user();
-        $wallet = Wallet::where('user_id', $user->getKey())->first();
+
+        $wallet = Wallet::where('user_id', $user->_id)->first();
+
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found.', false, 404);
         }
@@ -168,11 +201,13 @@ class WalletApiController extends Controller
     public function walletStatus()
     {
         $user = Auth::user();
+
         if (!$user) {
             return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
         }
 
-        $wallet = Wallet::where('user_id', $user->getKey())->first();
+        $wallet = Wallet::where('user_id', $user->_id)->first();
+
         $userDetails = $this->getUserDetails($user);
 
         if (!$wallet) {
@@ -200,7 +235,7 @@ class WalletApiController extends Controller
 
         return ResponseHelper::sendResponse([
             'has_wallet'      => true,
-            'wallet_id'       => $this->maskWalletId((string) $wallet->getKey()),
+            'wallet_id'       => $this->maskWalletId($wallet->_id),
             'wallet_status'   => $status,
             'status_message'  => $statusMessages[$status] ?? 'Unknown status.',
             'hold_reason'     => $wallet->status_reason ?? null,
@@ -219,10 +254,16 @@ class WalletApiController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation error.', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
         }
 
         $wallet = Wallet::where('user_id', $request->user_id)->first();
+
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found.', false, 404);
         }
@@ -232,6 +273,7 @@ class WalletApiController extends Controller
         $wallet->updated_at = Carbon::now();
         $wallet->save();
 
+        // Sync wallet status on user
         $user = User::find($request->user_id);
         if ($user) {
             $user->wallet_status = $request->status;
@@ -244,6 +286,7 @@ class WalletApiController extends Controller
         ], 'Wallet status updated.');
     }
 
+
     public function deposit(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -253,11 +296,18 @@ class WalletApiController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation error.', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
         }
 
         $user = Auth::user();
-        $wallet = Wallet::where('user_id', $user->getKey())->first();
+
+        $wallet = Wallet::where('user_id', $user->_id)->first();
+
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found.', false, 404);
         }
@@ -266,13 +316,11 @@ class WalletApiController extends Controller
         $wallet->save();
 
         $transaction = new Transaction();
-        $transaction->user_id = $user->getKey();
-        $transaction->transaction_type = 'deposit';
+        $transaction->user_id = $user->_id;
+        $transaction->type = 'deposit';
         $transaction->amount = $request->amount;
         $transaction->payment_method = $request->payment_method;
         $transaction->description = $request->description;
-        $transaction->status = 'COMPLETED';
-        $transaction->date = Carbon::now()->format('Y-m-d');
         $transaction->created_at = Carbon::now();
         $transaction->save();
 
@@ -282,337 +330,12 @@ class WalletApiController extends Controller
         ], 'Deposit successful.');
     }
 
-    public function dashboard(Request $request)
-    {
-        $user = User::find(Auth::id());
-        if (!$user) {
-            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
-        }
-        if (empty($user->wallet_id) || ($user->wallet_status ?? '') !== 'activated') {
-            return ResponseHelper::sendResponse([
-                'has_wallet' => !empty($user->wallet_id),
-                'wallet_status' => $user->wallet_status ?? null,
-            ], 'Wallet not active.', false, 403);
-        }
-
-        $walletType = $request->query('type', 'private');
-
-        // Fetch settings for exchange rates
-        $setting = $this->getZercashSetting();
-        $cashbackPercent = $setting['transaction_fee_percent'] ?? 5;
-        $currency = $setting['default_currency'] ?? 'EUR';
-
-        $userId = Auth::id();
-        $deposits = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->sum('amount');
-        $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
-        $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
-
-        $weeklyData = [];
-        $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-        for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i);
-            $dayTotal = Transaction::where('user_id', $userId)->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
-            $weeklyData[] = [
-                'day' => $dayLabels[$date->dayOfWeek],
-                'date' => $date->format('Y-m-d'),
-                'amount' => round($dayTotal, 2),
-                'is_today' => $i === 0,
-            ];
-        }
-
-        return ResponseHelper::sendResponse([
-            'wallet_id' => $this->maskWalletId((string) $user->wallet_id),
-            'wallet_type' => $walletType,
-            'expire_at' => $user->wallet_expire_at ?? null,
-            'balance' => round($user->wallet_balance ?? 0, 2),
-            'zer_balance' => round($user->zer_balance ?? 0, 2),
-            'cashback_percent' => $cashbackPercent,
-            'currency' => $currency,
-            'summary' => [
-                'deposits' => round($deposits, 2),
-                'cashbacks' => round($cashbacks, 2),
-                'expenses' => round($expenses, 2),
-            ],
-            'weekly_chart' => $weeklyData,
-        ], 'Wallet dashboard fetched.');
-    }
-
-    public function deposits(Request $request)
-    {
-        $perPage = $request->query('per_page', 10);
-        $deposits = Transaction::where('user_id', Auth::id())
-            ->where('transaction_type', 'deposit')
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
-
-        $items = collect($deposits->items())->map(function ($tx) {
-            return [
-                'id' => $tx->getKey(),
-                'tId' => $tx->tId ?? '',
-                'description' => $tx->description ?? 'Deposit',
-                'category' => $tx->category ?? 'deposit',
-                'amount' => round($tx->amount ?? 0, 2),
-                'currency' => $tx->currency ?? 'ZER',
-                'status' => $tx->status ?? 'COMPLETED',
-                'type' => 'INCOME',
-                'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),
-            ];
-        });
-
-        return ResponseHelper::sendResponse([
-            'items' => $items,
-            'current_page' => $deposits->currentPage(),
-            'last_page' => $deposits->lastPage(),
-            'total' => $deposits->total(),
-        ], 'Deposits fetched.');
-    }
-
-    public function cashbacks(Request $request)
-    {
-        $perPage = $request->query('per_page', 10);
-        $cashbacks = Transaction::where('user_id', Auth::id())
-            ->where('category', 'cashback')
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
-
-        $items = collect($cashbacks->items())->map(function ($tx) {
-            return [
-                'id' => $tx->getKey(),
-                'tId' => $tx->tId ?? '',
-                'description' => $tx->description ?? 'Cashback',
-                'shop_name' => $tx->shop_name ?? $tx->description ?? '',
-                'amount' => round($tx->amount ?? 0, 2),
-                'currency' => $tx->currency ?? 'ZER',
-                'status' => $tx->status ?? 'PENDING',
-                'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),
-            ];
-        });
-
-        return ResponseHelper::sendResponse([
-            'items' => $items,
-            'current_page' => $cashbacks->currentPage(),
-            'last_page' => $cashbacks->lastPage(),
-            'total' => $cashbacks->total(),
-        ], 'Cashbacks fetched.');
-    }
-
-    public function payouts(Request $request)
-    {
-        $perPage = $request->query('per_page', 10);
-        $payouts = Transaction::where('user_id', Auth::id())
-            ->whereIn('transaction_type', ['purchase', 'payment', 'payout', 'expense'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
-
-        $items = collect($payouts->items())->map(function ($tx) {
-            return [
-                'id' => $tx->getKey(),
-                'tId' => $tx->tId ?? '',
-                'description' => $tx->description ?? 'Payment',
-                'shop_name' => $tx->shop_name ?? '',
-                'amount' => round($tx->amount ?? 0, 2),
-                'currency' => $tx->currency ?? 'ZER',
-                'status' => $tx->status ?? 'COMPLETED',
-                'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),
-            ];
-        });
-
-        return ResponseHelper::sendResponse([
-            'items' => $items,
-            'current_page' => $payouts->currentPage(),
-            'last_page' => $payouts->lastPage(),
-            'total' => $payouts->total(),
-        ], 'Payouts fetched.');
-    }
-
-    public function transactions(Request $request)
-    {
-        $perPage = $request->query('per_page', 20);
-        $type = $request->query('type', 'all');
-        $status = $request->query('status');
-
-        $query = Transaction::where('user_id', Auth::id())->orderBy('created_at', 'desc');
-        if ($type !== 'all') {
-            if ($type === 'cashback') {
-                $query->where('category', 'cashback');
-            } else {
-                $query->where('transaction_type', $type);
-            }
-        }
-        if ($status) {
-            $query->where('status', $status);
-        }
-        $transactions = $query->paginate($perPage);
-
-        $items = collect($transactions->items())->map(function ($tx) {
-            $txType = $tx->transaction_type ?? 'other';
-            $isIncome = in_array($txType, ['deposit', 'refund']) || ($tx->category ?? '') === 'welcome_bonus';
-            return [
-                'id' => $tx->getKey(),
-                'tId' => $tx->tId ?? '',
-                'description' => $tx->description ?? ucfirst($txType),
-                'transaction_type' => $txType,
-                'category' => $tx->category ?? $txType,
-                'amount' => round($tx->amount ?? 0, 2),
-                'currency' => $tx->currency ?? 'ZER',
-                'status' => $tx->status ?? 'PENDING',
-                'type' => $isIncome ? 'INCOME' : 'EXPENSE',
-                'shop_name' => $tx->shop_name ?? null,
-                'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),
-            ];
-        });
-
-        return ResponseHelper::sendResponse([
-            'items' => $items,
-            'current_page' => $transactions->currentPage(),
-            'last_page' => $transactions->lastPage(),
-            'total' => $transactions->total(),
-        ], 'Transactions fetched.');
-    }
-
-    public function quickAccess()
-    {
-        $user = User::find(Auth::id());
-        if (!$user) {
-            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
-        }
-
-        $walletInfo = [
-            'has_wallet' => !empty($user->wallet_id),
-            'wallet_id' => $user->wallet_id ? $this->maskWalletId((string) $user->wallet_id) : null,
-            'wallet_status' => $user->wallet_status ?? null,
-            'balance' => round($user->wallet_balance ?? 0, 2),
-            'zer_balance' => round($user->zer_balance ?? 0, 2),
-        ];
-
-        $transactionsCount = Transaction::where('user_id', $user->getKey())->count();
-        $depositChange = 0;
-        $expenseChange = 0;
-        $terminalStats = [
-            'open_terminal' => 0,
-            'transactions' => $transactionsCount,
-            'deposit_change' => $depositChange . '%',
-            'expense_change' => $expenseChange . '%',
-            'zer_status' => round($user->zer_balance ?? 0, 2),
-        ];
-
-        $channelInfo = [
-            'has_channel' => !empty($user->channel_name),
-            'channel_name' => $user->channel_name ?? null,
-            'channel_id' => $user->channel_id ?? null,
-            'member_since' => $user->created_at ? Carbon::parse($user->created_at)->format('d-m-Y') : null,
-            'channel_status' => $user->channel_status ?? 'activated',
-            'status_message' => $user->channel_status_message ?? 'We wish good luck here',
-            'followers' => $user->followers_count ?? 0,
-            'members' => $user->members_count ?? 0,
-            'feeds' => $user->feeds_count ?? 0,
-            'follower_change' => '+25%',
-            'member_change' => '+25%',
-            'feed_change' => '+25%',
-        ];
-
-        $shopInfo = [
-            'has_shop' => !empty($user->shop_name),
-            'shop_name' => $user->shop_name ?? null,
-            'shop_id' => $user->shop_id ?? null,
-            'member_since' => $user->shop_created_at ?? ($user->created_at ? Carbon::parse($user->created_at)->format('d-m-Y') : null),
-            'shop_status' => $user->shop_status ?? 'activated',
-            'status_message' => $user->shop_status_message ?? 'We wish good luck here',
-            'followers' => $user->shop_followers_count ?? 0,
-            'reviews' => $user->shop_reviews_count ?? 0,
-            'offers' => $user->shop_offers_count ?? 0,
-            'follower_change' => '+25%',
-            'review_change' => '+25%',
-            'offer_change' => '+25%',
-        ];
-
-        return ResponseHelper::sendResponse([
-            'wallet' => $walletInfo,
-            'terminal' => $terminalStats,
-            'channel' => $channelInfo,
-            'shop' => $shopInfo,
-        ], 'Quick access data fetched.');
-    }
-
-    public function chartData(Request $request)
-    {
-        $period = $request->query('period', 'week');
-        $userId = Auth::id();
-        $data = [];
-
-        switch ($period) {
-            case 'month':
-                for ($i = 29; $i >= 0; $i--) {
-                    $date = Carbon::now()->subDays($i);
-                    $income = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
-                    $expense = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
-                    $data[] = [
-                        'label' => $date->format('d'),
-                        'date' => $date->format('Y-m-d'),
-                        'income' => round($income, 2),
-                        'expense' => round($expense, 2),
-                        'net' => round($income - $expense, 2),
-                    ];
-                }
-                break;
-            case 'year':
-                for ($i = 11; $i >= 0; $i--) {
-                    $month = Carbon::now()->subMonths($i);
-                    $start = $month->copy()->startOfMonth()->format('Y-m-d');
-                    $end = $month->copy()->endOfMonth()->format('Y-m-d');
-                    $income = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->whereBetween('date', [$start, $end])->sum('amount');
-                    $expense = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->whereBetween('date', [$start, $end])->sum('amount');
-                    $data[] = [
-                        'label' => $month->format('M'),
-                        'date' => $month->format('Y-m'),
-                        'income' => round($income, 2),
-                        'expense' => round($expense, 2),
-                        'net' => round($income - $expense, 2),
-                    ];
-                }
-                break;
-            default:
-                $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-                for ($i = 6; $i >= 0; $i--) {
-                    $date = Carbon::now()->subDays($i);
-                    $income = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
-                    $expense = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
-                    $data[] = [
-                        'label' => $dayLabels[$date->dayOfWeek],
-                        'date' => $date->format('Y-m-d'),
-                        'income' => round($income, 2),
-                        'expense' => round($expense, 2),
-                        'net' => round($income - $expense, 2),
-                        'is_today' => $i === 0,
-                    ];
-                }
-                break;
-        }
-
-        return ResponseHelper::sendResponse([
-            'period' => $period,
-            'data' => $data,
-        ], 'Chart data fetched.');
-    }
-
-    private function getZercashSetting()
-    {
-        try {
-            $row = DB::connection('mongodb')->collection('zercash_settings')
-                ->where('key', 'general')
-                ->where('is_active', true)
-                ->first();
-            return $row ?: [];
-        } catch (\Exception $e) {
-            return [];
-        }
-    }
-
     private function getUserDetails($user)
     {
         $user = $user->fresh();
 
-        $wallet = Wallet::where('user_id', $user->getKey())->first();
+        // Wallet info
+        $wallet = Wallet::where('user_id', $user->_id)->first();
         $walletStatusMessages = [
             'not_found'    => 'No wallet found. Please create one.',
             'under_review' => 'We will review your request. We will get back soon.',
@@ -627,7 +350,7 @@ class WalletApiController extends Controller
                 'has_wallet'            => true,
                 'has_pin'               => !empty($wallet->pin),
                 'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
-                'wallet_id'             => $this->maskWalletId((string) $wallet->getKey()),
+                'wallet_id'             => $this->maskWalletId($wallet->_id),
                 'wallet_status'         => $wStatus,
                 'status_message'        => $walletStatusMessages[$wStatus] ?? 'Unknown status.',
                 'hold_reason'           => $wallet->status_reason ?? null,
@@ -650,7 +373,8 @@ class WalletApiController extends Controller
             ];
         }
 
-        $kyc = KycVerification::where('user_id', $user->getKey())->orderBy('created_at', 'desc')->first();
+        // KYC info
+        $kyc = KycVerification::where('user_id', $user->_id)->orderBy('created_at', 'desc')->first();
         $kycStatusMessages = [
             'not_submitted' => 'KYC not submitted yet.',
             'pending'       => 'Your documents are submitted and waiting for review.',
@@ -662,7 +386,7 @@ class WalletApiController extends Controller
         if ($kyc) {
             $kycData = [
                 'has_kyc'          => true,
-                'kyc_id'           => $kyc->getKey(),
+                'kyc_id'           => $kyc->_id,
                 'kyc_status'       => $kyc->status,
                 'status_message'   => $kycStatusMessages[$kyc->status] ?? 'Unknown status.',
                 'document_type'    => $kyc->document_type,
@@ -683,6 +407,7 @@ class WalletApiController extends Controller
             ];
         }
 
+        // Embed wallet & kyc inside user object
         $userData = $user->toArray();
         $userData['wallet'] = $walletData;
         $userData['kyc'] = $kycData;
@@ -693,6 +418,171 @@ class WalletApiController extends Controller
     private function maskWalletId($walletId)
     {
         if (strlen($walletId) < 10) return $walletId;
-        return strtoupper(substr($walletId, 0, 4)) . ' **** **** ' . strtoupper(substr($walletId, -4));
+        $parts = explode(' ', $walletId);
+        if (count($parts) >= 4) {
+            return $parts[0] . ' **** **** ' . $parts[3];
+        }
+        return $walletId;
+    }
+
+    public function dashboard(Request $request)
+    {
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+        if (empty($user->wallet_id) || ($user->wallet_status ?? '') !== 'activated') {
+            return ResponseHelper::sendResponse(['has_wallet' => !empty($user->wallet_id), 'wallet_status' => $user->wallet_status ?? null,], 'Wallet not active.', false, 403);
+        }
+        $walletType = $request->query('type', 'private');
+        // private or business // Fetch settings for exchange rates
+        $setting = ZercashSetting::where('key', 'general')->where('is_active', true)->first();
+        $cashbackPercent = $setting->transaction_fee_percent ?? 5;
+        $currency = $setting->default_currency ?? 'EUR'; // Calculate totals from transactions
+        $userId = Auth::id();
+        $deposits = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->sum('amount');
+        $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
+        $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount'); // Weekly chart data (last 7 days)
+        $weeklyData = [];
+        $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i);
+            $dayTotal = Transaction::where('user_id', $userId)->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
+            $weeklyData[] = ['day' => $dayLabels[$date->dayOfWeek], 'date' => $date->format('Y-m-d'), 'amount' => round($dayTotal, 2), 'is_today' => $i === 0,];
+        }
+        return ResponseHelper::sendResponse(['wallet_id' => $this->maskWalletId($user->wallet_id), 'wallet_type' => $walletType, 'expire_at' => $user->wallet_expire_at ?? null, 'balance' => round($user->wallet_balance ?? 0, 2), 'zer_balance' => round($user->zer_balance ?? 0, 2), 'cashback_percent' => $cashbackPercent, 'currency' => $currency, 'summary' => ['deposits' => round($deposits, 2), 'cashbacks' => round($cashbacks, 2), 'expenses' => round($expenses, 2),], 'weekly_chart' => $weeklyData,], 'Wallet dashboard fetched.');
+    }
+
+    // ─── DEPOSITS ────────────────────────────────────────────────── /** * GET /api/wallet/deposits * List user's deposit transactions. * * Query: ?page=1&per_page=10 */
+    public function deposits(Request $request)
+    {
+        $perPage = $request->query('per_page', 10);
+        $deposits = Transaction::where('user_id', Auth::id())->where('transaction_type', 'deposit')->orderBy('created_at', 'desc')->paginate($perPage);
+        $items = $deposits->map(function ($tx) {
+            return ['id' => $tx->_id, 'tId' => $tx->tId ?? '', 'description' => $tx->description ?? 'Deposit', 'category' => $tx->category ?? 'deposit', 'amount' => round($tx->amount ?? 0, 2), 'currency' => $tx->currency ?? 'ZER', 'status' => $tx->status ?? 'COMPLETED', 'type' => 'INCOME', 'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),];
+        });
+        return ResponseHelper::sendResponse(['items' => $items, 'current_page' => $deposits->currentPage(), 'last_page' => $deposits->lastPage(), 'total' => $deposits->total(),], 'Deposits fetched.');
+    }
+
+    // ─── CASHBACKS ───────────────────────────────────────────────── /** * GET /api/wallet/cashbacks * List user's cashback transactions. * * Query: ?page=1&per_page=10 */
+    public function cashbacks(Request $request)
+    {
+        $perPage = $request->query('per_page', 10);
+        $cashbacks = Transaction::where('user_id', Auth::id())->where('category', 'cashback')->orderBy('created_at', 'desc')->paginate($perPage);
+        $items = $cashbacks->map(function ($tx) {
+            return [
+                'id' => $tx->_id,
+                'tId' => $tx->tId ?? '',
+                'description' => $tx->description ?? 'Cashback',
+                'shop_name' => $tx->shop_name ?? $tx->description ?? '',
+                'amount' => round($tx->amount ?? 0, 2),
+                'currency' => $tx->currency ?? 'ZER',
+                'status' => $tx->status ?? 'PENDING', // PENDING, COMPLETED, FAILED
+                'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),
+            ];
+        });
+        return ResponseHelper::sendResponse(['items' => $items, 'current_page' => $cashbacks->currentPage(), 'last_page' => $cashbacks->lastPage(), 'total' => $cashbacks->total(),], 'Cashbacks fetched.');
+    }
+
+    // ─── PAYOUTS / EXPENSES ──────────────────────────────────────── /** * GET /api/wallet/payouts * List user's payout/expense transactions. * * Query: ?page=1&per_page=10 */
+    public function payouts(Request $request)
+    {
+        $perPage = $request->query('per_page', 10);
+        $payouts = Transaction::where('user_id', Auth::id())->whereIn('transaction_type', ['purchase', 'payment', 'payout', 'expense'])->orderBy('created_at', 'desc')->paginate($perPage);
+        $items = $payouts->map(function ($tx) {
+            return [
+                'id' => $tx->_id,
+                'tId' => $tx->tId ?? '',
+                'description' => $tx->description ?? 'Payment',
+                'shop_name' => $tx->shop_name ?? '',
+                'amount' => round($tx->amount ?? 0, 2),
+                'currency' => $tx->currency ?? 'ZER',
+                'status' => $tx->status ?? 'COMPLETED', // IN_CART, COMPLETED, PENDING
+                'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),
+            ];
+        });
+        return ResponseHelper::sendResponse(['items' => $items, 'current_page' => $payouts->currentPage(), 'last_page' => $payouts->lastPage(), 'total' => $payouts->total(),], 'Payouts fetched.');
+    }
+
+    // ─── ALL TRANSACTIONS (COMBINED) ─────────────────────────────── /** * GET /api/wallet/transactions * All transactions with filters. * * Query: ?type=deposit|cashback|purchase|all &status=COMPLETED|PENDING|FAILED &page=1&per_page=20 */
+    public function transactions(Request $request)
+    {
+        $perPage = $request->query('per_page', 20);
+        $type = $request->query('type', 'all');
+        $status = $request->query('status');
+        $query = Transaction::where('user_id', Auth::id())->orderBy('created_at', 'desc');
+        if ($type !== 'all') {
+            if ($type === 'cashback') {
+                $query->where('category', 'cashback');
+            } else {
+                $query->where('transaction_type', $type);
+            }
+        }
+        if ($status) {
+            $query->where('status', $status);
+        }
+        $transactions = $query->paginate($perPage);
+        $items = $transactions->map(function ($tx) {
+            $txType = $tx->transaction_type ?? 'other';
+            $isIncome = in_array($txType, ['deposit', 'refund']) || ($tx->category ?? '') === 'welcome_bonus';
+            return ['id' => $tx->_id, 'tId' => $tx->tId ?? '', 'description' => $tx->description ?? ucfirst($txType), 'transaction_type' => $txType, 'category' => $tx->category ?? $txType, 'amount' => round($tx->amount ?? 0, 2), 'currency' => $tx->currency ?? 'ZER', 'status' => $tx->status ?? 'PENDING', 'type' => $isIncome ? 'INCOME' : 'EXPENSE', 'shop_name' => $tx->shop_name ?? null, 'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),];
+        });
+        return ResponseHelper::sendResponse(['items' => $items, 'current_page' => $transactions->currentPage(), 'last_page' => $transactions->lastPage(), 'total' => $transactions->total(),], 'Transactions fetched.');
+    }
+
+    public function quickAccess()
+    {
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+        // Wallet info
+        $walletInfo = ['has_wallet' => !empty($user->wallet_id), 'wallet_id' => $user->wallet_id ? $this->maskWalletId($user->wallet_id) : null, 'wallet_status' => $user->wallet_status ?? null, 'balance' => round($user->wallet_balance ?? 0, 2), 'zer_balance' => round($user->zer_balance ?? 0, 2),];
+        // Open Terminal, Transactions count, Zer Status
+        $transactionsCount = Transaction::where('user_id', $user->_id)->count();
+        $depositChange = 0; // Percentage change - calculate if needed
+        $expenseChange = 0;
+        $terminalStats = ['open_terminal' => 0, 'transactions' => $transactionsCount, 'deposit_change' => $depositChange . '%', 'expense_change' => $expenseChange . '%', 'zer_status' => round($user->zer_balance ?? 0, 2),]; // Channel info (if user has a channel)
+        $channelInfo = ['has_channel' => !empty($user->channel_name), 'channel_name' => $user->channel_name ?? null, 'channel_id' => $user->channel_id ?? null, 'member_since' => $user->created_at ? Carbon::parse($user->created_at)->format('d-m-Y') : null, 'channel_status' => $user->channel_status ?? 'activated', 'status_message' => $user->channel_status_message ?? 'We wish good luck here', 'followers' => $user->followers_count ?? 0, 'members' => $user->members_count ?? 0, 'feeds' => $user->feeds_count ?? 0, 'follower_change' => '+25%', 'member_change' => '+25%', 'feed_change' => '+25%',]; // Shop info (if user has a shop)
+        $shopInfo = ['has_shop' => !empty($user->shop_name), 'shop_name' => $user->shop_name ?? null, 'shop_id' => $user->shop_id ?? null, 'member_since' => $user->shop_created_at ?? ($user->created_at ? Carbon::parse($user->created_at)->format('d-m-Y') : null), 'shop_status' => $user->shop_status ?? 'activated', 'status_message' => $user->shop_status_message ?? 'We wish good luck here', 'followers' => $user->shop_followers_count ?? 0, 'reviews' => $user->shop_reviews_count ?? 0, 'offers' => $user->shop_offers_count ?? 0, 'follower_change' => '+25%', 'review_change' => '+25%', 'offer_change' => '+25%',];
+        return ResponseHelper::sendResponse(['wallet' => $walletInfo, 'terminal' => $terminalStats, 'channel' => $channelInfo, 'shop' => $shopInfo,], 'Quick access data fetched.');
+    }
+
+    // ─── WALLET CHART DATA ───────────────────────────────────────── /** * GET /api/wallet/chart * Chart data for wallet balance over time. * * Query: ?period=week|month|year (default: week) */
+    public function chartData(Request $request)
+    {
+        $period = $request->query('period', 'week');
+        $userId = Auth::id();
+        $data = [];
+        switch ($period) {
+            case 'month': // Last 30 days, grouped by day
+                for ($i = 29; $i >= 0; $i--) {
+                    $date = Carbon::now()->subDays($i);
+                    $income = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
+                    $expense = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
+                    $data[] = ['label' => $date->format('d'), 'date' => $date->format('Y-m-d'), 'income' => round($income, 2), 'expense' => round($expense, 2), 'net' => round($income - $expense, 2),];
+                }
+                break;
+            case 'year': // Last 12 months
+                for ($i = 11; $i >= 0; $i--) {
+                    $month = Carbon::now()->subMonths($i);
+                    $start = $month->copy()->startOfMonth()->format('Y-m-d');
+                    $end = $month->copy()->endOfMonth()->format('Y-m-d');
+                    $income = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->whereBetween('date', [$start, $end])->sum('amount');
+                    $expense = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->whereBetween('date', [$start, $end])->sum('amount');
+                    $data[] = ['label' => $month->format('M'), 'date' => $month->format('Y-m'), 'income' => round($income, 2), 'expense' => round($expense, 2), 'net' => round($income - $expense, 2),];
+                }
+                break;
+            default: // week
+                $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+                for ($i = 6; $i >= 0; $i--) {
+                    $date = Carbon::now()->subDays($i);
+                    $income = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
+                    $expense = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
+                    $data[] = ['label' => $dayLabels[$date->dayOfWeek], 'date' => $date->format('Y-m-d'), 'income' => round($income, 2), 'expense' => round($expense, 2), 'net' => round($income - $expense, 2), 'is_today' => $i === 0,];
+                }
+                break;
+        }
+        return ResponseHelper::sendResponse(['period' => $period, 'data' => $data,], 'Chart data fetched.');
     }
 }

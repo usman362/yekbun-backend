@@ -86,7 +86,7 @@ class ClipsController extends Controller
         exec($command, $output, $return_var);
 
         if ($return_var === 0) {
-            $clip->clip = Helpers::fileCDNUpload(new \Illuminate\Http\File($outputPath), 'clips');
+            $clip->clip = Helpers::fileCDNUpload2(new \Illuminate\Http\File($outputPath), 'clips');
             if (file_exists($outputPath)) unlink($outputPath);
         }
 

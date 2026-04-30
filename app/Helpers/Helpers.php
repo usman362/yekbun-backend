@@ -62,6 +62,52 @@ class Helpers
         return $cleanedcdnPath;
     }
 
+    public static function fileCDNUpload2($uploadedFile, $folder = 'files')
+    {
+        $bunny = new BunnyCDNService();
+        $folder = trim($folder, '/');
+
+        $ext = strtolower($uploadedFile->extension());
+        $tempLocalPath = storage_path('app/uploads/' . uniqid() . '.' . $ext);
+
+        $uploadedFile->move(dirname($tempLocalPath), basename($tempLocalPath));
+
+        $finalLocalFile = $tempLocalPath;
+
+        if ($ext === 'mp3') {
+            $convertedPath = str_replace('.mp3', '.m4a', $tempLocalPath);
+            if (static::convertToM4A($tempLocalPath, $convertedPath)) {
+                unlink($tempLocalPath);
+                $finalLocalFile = $convertedPath;
+            }
+        } elseif ($ext === 'mp4') {
+            $convertedPath = str_replace('.mp4', '_h265.mp4', $tempLocalPath);
+            if (static::convertToH265($tempLocalPath, $convertedPath)) {
+                unlink($tempLocalPath);
+                $finalLocalFile = $convertedPath;
+            }
+        }
+
+        $uniqueName = basename($uploadedFile);
+
+        $content = file_get_contents($finalLocalFile);
+        $mime    = mime_content_type($finalLocalFile);
+
+        $cdnPath = $bunny->upload(
+            $folder,
+            $uniqueName,
+            $content,
+            $mime
+        );
+
+        if (file_exists($finalLocalFile)) {
+            unlink($finalLocalFile);
+        }
+
+        $cleanedcdnPath = Str::after($cdnPath, env('BUNNY_CDN_URL'));
+        return $cleanedcdnPath;
+    }
+
     public static function formatDuration($durationInSeconds)
     {
         $seconds = (int) round($durationInSeconds);
