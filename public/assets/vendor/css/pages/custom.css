@@ -1,0 +1,203 @@
+.card_foot{
+	padding:5px !important;
+}
+.postitem{
+	background: #f2f2f2;
+	padding: 0.4rem !important;
+}
+.video-thumbnail-duration{
+	position: absolute;
+  	color: #fff;
+  	right: 5px;
+  	bottom: 2px;
+}
+.video-thumbnail-title{
+	position: absolute;
+	color: #fff;
+	left: 5px;
+	bottom: 2px;
+}
+.video-thumbnail-views{
+	position: absolute;
+	right:2px;
+	color:#fff;
+	background-color: rgba(0, 0, 0, 0.1);
+	
+	border-radius:10px;
+}
+
+.card-post-thumbnail {
+    position: relative;
+    width: 100%;
+    height: 150px; /* Or whatever your thumbnail height is */
+    background-size: cover;
+    background-position: center;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.video-overlay-gradient {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    padding: 8px 10px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.0));
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: 13px;
+    font-weight: 500;
+	height:40px;
+}
+.custom-header{
+	text-align:center;
+	padding:5px;
+	background:#f2f2f2;
+}
+.custom-header h4{
+	margin-bottom:0px;
+	font-size:1.2rem;
+	
+}
+.light-style .dz-message{
+	color:#000;
+}
+.text-custom{
+	font-size:1rem;
+	display:block;
+}
+.light-style .dropzone {
+  border: 4px dashed #d9dee3;
+  /*
+  border: 2px solid transparent;
+  border-image-source: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M0 0h10M20 0v10M20 20h-10M0 20v-10' stroke='%23d9dee3' stroke-width='2'/%3E%3C/svg%3E");
+  border-image-slice: 1;
+  border-image-repeat: round;
+  */
+}
+.thumbnail-heading{
+	margin-bottom:0px;
+	color: #a1acb8 !important;
+}
+.generated-img{
+	width: 100%;
+  height: 85px;
+  margin: 12px 0 0 4px;
+  border-radius: 5px;
+  border: 3px dashed #0000004f;
+  cursor: pointer;
+}
+.close-custom{
+	display:none !important;
+}
+.save-btn-custom{
+	background:#1bc469;
+	color:#fff;
+	font-size: 1.7rem;
+}
+.save-btn-custom:hover{
+	background:#1bc469;
+	color:#fff;
+}
+.uplobtn{
+	display:block !important;
+}
+.footer-custom{
+	text-align:center;
+	margin:auto;
+}
+.regnerate{
+	
+	background:#f2f2f2;
+	margin-top:20px;
+	padding:4px;
+	border-radius:10px;	
+}
+.font14{
+	font-size:14px;
+}
+.info{
+	padding-top:2px !important;
+	padding-left:4px !important;
+}
+.info h5{
+	margin: 0px;
+  color: #000;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.infbox{
+	background:#F2F2F2;
+	border-radius:10px;
+	padding:10px;
+	padding-bottom: 5px;
+	cursor:pointer;
+	margin-top:5px;
+	margin-bottom:5px;
+}
+.infhead{
+	background:#B5B5B5;
+	border-radius:5px;
+	color:#fff;
+	padding:5px;
+	margin-bottom:10px;
+}
+
+.form-switch .form-check-input {
+        width: 2.5em;
+        height: 1.4em;
+        background-color: #ccc;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        transition: background-color 0.2s ease-in-out;
+    }
+
+    .form-switch .form-check-input:checked {
+        background-color: #28a745; /* Bootstrap green */
+        border-color: #28a745;
+    }
+
+    /* Optional: a green line behind the toggle when checked */
+    .form-switch.green-line {
+        position: relative;
+    }
+
+    .form-switch.green-line::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background-color: #28a745;
+        transform: scaleX(0);
+        transform-origin: center;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    .form-switch.green-line input:checked ~ ::before {
+        transform: scaleX(1);
+    }
+	
+	.robox{
+		background:#F2F2F2;
+		border-radius:5px;
+		padding:5px;
+		font-size:16px;
+		font-weight:bold;
+		margin-top:10px;
+	}
+	.robox.active{
+		border:solid 2px #0C0;	
+	}
+	html:not([dir="rtl"]) .text-center {
+	  margin:auto;
+	}
+	.labelsectoin{
+		height:100%;
+		align-items: center;
+		display: flex;
+		text-align: center;
+	}

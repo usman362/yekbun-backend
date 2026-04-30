@@ -1,0 +1,233 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  font-size: 16px;
+  font-family: "Poppins", sans-serif;
+  --primary-color: #1c274c;
+  --block-color: #f5f5f5;
+}
+
+.btn-no-border {
+  border: none !important;
+  box-shadow: none;
+}
+
+.btn-start-work {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  background-color: rgb(233, 233, 233);
+}
+
+.btn-start-work:hover {
+  background-color: rgb(206, 206, 206);
+  transition: all 0.2s ease-in-out;
+}
+.header-popup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.header-popup h2 {
+  font-weight: 700;
+}
+
+.header-popup h5 {
+  font-weight: 300;
+}
+
+.active-thumbnail {
+  border: 2px solid blue;
+}
+
+.toggle-card {
+  width: 360px; height: 62px; margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: #f8f9fa;
+}
+.toggle-item {
+    width: 108px;
+  height: 47px;
+  text-align: center;
+  background-color: #e0e0e0;
+  border-radius: 10px;
+}
+.form-switch .form-check-input {
+  width: 40px;
+  height: 20px;
+  background-color: #b4b4b4;
+  border-radius: 1.25rem;
+}
+.form-switch .form-check-input:checked {
+  background-color: #0d6efd;
+}
+.toggle-item span {
+  display: block;
+  margin-top: -4px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: Genos;
+  color: #1b1e34;
+}
+
+.bg-model-image {
+  background-image: url("https://first-freelance-upwork.vercel.app/assets/third-svg-dialog/image/%201425/(1/).svg");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.form-control {
+  border-radius: 8px;
+  background-color: #f7fafc;
+}
+.input-group-text {
+  border: none;
+  background-color: transparent;
+}
+.icon-input-group {
+  background-color: #f7fafc;
+  border-radius: 8px;
+}
+
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background: none;
+  border: none;
+  padding-right: 1.5rem;
+}
+
+select:focus {
+  outline: none;
+}
+
+
+
+.reaction-container {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 5px;
+  width: 100%;
+  margin: auto;
+  margin-bottom: 5px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.reaction-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: bold;
+  font-size: 16px;
+  color: #1f2937;
+  margin-bottom: 5px;
+}
+
+.reaction-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 5px;
+  margin-bottom: 5px;
+}
+
+.reaction-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: url("assets/donations/Group%201000006854.svg") no-repeat center;
+  background-size: contain;
+  background-color: #e5e7eb;
+}
+
+.reaction-icon input[type="file"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.form-control {
+  flex-grow: 1;
+  font-size: 14px;
+  color: #6b7280;
+  border: none;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+
+/* Masquer complètement la scrollbar */
+textarea::-webkit-scrollbar {
+  display: none;
+}
+
+/* Masquer uniquement les flèches */
+textarea::-webkit-scrollbar-button {
+  display: none;
+}
+
+
+.switch-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #f8f9fa;
+  padding: 10px 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 95px;
+  height: 47px;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: #212529;
+  margin-top: 5px;
+}
+
+.custom-file-container {
+  width: 33px;
+  height: 33px;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  position: relative;
+}
+.custom-file-container:hover {
+  background-color: #e9e9e9;
+}
+.custom-file-container input[type="file"] {
+  display: none;
+}
+.custom-file-container .icon-container {
+  text-align: center;
+}
+.custom-file-container .icon-container img {
+  width: 24px;
+  height: 24px;
+}
+

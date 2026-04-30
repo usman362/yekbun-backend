@@ -1,0 +1,350 @@
+.flex-fluid {
+    flex: 1 !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.border-radius-5 {
+    border-radius: 5px !important;
+}
+
+.border-radius-10 {
+    border-radius: 10px !important;
+}
+
+.w-50px {
+    width: 50px !important;
+}
+
+.w-100px {
+    width: 100px !important;
+}
+
+.w-150px {
+    width: 150px !important;
+}
+
+.h-50px {
+    height: 50px !important;
+}
+
+.h-100px {
+    height: 100px !important;
+}
+
+.h-150px {
+    height: 150px !important;
+}
+
+
+#createvotingModal .modal-body,
+#editvotingModal .modal-body,
+#statisticVotingModal .modal-body {
+    padding: 0px;
+    border-radius: 10px !important;
+}
+
+.vote-banner-image {
+    border-radius: 5px;
+    width: auto;
+    height: 72px;
+}
+
+.edit-vote-modal .vote-header,
+.vote-detail-modal .vote-header {
+    background: #f5f5f5;
+    border-top-left-radius: 10px !important;
+    border-top-right-radius: 10px !important;
+    padding: 10px;
+}
+
+.edit-vote-modal .vote-header .vote-header1 {
+    border-radius: 5px;
+    background: white;
+    padding: 5px 20px;
+    color: #333;
+    font-size: 110%;
+    font-weight: bold;
+}
+
+.edit-vote-modal .edit-vote-header {
+    background: #f5f5f5;
+    display: flex;
+    justify-content: center;
+    padding: 5px 0px;
+}
+
+.edit-vote-modal .edit-vote-header .title {
+    border-radius: 5px;
+    background: white;
+    color: #000;
+    padding: 5px 20px;
+}
+
+.edit-vote-modal .vote-categories {
+    border-radius: 5px;
+    background: #f5f5f5;
+    overflow-x: auto;
+}
+
+.edit-vote-modal .vote-categories .select-category {
+    color: #333;
+    font-weight: bold;
+}
+
+.edit-vote-modal .vote-categories .vote-category {
+    padding: 5px;
+}
+
+.edit-vote-modal .vote-categories .vote-category>div {
+    border-radius: 5px;
+    overflow: hidden;
+    width: 100px;
+    height: 120px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.edit-vote-modal .vote-categories .vote-category>div:hover {
+    background-color: rgb(229, 248, 232);
+}
+
+.edit-vote-modal .vote-categories .vote-category.selected div {
+    background: rgb(187, 230, 194);
+}
+
+.edit-vote-modal .vote-categories .vote-category img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+}
+
+.edit-vote-modal .vote-content {
+    border-radius: 10px;
+    background: #f5f5f5;
+}
+
+.edit-vote-modal .vote-content .vote-banner .dz-preview {
+    margin: 0 !important;
+}
+
+.edit-vote-modal .vote-content .vote-banner .dz-message {
+    margin: 0 !important;
+}
+
+.edit-vote-modal .allowed-reactions {
+    border-radius: 10px;
+    background: #f5f5f5;
+    padding: 10px;
+}
+
+.edit-vote-modal .allowed-reactions .reaction-option {
+    border-radius: 10px;
+    padding: 5px 10px;
+    color: #555;
+    background: white;
+    width: 120px;
+    text-align: center;
+}
+
+.edit-vote-modal .allowed-reactions .individual-vote-react-option-image {
+    border-radius: 5px;
+    padding: 2px;
+    border: 1px dashed;
+    cursor: pointer;
+    position: relative;
+}
+
+.edit-vote-modal .allowed-reactions .individual-vote-react-option-image .remove-image {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0.8;
+    display: none;
+}
+
+.edit-vote-modal .allowed-reactions .individual-vote-react-option-image.uploaded:hover .remove-image {
+    display: flex;
+}
+
+.edit-vote-modal #individual-vote-options .max-10-letters {
+    position: absolute;
+    right: 0px;
+    top: -18px;
+    font-size: 85%;
+}
+
+.edit-vote-modal #individual-vote-options .individual-reaction-option {
+    position: relative;
+}
+
+#statisticVotingModal .vote-name {
+    font-size: 130%;
+    line-height: normal;
+    color: #555;
+}
+
+#statisticVotingModal .vote-category-name {
+    font-size: 90%;
+    color: #888;
+}
+
+#statisticVotingModal .community {
+    border-radius: 10px;
+    background: #f5f5f5;
+}
+
+#statisticVotingModal .vote-reaction {
+    border-radius: 17px;
+    height: 34px;
+    padding: 5px 10px;
+}
+
+#statisticVotingModal .vote-reaction img {
+    width: 25px !important;
+    height: 25px !important;
+    border-radius: 50%;
+}
+
+#statisticVotingModal .vote-reaction.dislike {
+    background: red;
+    color: white;
+}
+
+#statisticVotingModal .vote-reaction.noIdea {
+    background: rgb(255, 235, 58);
+    color: #333;
+}
+
+#statisticVotingModal .vote-reaction.like {
+    background: rgb(27, 196, 105);
+    color: white;
+}
+
+#statisticVotingModal .statistic {
+    border-radius: 10px;
+    background: #f5f5f5;
+}
+
+#statisticVotingModal .statistic .gender {
+    position: relative;
+}
+
+#statisticVotingModal .statistic .gender::before {
+    position: absolute;
+    content: '';
+    left: -15px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+}
+
+#statisticVotingModal .statistic .gender.male::before {
+    background: #696cff;
+}
+
+#statisticVotingModal .statistic .gender.female::before {
+    background: pink;
+}
+
+#statisticVotingModal .modal-header {
+    padding: 16px 20px 0px 20px !important;
+    border-bottom: 1px solid #f8f8f8 !important;
+    margin-bottom: 4px !important;
+}
+
+.vote-option-image {
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+}
+
+.mak-upload-audio {
+    background: white;
+    border-radius: 10px;
+}
+
+.mak-upload-audio .label-upload-audio {
+    background: #f5f5f5;
+    border-radius: 10px;
+    padding: 5px 10px;
+}
+
+.mak-upload-audio .audio-meta {
+    border-radius: 10px;
+    background: #f5f5f5;
+    padding: 5px 10px;
+}
+
+.mak-upload-audio .audio-meta img {
+    width: 30px;
+    height: 30px;
+}
+
+.mak-upload-audio .action-bar {
+    border-radius: 10px;
+    background-color: white;
+    border: 1px solid #f5f5f5;
+    padding: 5px 10px;
+    height: 50px;
+}
+
+.mak-upload-audio #audio_player {
+    width: 100%;
+    height: 40px;
+}
+
+.mak-upload-audio .action-bar #upload_btn {
+    color: black;
+}
+
+.mak-upload-audio .action-bar #upload_btn:hover {
+    text-decoration: underline;
+}
+
+.vote-content .uploaded-banner {
+    border-radius: 10px;
+    border: 2px dashed #d9dee3
+}
+
+.vote-content .uploaded-banner .remove-image:hover {
+    background: #d9dee3;
+}
+
+.has-splitter-bar {
+    position: relative;
+}
+
+.has-splitter-bar::after {
+    position: absolute;
+    content: '';
+    background: #eee;
+}
+
+.has-splitter-bar.right {
+    padding-right: 20px !important;
+}
+
+.has-splitter-bar.right::after {
+    right: 0px;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+}
+
+.has-splitter-bar.left {
+    padding-left: 20px !important;
+}
+
+.has-splitter-bar.left::after {
+    left: 0px;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+}

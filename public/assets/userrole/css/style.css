@@ -1,0 +1,59 @@
+@font-face {
+    font-family: 'Genos';
+    font-style: normal;
+    font-weight: normal;
+    src: url(./fonts/GenosGX.ttf) format('truetype');
+}
+    
+.nav-text-left {
+	text-align: left !important;
+}
+
+.genos-font {
+	/* font-family:'Genos'; */
+	line-height: 16px;
+}
+
+.genos-font span {
+	color:  rgba(11, 14, 45, 1);
+}
+
+.title-color {
+	color:  rgba(11, 14, 45, 1);
+}
+
+.nav-group {
+	color: rgba(28, 39, 76, 1);
+	padding-top: 20px;
+	padding-bottom: 20px;
+	background-color: white;
+}
+
+.nav-group-icon {
+	border: 1px solid rgba(236, 236, 236, 1);
+	height: 1px;
+	width: 18px;
+	margin-right: 5px;
+}
+
+.content-group {
+	border: 1px solid rgba(242, 242, 242, 1);
+	border-radius: 7px;
+	padding: 9px;
+	margin: 9px;
+}
+
+.up-down-group {
+	border: 1px solid rgba(242, 242, 242, 1);
+	border-radius: 5px;
+	padding: 4px;
+	margin-left: 8px;
+	width: 85px;
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+}
+
+.ms-8 {
+	margin-left: 80px;
+}
