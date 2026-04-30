@@ -10,11 +10,11 @@ class LanguageController extends Controller
 {
     public function index()
     {
-        $languages = Language::with('translations')->where('status', '1')->get();
+        $languages = Language::with('translation')->where('status', '1')->get();
         $response = [];
         foreach ($languages as $language) {
             $translations = [];
-            foreach ($language->translations as $translation) {
+            foreach ($language->translation as $translation) {
                 $translations[$translation->keyword] = $translation->translated !== '' ? $translation->translated : $translation->keyword;
             }
             $response[$language->code] = ['translation' => $translations];
@@ -75,16 +75,18 @@ class LanguageController extends Controller
 
     public function keywords($id)
     {
-        $keywords = \App\Models\Translation::where('language_id', $id)
-            ->get(['section_name', 'keyword', 'translated']);
+        $keywords = \App\Models\LanguageDetail::select(['section_name', 'keyword', 'translated'])
+            ->where('language_id', $id)
+            ->get();
         return response()->json(['keywords' => $keywords], 200);
     }
 
     public function keyword($id, $keyword)
     {
-        $row = \App\Models\Translation::where('language_id', $id)
+        $row = \App\Models\LanguageDetail::select(['section_name', 'keyword', 'translated'])
+            ->where('language_id', $id)
             ->where('keyword', $keyword)
-            ->first(['section_name', 'keyword', 'translated']);
+            ->first();
         if (!empty($row)) {
             return response()->json(['keyword' => $row], 200);
         }

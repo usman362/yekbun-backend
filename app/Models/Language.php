@@ -14,4 +14,6 @@ class Language extends Model
     protected $guarded = [];
 
     public function translations() { return $this->hasMany(Translation::class, 'language_id'); }
+
+    public function translation() { return $this->hasMany(LanguageDetail::class, 'language_id'); }
 }
