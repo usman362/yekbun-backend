@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Jenssegers\Mongodb\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class StoryTime extends Model
 {
-    protected $connection = 'mongodb';
+    
+    use UsesLegacyId;
+protected $connection = 'mongodb';
     use HasFactory;
 
     protected $fillable = [

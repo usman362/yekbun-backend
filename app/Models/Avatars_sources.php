@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
-use Jenssegers\Mongodb\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class Avatars_sources extends Model
 {
-    protected $connection = 'mongodb';
+    
+    use UsesLegacyId;
+protected $connection = 'mongodb';
 }

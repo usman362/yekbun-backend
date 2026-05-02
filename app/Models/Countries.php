@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class Countries extends Model
 {
-    protected $connection = 'mongodb';
+    
+    use UsesLegacyId;
+protected $connection = 'mongodb';
     protected $table = 'countries';
 
     protected $fillable = [

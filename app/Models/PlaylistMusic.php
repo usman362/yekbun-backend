@@ -4,11 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 //use Illuminate\Database\Eloquent\Model;
-use Jenssegers\Mongodb\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class PlaylistMusic extends Model
 {
-    use HasFactory;
+    
+    use UsesLegacyId;
+use HasFactory;
 
     public $fillable = [
         'playlist_id',

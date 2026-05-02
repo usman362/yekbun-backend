@@ -4,11 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 //use Illuminate\Database\Eloquent\Model;
-use Jenssegers\Mongodb\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class FavouriteArtist extends Model
 {
-    use HasFactory;
+    
+    use UsesLegacyId;
+use HasFactory;
     public $fillable = [
         'user_id',
         'artist_id'

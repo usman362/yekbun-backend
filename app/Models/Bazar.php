@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
-use Spatie\Activitylog\LogOptions;
 //use Illuminate\Database\Eloquent\Model;
-use Jenssegers\Mongodb\Eloquent\Model;
-use Spatie\Activitylog\Traits\LogsActivity;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Bazar extends Model
 {
-    use HasFactory, LogsActivity;
+    
+    use UsesLegacyId;
+use HasFactory;
     protected $fillable = [
         'title',
         'image',
@@ -26,11 +27,6 @@ class Bazar extends Model
      protected $attributes = [
         'image' => '[]'
      ];
-
-    public function getActivitylogOptions(): LogOptions
-    {
-        return LogOptions::defaults();
-    }
     
     // public function getImageAttribute($value)
     // {

@@ -2,15 +2,13 @@
 
 namespace App\Models;
 
-use Spatie\Activitylog\LogOptions;
 //use Illuminate\Database\Eloquent\Model;
-use Jenssegers\Mongodb\Eloquent\Model;
-use Spatie\Activitylog\Traits\LogsActivity;
+use MongoDB\Laravel\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class UplaodVideo extends Model
 {
-    use HasFactory , LogsActivity;
+    use HasFactory ;
     protected $fillable=[
         'title',
         'thumbnail',
@@ -25,11 +23,6 @@ class UplaodVideo extends Model
      protected $attributes = [
         'video' => '[]'
      ];
-
-    public function getActivitylogOptions(): LogOptions
-    {
-        return LogOptions::defaults();
-    }
     public function videocategory(){
         return $this->belongsTo(UploadVideoCategory::class , 'category_id');
     }

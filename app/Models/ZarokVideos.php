@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Jenssegers\Mongodb\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class ZarokVideos extends Model
 {
-    use HasFactory;
+    
+    use UsesLegacyId;
+use HasFactory;
 
     protected $connection = 'mongodb';
     protected $table = 'zarok_videos';

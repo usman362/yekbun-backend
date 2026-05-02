@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
-use Spatie\Activitylog\LogOptions;
 //use Illuminate\Database\Eloquent\Model;
-use Jenssegers\Mongodb\Eloquent\Model;
-use Spatie\Activitylog\Traits\LogsActivity;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class SubCategoryBazar extends Model
 {
-    use HasFactory , LogsActivity;
+    
+    use UsesLegacyId;
+use HasFactory ;
     
     protected $fillable=[
         'category_id',
@@ -18,10 +19,6 @@ class SubCategoryBazar extends Model
         'city',
         'state'
     ];
-    public function getActivitylogOptions(): LogOptions
-    {
-        return LogOptions::defaults();
-    }
     public function bazar_category(){
         return $this->belongsTo(BazarCategory::class , 'category_id');
     }

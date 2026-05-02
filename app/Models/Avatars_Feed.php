@@ -4,11 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-use Jenssegers\Mongodb\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
+use App\Traits\UsesLegacyId;
 
 class Avatars_Feed extends Model
 {
-    use HasFactory;
+    
+    use UsesLegacyId;
+use HasFactory;
 
     protected $table = 'avatars_feeds';
 

@@ -2,15 +2,13 @@
 
 namespace App\Models;
 
-use Spatie\Activitylog\LogOptions;
 //use Illuminate\Database\Eloquent\Model;
-use Jenssegers\Mongodb\Eloquent\Model;
-use Spatie\Activitylog\Traits\LogsActivity;
+use MongoDB\Laravel\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class UploadMovie extends Model
 {
-    use HasFactory , LogsActivity;
+    use HasFactory ;
     protected $fillable=[
         'title',
         'thumbnail',
@@ -24,11 +22,6 @@ class UploadMovie extends Model
      protected $attributes = [
         'movie' => '[]'
      ];
-    
-    public function getActivitylogOptions(): LogOptions
-    {
-        return LogOptions::defaults();
-    }
 
     public function moviecategory(){
         return $this->belongsTo(UploadMovieCategory::class , 'category_id');
