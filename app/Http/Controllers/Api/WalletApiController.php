@@ -348,6 +348,7 @@ class WalletApiController extends Controller
             $wStatus = $wallet->status ?? 'under_review';
             $walletData = [
                 'has_wallet'            => true,
+                'has_valid'             => ($wStatus === 'activated'),
                 'has_pin'               => !empty($wallet->pin),
                 'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
                 'wallet_id'             => $this->maskWalletId($wallet->_id),
@@ -361,6 +362,7 @@ class WalletApiController extends Controller
         } else {
             $walletData = [
                 'has_wallet'            => false,
+                'has_valid'             => false,
                 'has_pin'               => false,
                 'welcome_bonus_claimed' => false,
                 'wallet_id'             => null,
