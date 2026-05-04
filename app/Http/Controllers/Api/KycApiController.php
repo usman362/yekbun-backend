@@ -224,12 +224,31 @@ class KycApiController extends Controller
             $kyc->save();
 
             $user->kyc_status = 'approved';
+
+            // Create or activate wallet on KYC approval
+            $wallet = Wallet::where('user_id', $user->getKey())->first();
+            if (!$wallet) {
+                $wallet = new Wallet();
+                $wallet->user_id      = $user->getKey();
+                $wallet->status       = 'activated';
+                $wallet->balance      = 0;
+                $wallet->activated_at = Carbon::now();
+                $wallet->created_at   = Carbon::now();
+                $wallet->save();
+            } else {
+                $wallet->status       = 'activated';
+                $wallet->activated_at = Carbon::now();
+                $wallet->save();
+            }
+
+            $user->wallet_id     = $wallet->getKey();
+            $user->wallet_status = 'activated';
             $user->save();
 
             return ResponseHelper::sendResponse([
                 'kyc_status'  => 'approved',
                 'userDetails' => $this->getUserDetails($user),
-            ], 'KYC approved');
+            ], 'KYC approved and wallet activated');
         } else {
 
             $kyc->status = 'rejected';
