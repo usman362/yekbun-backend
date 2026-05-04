@@ -38,21 +38,32 @@ class WalletApiController extends Controller
             return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
         }
 
-        $wallet = Wallet::where('user_id', $user->_id)->first();
+        $wallet = Wallet::where('user_id', $user->getKey())->first();
 
         if ($wallet) {
-            return ResponseHelper::sendResponse(null, 'Wallet already exists.', false, 400);
+            // Wallet already exists (created during KYC approval) — just set/update the PIN
+            $wallet->pin = bcrypt($request->pin);
+            $wallet->save();
+
+            $user->wallet_id     = $wallet->getKey();
+            $user->wallet_status = $wallet->status ?? $user->wallet_status;
+            $user->save();
+
+            return ResponseHelper::sendResponse([
+                'wallet'      => $wallet,
+                'userDetails' => $this->getUserDetails($user),
+            ], 'Wallet PIN set successfully.');
         }
 
         $wallet = new Wallet();
-        $wallet->user_id = $user->_id;
-        $wallet->pin = bcrypt($request->pin);
-        $wallet->status = 'under_review';
+        $wallet->user_id    = $user->getKey();
+        $wallet->pin        = bcrypt($request->pin);
+        $wallet->status     = 'under_review';
         $wallet->created_at = Carbon::now();
         $wallet->save();
 
         // Save wallet_id on user for userDetails response
-        $user->wallet_id = $wallet->_id;
+        $user->wallet_id     = $wallet->getKey();
         $user->wallet_status = 'under_review';
         $user->save();
 
