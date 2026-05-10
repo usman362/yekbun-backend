@@ -24,23 +24,32 @@ class Helpers
     public static function mediaUrl($path)
     {
         if (empty($path)) return null;
-        if (Str::startsWith($path, ['http://', 'https://'])) return $path;
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            // Encode any spaces / special chars in already-absolute URL (preserve scheme/host)
+            return preg_replace_callback('#^(https?://[^/]+)(/.*)?$#', function ($m) {
+                if (empty($m[2])) return $m[1];
+                $segments = array_map('rawurlencode', explode('/', ltrim($m[2], '/')));
+                return $m[1] . '/' . implode('/', $segments);
+            }, $path);
+        }
 
         $relative = ltrim($path, '/');
+        // Encode path segments (keeps slashes, encodes spaces and other special chars)
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
 
         // Prefer local storage if file exists
         $publicPath = function_exists('public_path') ? public_path('storage/' . $relative) : null;
         $storagePath = function_exists('storage_path') ? storage_path('app/public/' . $relative) : null;
         if (($publicPath && file_exists($publicPath)) || ($storagePath && file_exists($storagePath))) {
-            return asset('storage/' . $relative);
+            return asset('storage/' . $encoded);
         }
 
         // Fall back to CDN if configured
         $cdn = env('BUNNY_CDN_URL');
-        if (!empty($cdn)) return rtrim($cdn, '/') . '/' . $relative;
+        if (!empty($cdn)) return rtrim($cdn, '/') . '/' . $encoded;
 
         // Last resort: storage URL anyway
-        return asset('storage/' . $relative);
+        return asset('storage/' . $encoded);
     }
 
     public static function fileUpload($uploadedFile, $folder = null)
