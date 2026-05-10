@@ -127,6 +127,52 @@ class MusicController extends Controller
         return ResponseHelper::sendResponse($result, 'Video clips fetched.');
     }
 
+    public function artistSongs($id)
+    {
+        $songs = Song::where('artist_id', $id)->orderByRaw(['created_at' => -1])->get();
+        $songIds = $songs->pluck('_id')->toArray();
+        $viewCounts = SongViews::whereIn('song_id', $songIds)
+            ->get()
+            ->groupBy('song_id')
+            ->map(fn($g) => $g->count());
+
+        $result = $songs->values()->map(function ($s, $i) use ($viewCounts) {
+            return [
+                'id'       => $s->custom_id ?? sprintf('S-%03d', $i + 1),
+                'songId'   => (string) $s->_id,
+                'title'    => $s->name ?? '',
+                'duration' => $s->length ?? '0:00',
+                'size'     => $s->file_size ? $s->file_size . 'MB' : '0MB',
+                'listens'  => (int) $viewCounts->get($s->_id, 0),
+                'trend'    => 'up',
+                'track'    => Helpers::mediaUrl($s->audio) ?? '',
+            ];
+        });
+
+        return ResponseHelper::sendResponse($result, 'Artist songs fetched.');
+    }
+
+    public function artistClips($id)
+    {
+        $clips = VideoClip::where('artist_id', $id)->orderByRaw(['created_at' => -1])->get();
+
+        $result = $clips->values()->map(function ($c, $i) {
+            return [
+                'id'        => sprintf('VC-%03d', $i + 1),
+                'clipId'    => (string) $c->_id,
+                'title'     => $c->name ?? ('Clip ' . ($i + 1)),
+                'thumbnail' => Helpers::mediaUrl($c->thumbnail) ?? '',
+                'video'     => Helpers::mediaUrl($c->clip ?? $c->video) ?? '',
+                'views'     => (int) ($c->short_size ?? 0),
+                'likes'     => 0,
+                'duration'  => $c->length ?? '0:00',
+                'status'    => $c->status == 1 ? 'Published' : 'Draft',
+            ];
+        });
+
+        return ResponseHelper::sendResponse($result, 'Artist clips fetched.');
+    }
+
     public function stats()
     {
         return ResponseHelper::sendResponse([

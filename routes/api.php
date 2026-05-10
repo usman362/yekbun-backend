@@ -652,6 +652,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/music/artists', [AdminMusicController::class, 'artists']);
         Route::get('/music/songs', [AdminMusicController::class, 'songs']);
         Route::get('/music/video-clips', [AdminMusicController::class, 'videoClips']);
+        Route::get('/music/artists/{id}/songs', [AdminMusicController::class, 'artistSongs']);
+        Route::get('/music/artists/{id}/clips', [AdminMusicController::class, 'artistClips']);
         Route::get('/music/stats', [AdminMusicController::class, 'stats']);
 
         // ─── Ringtones ───
