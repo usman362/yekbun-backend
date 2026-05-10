@@ -15,15 +15,12 @@ class Helpers
      * Rules:
      * - empty / null → null
      * - already absolute (http/https) → return as-is
-     * - if BUNNY_CDN_URL is set → prepend CDN URL
      * - else → prepend asset('storage/...') (Laravel public disk)
      */
     public static function mediaUrl($path)
     {
         if (empty($path)) return null;
         if (Str::startsWith($path, ['http://', 'https://'])) return $path;
-        $cdn = env('BUNNY_CDN_URL');
-        if (!empty($cdn)) return rtrim($cdn, '/') . '/' . ltrim($path, '/');
         return asset('storage/' . ltrim($path, '/'));
     }
 
