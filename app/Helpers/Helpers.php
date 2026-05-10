@@ -15,13 +15,32 @@ class Helpers
      * Rules:
      * - empty / null → null
      * - already absolute (http/https) → return as-is
-     * - else → prepend asset('storage/...') (Laravel public disk)
+     * - if file exists in local storage (storage/app/public/{path}) → asset('storage/...')
+     * - else if BUNNY_CDN_URL set → CDN URL
+     * - else fallback storage URL (graceful 404)
+     *
+     * This handles old-project's mixed pattern (some paths stored on CDN, others local).
      */
     public static function mediaUrl($path)
     {
         if (empty($path)) return null;
         if (Str::startsWith($path, ['http://', 'https://'])) return $path;
-        return asset('storage/' . ltrim($path, '/'));
+
+        $relative = ltrim($path, '/');
+
+        // Prefer local storage if file exists
+        $publicPath = function_exists('public_path') ? public_path('storage/' . $relative) : null;
+        $storagePath = function_exists('storage_path') ? storage_path('app/public/' . $relative) : null;
+        if (($publicPath && file_exists($publicPath)) || ($storagePath && file_exists($storagePath))) {
+            return asset('storage/' . $relative);
+        }
+
+        // Fall back to CDN if configured
+        $cdn = env('BUNNY_CDN_URL');
+        if (!empty($cdn)) return rtrim($cdn, '/') . '/' . $relative;
+
+        // Last resort: storage URL anyway
+        return asset('storage/' . $relative);
     }
 
     public static function fileUpload($uploadedFile, $folder = null)
