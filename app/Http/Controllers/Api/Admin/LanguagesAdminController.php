@@ -18,7 +18,7 @@ class LanguagesAdminController extends Controller
                 'id' => (string) $lang->_id,
                 'name' => $lang->title ?? $lang->name ?? '',
                 'code' => $lang->code ?? '',
-                'icon' => $lang->icon ?? null,
+                'icon' => Helpers::mediaUrl($lang->icon),
                 'active' => ($lang->status ?? '1') === '1' || ($lang->status ?? 1) == 1,
             ];
         });

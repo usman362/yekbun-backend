@@ -19,7 +19,7 @@ class DepartmentController extends Controller
             return [
                 'id'          => $d->_id,
                 'name'        => $d->name ?? 'Untitled',
-                'thumbnail'   => $d->thumbnail_path ?? '📁',
+                'thumbnail'   => Helpers::mediaUrl($d->thumbnail_path) ?? '📁',
                 'totalSub'    => $subCount,
                 'status'      => 'active',
                 'createdDate' => $d->created_at ? Carbon::parse($d->created_at)->format('d/m/Y') : '',

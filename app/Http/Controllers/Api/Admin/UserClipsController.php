@@ -24,7 +24,7 @@ class UserClipsController extends Controller
                 'id'              => $t->_id,
                 'title'           => $t->title ?? $t->name ?? 'Untitled',
                 'date'            => $t->created_at ? Carbon::parse($t->created_at)->format('d/m/Y') : '',
-                'image'           => $t->thumbnail ?? $t->image ?? '',
+                'image'           => Helpers::mediaUrl($t->thumbnail ?? $t->image) ?? '',
                 'variant'         => $t->variant ?? 'portrait',
                 'educatedPrice'   => $t->educated_price ?? 'Free',
                 'cultivatedPrice' => $t->cultivated_price ?? 'Free',

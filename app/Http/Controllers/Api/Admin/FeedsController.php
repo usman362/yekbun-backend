@@ -136,20 +136,22 @@ class FeedsController extends Controller
 
         if (!empty($feed->images) && is_array($feed->images)) {
             foreach ($feed->images as $img) {
+                $path = $img['path'] ?? '';
                 $media[] = [
-                    'id'   => md5($img['path'] ?? ''),
+                    'id'   => md5($path),
                     'type' => 'image',
-                    'url'  => $img['path'] ?? '',
+                    'url'  => Helpers::mediaUrl($path) ?? '',
                 ];
             }
         }
 
         if (!empty($feed->videos) && is_array($feed->videos)) {
             foreach ($feed->videos as $vid) {
+                $path = $vid['path'] ?? '';
                 $media[] = [
-                    'id'   => md5($vid['path'] ?? ''),
+                    'id'   => md5($path),
                     'type' => 'video',
-                    'url'  => $vid['path'] ?? '',
+                    'url'  => Helpers::mediaUrl($path) ?? '',
                 ];
             }
         }

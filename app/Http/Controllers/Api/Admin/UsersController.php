@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\Carbon;
@@ -56,7 +57,7 @@ class UsersController extends Controller
                 'email'        => $u->email ?? '',
                 'username'     => $u->username ?? '',
                 'userId'       => $u->user_id ?? '',
-                'avatar'       => $u->image ?? '',
+                'avatar'       => Helpers::mediaUrl($u->image) ?? '',
                 'gender'       => $u->gender ?? 'male',
                 'status'       => $u->status == 1 ? 'active' : 'closed',
                 'deviceType'   => $u->device_type ?? 'android',
