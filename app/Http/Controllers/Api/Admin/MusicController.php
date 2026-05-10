@@ -75,7 +75,7 @@ class MusicController extends Controller
     public function songs()
     {
         $songs = Song::where('status', 1)
-            ->orderByRaw(['created_at' => -1])
+            ->orderBy('created_at', 'desc')
             ->get();
 
         $artistIds = $songs->pluck('artist_id')->unique()->filter()->toArray();
@@ -92,8 +92,8 @@ class MusicController extends Controller
             return [
                 'id'       => $s->_id,
                 'title'    => $s->name ?? '',
-                'artist'   => $artist->name ?? 'Unknown',
-                'cover'    => Helpers::mediaUrl($artist->image) ?? '',
+                'artist'   => $artist?->name ?? 'Unknown',
+                'cover'    => Helpers::mediaUrl($artist?->image) ?? '',
                 'plays'    => (int) $viewCounts->get($s->_id, 0),
                 'duration' => $s->length ?? '0:00',
             ];
@@ -104,7 +104,7 @@ class MusicController extends Controller
 
     public function videoClips()
     {
-        $clips = VideoClip::orderByRaw(['created_at' => -1])->get();
+        $clips = VideoClip::orderBy('created_at', 'desc')->get();
 
         $artistIds = $clips->pluck('artist_id')->unique()->filter()->toArray();
         $artists = Artist::whereIn('_id', $artistIds)->get()->keyBy('_id');
@@ -114,7 +114,7 @@ class MusicController extends Controller
             return [
                 'id'        => $c->_id,
                 'title'     => $artist ? ($artist->name . ' - Clip') : 'Video Clip',
-                'avatar'    => Helpers::mediaUrl($artist->image) ?? '',
+                'avatar'    => Helpers::mediaUrl($artist?->image) ?? '',
                 'timeAgo'   => \Carbon\Carbon::parse($c->created_at)->diffForHumans(),
                 'thumbnail' => Helpers::mediaUrl($c->thumbnail) ?? '',
                 'views'     => (int) ($c->short_size ?? 0),
@@ -129,7 +129,7 @@ class MusicController extends Controller
 
     public function artistSongs($id)
     {
-        $songs = Song::where('artist_id', $id)->orderByRaw(['created_at' => -1])->get();
+        $songs = Song::where('artist_id', $id)->orderBy('created_at', 'desc')->get();
         $songIds = $songs->pluck('_id')->toArray();
         $viewCounts = SongViews::whereIn('song_id', $songIds)
             ->get()
@@ -154,7 +154,7 @@ class MusicController extends Controller
 
     public function artistClips($id)
     {
-        $clips = VideoClip::where('artist_id', $id)->orderByRaw(['created_at' => -1])->get();
+        $clips = VideoClip::where('artist_id', $id)->orderBy('created_at', 'desc')->get();
 
         $result = $clips->values()->map(function ($c, $i) {
             return [
