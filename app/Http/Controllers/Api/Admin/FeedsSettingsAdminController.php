@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\BackgroundFeed;
 use App\Models\Emoji;
@@ -15,7 +16,7 @@ class FeedsSettingsAdminController extends Controller
         $rows = BackgroundFeed::orderBy('created_at', 'desc')->get()->map(fn ($b) => [
             'id' => (string) $b->_id,
             'name' => $b->name ?? 'Banner',
-            'url' => $b->image ?? '',
+            'url' => Helpers::mediaUrl($b->image) ?? '',
         ]);
 
         return ResponseHelper::sendResponse($rows, 'Backgrounds loaded.');
@@ -62,7 +63,7 @@ class FeedsSettingsAdminController extends Controller
         $rows = Emoji::orderBy('name')->get()->map(fn ($e) => [
             'id' => (string) $e->_id,
             'name' => $e->name ?? '',
-            'url' => $e->image ?? '',
+            'url' => Helpers::mediaUrl($e->image) ?? '',
             'enabled' => true,
         ]);
 

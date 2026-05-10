@@ -6,6 +6,7 @@ use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Helpers\Helpers;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Exceptions\JWTException;
@@ -61,7 +62,7 @@ class AuthController extends Controller
                 'name'      => $user->name,
                 'email'     => $user->email,
                 'username'  => $user->username,
-                'image'     => $user->image,
+                'image'     => Helpers::mediaUrl($user->image),
                 'role'      => $user->is_superadmin ? 'superadmin' : 'admin',
             ],
         ], 'Login successful.');
@@ -76,7 +77,7 @@ class AuthController extends Controller
             'name'      => $user->name,
             'email'     => $user->email,
             'username'  => $user->username,
-            'image'     => $user->image,
+            'image'     => Helpers::mediaUrl($user->image),
             'role'      => $user->is_superadmin ? 'superadmin' : 'admin',
         ], 'User details fetched.');
     }

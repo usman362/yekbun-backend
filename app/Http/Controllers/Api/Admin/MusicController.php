@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Artist;
 use App\Models\ArtistFavorite;
@@ -56,7 +57,7 @@ class MusicController extends Controller
                 'clips'      => $clips,
                 'status'     => $a->status == 1 ? 'published' : 'draft',
                 'likes'      => (int) ($a->total_views ?? $likes),
-                'avatar'     => $a->image ?? '',
+                'avatar'     => Helpers::mediaUrl($a->image) ?? '',
                 'followers'  => $likes,
                 'popularity' => min(100, $songs * 5 + $clips * 3 + $likes * 2),
             ];
@@ -92,7 +93,7 @@ class MusicController extends Controller
                 'id'       => $s->_id,
                 'title'    => $s->name ?? '',
                 'artist'   => $artist->name ?? 'Unknown',
-                'cover'    => $artist->image ?? '',
+                'cover'    => Helpers::mediaUrl($artist->image) ?? '',
                 'plays'    => (int) $viewCounts->get($s->_id, 0),
                 'duration' => $s->length ?? '0:00',
             ];
@@ -113,9 +114,9 @@ class MusicController extends Controller
             return [
                 'id'        => $c->_id,
                 'title'     => $artist ? ($artist->name . ' - Clip') : 'Video Clip',
-                'avatar'    => $artist->image ?? '',
+                'avatar'    => Helpers::mediaUrl($artist->image) ?? '',
                 'timeAgo'   => \Carbon\Carbon::parse($c->created_at)->diffForHumans(),
-                'thumbnail' => $c->thumbnail ?? '',
+                'thumbnail' => Helpers::mediaUrl($c->thumbnail) ?? '',
                 'views'     => (int) ($c->short_size ?? 0),
                 'comments'  => 0,
                 'likes'     => 0,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\ClipTemplates;
 use App\Models\Clips;
@@ -45,9 +46,9 @@ class UserClipsController extends Controller
             return [
                 'id'        => $c->_id,
                 'username'  => $user->username ?? $user->name ?? 'Unknown',
-                'avatar'    => $user->image ?? '',
+                'avatar'    => Helpers::mediaUrl($user->image) ?? '',
                 'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
-                'image'     => $c->thumbnail ?? '',
+                'image'     => Helpers::mediaUrl($c->thumbnail) ?? '',
                 'media'     => [],
                 'views'     => (int) ClipsViews::where('clip_id', $c->_id)->count(),
                 'shares'    => 0,
@@ -92,9 +93,9 @@ class UserClipsController extends Controller
             return [
                 'id'        => $c->_id,
                 'username'  => $user->username ?? $user->name ?? 'Unknown',
-                'avatar'    => $user->image ?? '',
+                'avatar'    => Helpers::mediaUrl($user->image) ?? '',
                 'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
-                'image'     => $c->thumbnail ?? '',
+                'image'     => Helpers::mediaUrl($c->thumbnail) ?? '',
                 'media'     => [],
                 'views'     => (int) ClipsViews::where('clip_id', $c->_id)->count(),
                 'shares'    => 0,

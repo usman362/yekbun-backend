@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Feed;
 use App\Models\FeedComments;
@@ -103,7 +104,7 @@ class FeedsController extends Controller
                 return [
                     'id'        => $c->_id,
                     'username'  => $cu->username ?? $cu->name ?? 'User',
-                    'avatar'    => $cu->image ?? '',
+                    'avatar'    => Helpers::mediaUrl($cu->image) ?? '',
                     'text'      => $c->comment ?? '',
                     'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
                 ];
@@ -112,7 +113,7 @@ class FeedsController extends Controller
             return [
                 'id'        => $feed->_id,
                 'username'  => $user->username ?? $user->name ?? 'Unknown',
-                'avatar'    => $user->image ?? '',
+                'avatar'    => Helpers::mediaUrl($user->image) ?? '',
                 'timestamp' => Carbon::parse($feed->created_at)->diffForHumans(),
                 'image'     => $firstImage,
                 'media'     => count($media) > 1 ? $media : [],
@@ -157,7 +158,7 @@ class FeedsController extends Controller
             $media[] = [
                 'id'   => 'main',
                 'type' => 'image',
-                'url'  => $feed->image,
+                'url'  => Helpers::mediaUrl($feed->image),
             ];
         }
 

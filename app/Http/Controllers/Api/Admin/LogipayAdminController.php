@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Models\Wallet;
 use App\Models\User;
 use App\Models\KycVerification;
@@ -65,7 +66,7 @@ class LogipayAdminController extends Controller
                 'kycStatus'         => $this->mapKycStatus($kyc->status ?? 'pending'),
                 'verificationLevel' => $this->mapVerificationLevel($kyc),
                 'country'           => $user->country ?? '',
-                'avatar'            => $user->image ?? '',
+                'avatar'            => Helpers::mediaUrl($user->image) ?? '',
             ];
         })->values();
 
@@ -112,7 +113,7 @@ class LogipayAdminController extends Controller
                 'verificationLevel' => $this->mapVerificationLevel($kyc),
                 'balance'           => number_format($wallet->balance ?? 0, 2) . ' ZER',
                 'lastActivity'      => $wallet->updated_at ? Carbon::parse($wallet->updated_at)->diffForHumans() : '',
-                'avatar'            => $user->image ?? '',
+                'avatar'            => Helpers::mediaUrl($user->image) ?? '',
             ];
         })->values();
 
@@ -157,7 +158,7 @@ class LogipayAdminController extends Controller
                 'closedDate' => $wallet->updated_at ? Carbon::parse($wallet->updated_at)->format('M d, Y') : '',
                 'reason'     => $wallet->status_reason ?? 'N/A',
                 'lastStatus' => ucfirst($wallet->status ?? 'Closed'),
-                'avatar'     => $user->image ?? '',
+                'avatar'     => Helpers::mediaUrl($user->image) ?? '',
             ];
         })->values();
 
