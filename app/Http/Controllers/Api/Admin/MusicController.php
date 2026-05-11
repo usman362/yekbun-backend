@@ -127,6 +127,7 @@ class MusicController extends Controller
                 'timeAgo'   => \Carbon\Carbon::parse($c->created_at)->diffForHumans(),
                 'thumbnail' => Helpers::mediaUrl($c->thumbnail) ?? '',
                 'video'     => Helpers::mediaUrl($c->video) ?? '',
+                'duration'  => $c->length ?? '0:00',
                 'views'     => (int) ($c->short_size ?? 0),
                 'comments'  => 0,
                 'likes'     => 0,
@@ -214,8 +215,10 @@ class MusicController extends Controller
         if ($request->hasFile('video')) {
             $videoFile = $request->file('video');
             $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
+            $length = $this->extractDuration($videoFile->getRealPath());
             $clip->video = Helpers::fileCDNUpload($videoFile, 'videos/clips');
             $clip->file_size = $sizeMb;
+            if ($length) $clip->length = $length;
         }
         $clip->save();
 
@@ -224,7 +227,22 @@ class MusicController extends Controller
             'name'      => $clip->name,
             'thumbnail' => Helpers::mediaUrl($clip->thumbnail) ?? '',
             'video'     => Helpers::mediaUrl($clip->video) ?? '',
+            'length'    => $clip->length ?? '0:00',
         ], 'Video clip created.');
+    }
+
+    private function extractDuration(?string $path): ?string
+    {
+        if (!$path || !file_exists($path)) return null;
+        $ffprobe = trim((string) shell_exec('which ffprobe 2>/dev/null'));
+        if (!$ffprobe) return null;
+        $out = @shell_exec(escapeshellcmd($ffprobe) . ' -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ' . escapeshellarg($path) . ' 2>/dev/null');
+        $secs = (float) trim((string) $out);
+        if ($secs <= 0) return null;
+        $m = floor($secs / 60);
+        $s = (int) round($secs - ($m * 60));
+        if ($s === 60) { $m++; $s = 0; }
+        return sprintf('%02d:%02d', $m, $s);
     }
 
     public function updateClip(Request $request, $id)
@@ -246,8 +264,10 @@ class MusicController extends Controller
         if ($request->hasFile('video')) {
             $videoFile = $request->file('video');
             $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
+            $length = $this->extractDuration($videoFile->getRealPath());
             $clip->video = Helpers::fileCDNUpload($videoFile, 'videos/clips');
             $clip->file_size = $sizeMb;
+            if ($length) $clip->length = $length;
         }
         $clip->save();
 
