@@ -127,6 +127,29 @@ class MusicController extends Controller
         return ResponseHelper::sendResponse($result, 'Video clips fetched.');
     }
 
+    public function storeArtist(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $artist = new Artist();
+        $artist->name = $request->input('name');
+        $artist->gender = $request->input('gender');
+        $artist->city = $request->input('city');
+        $artist->status = $request->input('status', '1');
+        if ($request->hasFile('image')) {
+            $artist->image = Helpers::fileUpload($request->file('image'), 'images/artists');
+        }
+        $artist->save();
+
+        return ResponseHelper::sendResponse([
+            'id'     => (string) $artist->getKey(),
+            'name'   => $artist->name,
+            'avatar' => Helpers::mediaUrl($artist->image) ?? '',
+        ], 'Artist created.');
+    }
+
     public function artistSongs($id)
     {
         $songs = Song::where('artist_id', $id)->orderBy('created_at', 'desc')->get();
