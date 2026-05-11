@@ -121,10 +121,12 @@ class MusicController extends Controller
             $artist = $artists->get($c->artist_id);
             return [
                 'id'        => $c->_id,
-                'title'     => $artist ? ($artist->name . ' - Clip') : 'Video Clip',
+                'artist_id' => (string) ($c->artist_id ?? ''),
+                'title'     => $c->name ?? ($artist ? ($artist->name . ' - Clip') : 'Video Clip'),
                 'avatar'    => Helpers::mediaUrl($artist?->image) ?? '',
                 'timeAgo'   => \Carbon\Carbon::parse($c->created_at)->diffForHumans(),
                 'thumbnail' => Helpers::mediaUrl($c->thumbnail) ?? '',
+                'video'     => Helpers::mediaUrl($c->video) ?? '',
                 'views'     => (int) ($c->short_size ?? 0),
                 'comments'  => 0,
                 'likes'     => 0,
@@ -190,6 +192,77 @@ class MusicController extends Controller
         }
         $artist->delete();
         return ResponseHelper::sendResponse([], 'Artist deleted.');
+    }
+
+    public function storeClip(Request $request)
+    {
+        $request->validate([
+            'name'      => 'required|string|max:255',
+            'artist_id' => 'required|string',
+        ]);
+
+        $clip = new VideoClip();
+        $clip->name      = $request->input('name');
+        $clip->artist_id = $request->input('artist_id');
+        $clip->status    = $request->input('status', '1');
+        if ($request->filled('custom_id')) $clip->custom_id = $request->input('custom_id');
+        if ($request->filled('length'))    $clip->length    = $request->input('length');
+
+        if ($request->hasFile('thumbnail')) {
+            $clip->thumbnail = Helpers::fileCDNUpload($request->file('thumbnail'), 'images/thumbnails/clips');
+        }
+        if ($request->hasFile('video')) {
+            $clip->video = Helpers::fileCDNUpload($request->file('video'), 'videos/clips');
+            $clip->file_size = round($request->file('video')->getSize() / 1024 / 1024, 2);
+        }
+        $clip->save();
+
+        return ResponseHelper::sendResponse([
+            'id'        => (string) $clip->getKey(),
+            'name'      => $clip->name,
+            'thumbnail' => Helpers::mediaUrl($clip->thumbnail) ?? '',
+            'video'     => Helpers::mediaUrl($clip->video) ?? '',
+        ], 'Video clip created.');
+    }
+
+    public function updateClip(Request $request, $id)
+    {
+        $clip = VideoClip::find($id);
+        if (!$clip) {
+            return ResponseHelper::sendResponse([], 'Video clip not found.', false, 404);
+        }
+
+        if ($request->filled('name'))      $clip->name      = $request->input('name');
+        if ($request->filled('artist_id')) $clip->artist_id = $request->input('artist_id');
+        if ($request->filled('status'))    $clip->status    = $request->input('status');
+        if ($request->filled('custom_id')) $clip->custom_id = $request->input('custom_id');
+        if ($request->filled('length'))    $clip->length    = $request->input('length');
+
+        if ($request->hasFile('thumbnail')) {
+            $clip->thumbnail = Helpers::fileCDNUpload($request->file('thumbnail'), 'images/thumbnails/clips');
+        }
+        if ($request->hasFile('video')) {
+            $clip->video = Helpers::fileCDNUpload($request->file('video'), 'videos/clips');
+            $clip->file_size = round($request->file('video')->getSize() / 1024 / 1024, 2);
+        }
+        $clip->save();
+
+        return ResponseHelper::sendResponse([
+            'id'        => (string) $clip->getKey(),
+            'name'      => $clip->name,
+            'thumbnail' => Helpers::mediaUrl($clip->thumbnail) ?? '',
+            'video'     => Helpers::mediaUrl($clip->video) ?? '',
+        ], 'Video clip updated.');
+    }
+
+    public function deleteClip($id)
+    {
+        $clip = VideoClip::find($id);
+        if (!$clip) {
+            return ResponseHelper::sendResponse([], 'Video clip not found.', false, 404);
+        }
+        $clip->delete();
+        return ResponseHelper::sendResponse([], 'Video clip deleted.');
     }
 
     public function artistSongs($id)
