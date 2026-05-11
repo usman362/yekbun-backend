@@ -212,8 +212,10 @@ class MusicController extends Controller
             $clip->thumbnail = Helpers::fileCDNUpload($request->file('thumbnail'), 'images/thumbnails/clips');
         }
         if ($request->hasFile('video')) {
-            $clip->video = Helpers::fileCDNUpload($request->file('video'), 'videos/clips');
-            $clip->file_size = round($request->file('video')->getSize() / 1024 / 1024, 2);
+            $videoFile = $request->file('video');
+            $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
+            $clip->video = Helpers::fileCDNUpload($videoFile, 'videos/clips');
+            $clip->file_size = $sizeMb;
         }
         $clip->save();
 
@@ -242,8 +244,10 @@ class MusicController extends Controller
             $clip->thumbnail = Helpers::fileCDNUpload($request->file('thumbnail'), 'images/thumbnails/clips');
         }
         if ($request->hasFile('video')) {
-            $clip->video = Helpers::fileCDNUpload($request->file('video'), 'videos/clips');
-            $clip->file_size = round($request->file('video')->getSize() / 1024 / 1024, 2);
+            $videoFile = $request->file('video');
+            $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
+            $clip->video = Helpers::fileCDNUpload($videoFile, 'videos/clips');
+            $clip->file_size = $sizeMb;
         }
         $clip->save();
 
