@@ -150,6 +150,40 @@ class MusicController extends Controller
         ], 'Artist created.');
     }
 
+    public function updateArtist(Request $request, $id)
+    {
+        $artist = Artist::find($id);
+        if (!$artist) {
+            return ResponseHelper::sendResponse([], 'Artist not found.', false, 404);
+        }
+
+        if ($request->filled('name'))   $artist->name   = $request->input('name');
+        if ($request->filled('gender')) $artist->gender = $request->input('gender');
+        if ($request->filled('city'))   $artist->city   = $request->input('city');
+        if ($request->filled('status')) $artist->status = $request->input('status');
+
+        if ($request->hasFile('image')) {
+            $artist->image = Helpers::fileCDNUpload($request->file('image'), 'images/artist');
+        }
+        $artist->save();
+
+        return ResponseHelper::sendResponse([
+            'id'     => (string) $artist->getKey(),
+            'name'   => $artist->name,
+            'avatar' => Helpers::mediaUrl($artist->image) ?? '',
+        ], 'Artist updated.');
+    }
+
+    public function deleteArtist($id)
+    {
+        $artist = Artist::find($id);
+        if (!$artist) {
+            return ResponseHelper::sendResponse([], 'Artist not found.', false, 404);
+        }
+        $artist->delete();
+        return ResponseHelper::sendResponse([], 'Artist deleted.');
+    }
+
     public function artistSongs($id)
     {
         $songs = Song::where('artist_id', $id)->orderBy('created_at', 'desc')->get();
