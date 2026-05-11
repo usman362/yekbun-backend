@@ -50,17 +50,18 @@ class MusicController extends Controller
             $likes = $favCounts->get($a->_id, 0);
 
             return [
-                'id'         => $a->_id,
-                'name'       => $a->name ?? '',
-                'gender'     => $a->gender ?? '',
-                'region'     => $a->city ?? '',
-                'songs'      => $songs,
-                'clips'      => $clips,
-                'status'     => $a->status == 1 ? 'published' : 'draft',
-                'likes'      => (int) ($a->total_views ?? $likes),
-                'avatar'     => Helpers::mediaUrl($a->image) ?? '',
-                'followers'  => $likes,
-                'popularity' => min(100, $songs * 5 + $clips * 3 + $likes * 2),
+                'id'          => $a->_id,
+                'name'        => $a->name ?? '',
+                'gender'      => $a->gender ?? '',
+                'province_id' => $a->province_id ?? '',
+                'region'      => $a->city ?? '',
+                'songs'       => $songs,
+                'clips'       => $clips,
+                'status'      => $a->status == 1 ? 'published' : 'draft',
+                'likes'       => (int) ($a->total_views ?? $likes),
+                'avatar'      => Helpers::mediaUrl($a->image) ?? '',
+                'followers'   => $likes,
+                'popularity'  => min(100, $songs * 5 + $clips * 3 + $likes * 2),
             ];
         })->values();
 
@@ -137,7 +138,7 @@ class MusicController extends Controller
         $artist = new Artist();
         $artist->name = $request->input('name');
         $artist->gender = $request->input('gender');
-        $artist->city = $request->input('city');
+        if ($request->filled('province_id')) $artist->province_id = $request->input('province_id');
         $artist->status = $request->input('status', '1');
         if ($request->hasFile('image')) {
             $artist->image = Helpers::fileCDNUpload($request->file('image'), 'images/artist');
@@ -158,10 +159,10 @@ class MusicController extends Controller
             return ResponseHelper::sendResponse([], 'Artist not found.', false, 404);
         }
 
-        if ($request->filled('name'))   $artist->name   = $request->input('name');
-        if ($request->filled('gender')) $artist->gender = $request->input('gender');
-        if ($request->filled('city'))   $artist->city   = $request->input('city');
-        if ($request->filled('status')) $artist->status = $request->input('status');
+        if ($request->filled('name'))        $artist->name        = $request->input('name');
+        if ($request->filled('gender'))      $artist->gender      = $request->input('gender');
+        if ($request->filled('province_id')) $artist->province_id = $request->input('province_id');
+        if ($request->filled('status'))      $artist->status      = $request->input('status');
 
         if ($request->hasFile('image')) {
             $artist->image = Helpers::fileCDNUpload($request->file('image'), 'images/artist');

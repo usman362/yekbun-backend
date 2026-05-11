@@ -677,6 +677,7 @@ Route::prefix('admin')->group(function () {
 
         // ─── Locations (countries / regions) ───
         Route::get('/locations/tree', [LocationAdminController::class, 'tree']);
+        Route::get('/locations/regions', [LocationAdminController::class, 'regionsList']);
         Route::post('/locations/countries', [LocationAdminController::class, 'storeCountry']);
         Route::put('/locations/countries/{id}', [LocationAdminController::class, 'updateCountry']);
         Route::delete('/locations/countries/{id}', [LocationAdminController::class, 'destroyCountry']);

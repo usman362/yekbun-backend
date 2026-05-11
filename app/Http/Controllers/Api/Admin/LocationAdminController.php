@@ -12,6 +12,18 @@ use Illuminate\Http\Request;
 
 class LocationAdminController extends Controller
 {
+    public function regionsList()
+    {
+        $regions = Region::orderBy('name')->get()->map(function ($r) {
+            return [
+                'id'   => (string) $r->_id,
+                'name' => $r->name ?? '',
+                'country_id' => (string) ($r->country_id ?? ''),
+            ];
+        });
+        return ResponseHelper::sendResponse($regions, 'Regions fetched.');
+    }
+
     public function tree()
     {
         $countries = Country::orderBy('name')->get();
