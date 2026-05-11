@@ -139,7 +139,7 @@ class MusicController extends Controller
         $artist->city = $request->input('city');
         $artist->status = $request->input('status', '1');
         if ($request->hasFile('image')) {
-            $artist->image = Helpers::fileUpload($request->file('image'), 'images/artists');
+            $artist->image = Helpers::fileCDNUpload($request->file('image'), 'images/artist');
         }
         $artist->save();
 
