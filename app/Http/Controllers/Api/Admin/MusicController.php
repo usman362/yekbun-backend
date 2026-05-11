@@ -7,6 +7,7 @@ use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Artist;
 use App\Models\ArtistFavorite;
+use App\Models\Region;
 use App\Models\Song;
 use App\Models\SongViews;
 use App\Models\VideoClip;
@@ -44,17 +45,22 @@ class MusicController extends Controller
             ->groupBy('artist_id')
             ->map(fn($g) => $g->count());
 
-        $result = $artists->map(function ($a) use ($songCounts, $clipCounts, $favCounts) {
+        $provinceIds = $artists->pluck('province_id')->unique()->filter()->toArray();
+        $provinces = Region::whereIn('_id', $provinceIds)->get()->keyBy(fn($r) => (string) $r->_id);
+
+        $result = $artists->map(function ($a) use ($songCounts, $clipCounts, $favCounts, $provinces) {
             $songs = $songCounts->get($a->_id, 0);
             $clips = $clipCounts->get($a->_id, 0);
             $likes = $favCounts->get($a->_id, 0);
+            $provinceName = $a->province_id ? ($provinces->get((string) $a->province_id)->name ?? '') : '';
 
             return [
                 'id'          => $a->_id,
                 'name'        => $a->name ?? '',
                 'gender'      => $a->gender ?? '',
-                'province_id' => $a->province_id ?? '',
-                'region'      => $a->city ?? '',
+                'province_id' => (string) ($a->province_id ?? ''),
+                'province'    => $provinceName,
+                'region'      => $provinceName ?: ($a->city ?? ''),
                 'songs'       => $songs,
                 'clips'       => $clips,
                 'status'      => $a->status == 1 ? 'published' : 'draft',
