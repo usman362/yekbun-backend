@@ -52,6 +52,7 @@ class MusicController extends Controller
             return [
                 'id'         => $a->_id,
                 'name'       => $a->name ?? '',
+                'gender'     => $a->gender ?? '',
                 'region'     => $a->city ?? '',
                 'songs'      => $songs,
                 'clips'      => $clips,
