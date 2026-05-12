@@ -706,6 +706,10 @@ Route::prefix('admin')->group(function () {
 
         // ─── Departments ───
         Route::get('/departments', [AdminDepartmentController::class, 'index']);
+        Route::post('/departments', [AdminDepartmentController::class, 'store']);
+        Route::put('/departments/{id}', [AdminDepartmentController::class, 'update']);
+        Route::delete('/departments/{id}', [AdminDepartmentController::class, 'destroy']);
+        Route::get('/departments/{id}/sub', [AdminDepartmentController::class, 'subDepartments']);
 
         // ─── Locations (countries / regions) ───
         Route::get('/locations/tree', [LocationAdminController::class, 'tree']);

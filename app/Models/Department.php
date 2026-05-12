@@ -11,7 +11,7 @@ class Department extends Model
     protected $connection = 'mongodb';
     protected $table = 'departments';
 
-    protected $fillable = ['name', 'thumbnail_path', 'parent_id'];
+    protected $fillable = ['name', 'thumbnail_path', 'parent_id', 'status'];
 
     public function departments() { return $this->hasMany(Department::class, 'parent_id'); }
     public function department() { return $this->hasOne(Department::class, '_id', 'parent_id'); }
