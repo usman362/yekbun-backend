@@ -653,6 +653,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/feeds/reported', [AdminFeedsController::class, 'reportedFeeds']);
         Route::get('/feeds/reported-comments', [AdminFeedsController::class, 'reportedComments']);
         Route::post('/feeds/action', [AdminFeedsController::class, 'actionFeed']);
+        Route::get('/feeds/{id}/comments', [AdminFeedsController::class, 'feedComments']);
+        Route::delete('/comments/{id}', [AdminFeedsController::class, 'deleteComment']);
 
         // ─── Music ───
         Route::get('/music/artists', [AdminMusicController::class, 'artists']);

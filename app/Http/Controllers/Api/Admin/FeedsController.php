@@ -125,6 +125,64 @@ class FeedsController extends Controller
         return ResponseHelper::sendResponse($rows, 'Reported comments fetched.');
     }
 
+    public function feedComments(Request $request, $id)
+    {
+        $feed = Feed::find($id);
+        if (!$feed) {
+            return ResponseHelper::sendResponse(null, 'Feed not found', false, 404);
+        }
+
+        $comments = FeedComments::where('feed_id', $id)
+            ->whereNull('parent_id')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $userIds = $comments->pluck('user_id')->unique()->filter()->toArray();
+        $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
+
+        $rows = $comments->map(function ($c) use ($users) {
+            $u = $users->get($c->user_id);
+            return [
+                'id'           => $c->_id,
+                'feed_id'      => $c->feed_id,
+                'parent_id'    => $c->parent_id,
+                'comment_type' => $c->comment_type ?? 'normal',
+                'text'         => $c->comment ?? '',
+                'audio'        => $c->audio ?? null,
+                'image'        => $c->image ?? null,
+                'emoji'        => $c->emoji ?? null,
+                'username'     => $u->username ?? $u->name ?? 'User',
+                'avatar'       => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'timestamp'    => Carbon::parse($c->created_at)->diffForHumans(),
+            ];
+        })->values()->toArray();
+
+        return ResponseHelper::sendResponse($rows, 'Comments fetched.');
+    }
+
+    public function deleteComment($id)
+    {
+        $comment = FeedComments::find($id);
+        if (!$comment) {
+            return ResponseHelper::sendResponse(null, 'Comment not found', false, 404);
+        }
+
+        // Delete audio attachment from BunnyCDN if present
+        if (!empty($comment->audio)) {
+            $bunny = new BunnyCDNService();
+            $cdnBase = rtrim((string) env('BUNNY_CDN_URL'), '/');
+            $bunny->delete($this->cdnPath($comment->audio, $cdnBase));
+        }
+
+        // Cascade: delete reports + child comments + likes
+        ReportComments::where('comment_id', $comment->_id)->delete();
+        FeedComments::where('parent_id', $comment->_id)->delete();
+
+        $comment->delete();
+
+        return ResponseHelper::sendResponse(['id' => $id], 'Comment deleted.');
+    }
+
     public function actionFeed(Request $request)
     {
         $request->validate([
