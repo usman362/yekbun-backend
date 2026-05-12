@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\AdminActivityController;
+use App\Http\Controllers\Api\Admin\FeedsController as AdminFeedsCtrl;
 use App\Models\AIVideo;
 use App\Models\Event;
 use App\Models\Feed;
@@ -47,13 +48,33 @@ class ContentBrowseAdminController extends Controller
     public function complaints(Request $request)
     {
         $perPage = min((int) $request->get('per_page', 15), 100);
-        $paginator = ReportFeeds::with(['feed', 'user'])->orderBy('created_at', 'desc')->paginate($perPage);
+
+        // Paginate distinct reported feed IDs by most-recent report
+        $reportsPaginator = ReportFeeds::orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        $feedIds = collect($reportsPaginator->items())
+            ->pluck('feed_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $feeds = empty($feedIds)
+            ? collect()
+            : Feed::whereIn('_id', $feedIds)->get();
+
+        // Preserve report-order: sort feeds in the same order as $feedIds
+        $orderMap = array_flip($feedIds);
+        $feeds = $feeds->sortBy(fn($f) => $orderMap[$f->_id] ?? PHP_INT_MAX)->values();
+
+        $items = app(AdminFeedsCtrl::class)->transformFeeds($feeds);
 
         return ResponseHelper::sendResponse([
-            'items' => $paginator->items(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'last_page' => $paginator->lastPage(),
+            'items'     => $items,
+            'total'     => $reportsPaginator->total(),
+            'page'      => $reportsPaginator->currentPage(),
+            'last_page' => $reportsPaginator->lastPage(),
         ], 'Reported feeds loaded.');
     }
 

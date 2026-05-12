@@ -397,7 +397,7 @@ class FeedsController extends Controller
         return ltrim($fullUrl, '/');
     }
 
-    private function transformFeeds($feeds): array
+    public function transformFeeds($feeds): array
     {
         $userIds = $feeds->pluck('user_id')->unique()->filter()->toArray();
         $users   = User::whereIn('_id', $userIds)->get()->keyBy('_id');
@@ -456,7 +456,7 @@ class FeedsController extends Controller
         })->values()->toArray();
     }
 
-    private function buildMedia(Feed $feed): array
+    public function buildMedia(Feed $feed): array
     {
         $media = [];
 
