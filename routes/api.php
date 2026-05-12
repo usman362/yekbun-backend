@@ -100,6 +100,7 @@ use App\Http\Controllers\Api\Admin\SettingsAdminController;
 use App\Http\Controllers\Api\Admin\TransactionsAdminController;
 use App\Http\Controllers\Api\Admin\ZercashAdminController;
 use App\Http\Controllers\Api\Admin\LogipayAdminController;
+use App\Http\Controllers\Api\Admin\ProductsAdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -843,5 +844,14 @@ Route::prefix('admin')->group(function () {
         Route::get('/logipay/new-requests', [LogipayAdminController::class, 'newRequests']);
         Route::get('/logipay/active-wallets', [LogipayAdminController::class, 'activeWallets']);
         Route::get('/logipay/closed-wallets', [LogipayAdminController::class, 'closedWallets']);
+
+        // ─── Zercash Products & Sale Managers ───
+        Route::get('/products', [ProductsAdminController::class, 'index']);
+        Route::post('/products', [ProductsAdminController::class, 'storeProduct']);
+        Route::put('/products/{id}', [ProductsAdminController::class, 'updateProduct']);
+        Route::delete('/products/{id}', [ProductsAdminController::class, 'destroyProduct']);
+        Route::post('/sale-managers', [ProductsAdminController::class, 'storeSaleManager']);
+        Route::put('/sale-managers/{id}', [ProductsAdminController::class, 'updateSaleManager']);
+        Route::delete('/sale-managers/{id}', [ProductsAdminController::class, 'destroySaleManager']);
     });
 });
