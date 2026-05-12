@@ -88,6 +88,9 @@ use App\Http\Controllers\Api\Admin\LanguagesAdminController;
 use App\Http\Controllers\Api\Admin\PolicyAdminController;
 use App\Http\Controllers\Api\Admin\PortalMiscAdminController;
 use App\Http\Controllers\Api\Admin\ContentBrowseAdminController;
+use App\Http\Controllers\Api\Admin\ContentHistoryAdminController;
+use App\Http\Controllers\Api\Admin\ContentAiVideoAdminController;
+use App\Http\Controllers\Api\Admin\FileController as AdminFileController;
 use App\Http\Controllers\Api\Admin\FeedsSettingsAdminController;
 use App\Http\Controllers\Api\Admin\SystemAdminController;
 use App\Http\Controllers\Api\Admin\SettingsAdminController;
@@ -719,6 +722,21 @@ Route::prefix('admin')->group(function () {
         Route::get('/content/complaints', [ContentBrowseAdminController::class, 'complaints']);
         Route::get('/content/posts-preview', [ContentBrowseAdminController::class, 'postsPreview']);
         Route::get('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivity']);
+
+        // ─── Content: History (create/edit/delete + thumbnail generation) ───
+        Route::post('/content/history/generate-thumbnails', [ContentHistoryAdminController::class, 'generateThumbnails']);
+        Route::post('/content/history', [ContentHistoryAdminController::class, 'store']);
+        Route::put('/content/history/{id}', [ContentHistoryAdminController::class, 'update']);
+        Route::delete('/content/history/{id}', [ContentHistoryAdminController::class, 'destroy']);
+
+        // ─── Content: AI Videos (create/edit/delete + thumbnail generation) ───
+        Route::post('/content/ai-videos/generate-thumbnails', [ContentAiVideoAdminController::class, 'generateThumbnails']);
+        Route::post('/content/ai-videos', [ContentAiVideoAdminController::class, 'store']);
+        Route::put('/content/ai-videos/{id}', [ContentAiVideoAdminController::class, 'update']);
+        Route::delete('/content/ai-videos/{id}', [ContentAiVideoAdminController::class, 'destroy']);
+
+        // ─── Generic file upload to BunnyCDN ───
+        Route::post('/files/upload', [AdminFileController::class, 'upload']);
 
         // ─── Feeds settings (backgrounds / emojis) ───
         Route::get('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'backgrounds']);
