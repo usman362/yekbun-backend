@@ -650,6 +650,9 @@ Route::prefix('admin')->group(function () {
         Route::get('/feeds/latest', [AdminFeedsController::class, 'latest']);
         Route::get('/feeds/on-hold', [AdminFeedsController::class, 'onHold']);
         Route::get('/feeds/stats', [AdminFeedsController::class, 'stats']);
+        Route::get('/feeds/reported', [AdminFeedsController::class, 'reportedFeeds']);
+        Route::get('/feeds/reported-comments', [AdminFeedsController::class, 'reportedComments']);
+        Route::post('/feeds/action', [AdminFeedsController::class, 'actionFeed']);
 
         // ─── Music ───
         Route::get('/music/artists', [AdminMusicController::class, 'artists']);

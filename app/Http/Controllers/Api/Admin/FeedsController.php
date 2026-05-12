@@ -7,12 +7,17 @@ use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Feed;
 use App\Models\FeedComments;
+use App\Models\FlaggedUser;
+use App\Models\NotificationCenter;
+use App\Models\Notifications;
 use App\Models\ReportFeeds;
 use App\Models\Report;
 use App\Models\ReportComments;
 use App\Models\User;
+use App\Services\BunnyCDNService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class FeedsController extends Controller
 {
@@ -71,6 +76,179 @@ class FeedsController extends Controller
             'reported_feeds'    => $reportedFeeds,
             'reported_comments' => $reportedComments,
         ], 'Feed stats fetched.');
+    }
+
+    public function reportedFeeds()
+    {
+        $reportFeedIds = ReportFeeds::pluck('feed_id')->unique()->toArray();
+        $feeds = Feed::whereIn('_id', $reportFeedIds)->orderBy('created_at', 'desc')->get();
+        return ResponseHelper::sendResponse($this->transformFeeds($feeds), 'Reported feeds fetched.');
+    }
+
+    public function reportedComments()
+    {
+        $reports = ReportComments::orderBy('created_at', 'desc')->get();
+
+        $commentIds = $reports->pluck('comment_id')->unique()->filter()->toArray();
+        $comments = FeedComments::whereIn('_id', $commentIds)->get()->keyBy('_id');
+
+        $userIds = $reports->pluck('user_id')
+            ->merge($comments->pluck('user_id'))
+            ->unique()->filter()->toArray();
+        $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
+
+        $rows = $reports->map(function ($r) use ($comments, $users) {
+            $c = $comments->get($r->comment_id);
+            $commentUser = $c ? $users->get($c->user_id) : null;
+            $reporter = $users->get($r->user_id);
+            return [
+                'id'               => $r->_id,
+                'comment_id'       => $r->comment_id,
+                'feed_id'          => $c->feed_id ?? null,
+                'comment_text'     => $c->comment ?? '',
+                'comment_type'     => $c->comment_type ?? 'normal',
+                'comment_user'     => $commentUser ? [
+                    'id'       => $commentUser->_id,
+                    'username' => $commentUser->username ?? $commentUser->name ?? 'User',
+                    'avatar'   => Helpers::mediaUrl($commentUser->image) ?? '',
+                ] : null,
+                'reporter'         => $reporter ? [
+                    'id'       => $reporter->_id,
+                    'username' => $reporter->username ?? $reporter->name ?? 'User',
+                    'avatar'   => Helpers::mediaUrl($reporter->image) ?? '',
+                ] : null,
+                'reason'           => $r->reason ?? '',
+                'reported_at'      => Carbon::parse($r->created_at)->diffForHumans(),
+            ];
+        })->values()->toArray();
+
+        return ResponseHelper::sendResponse($rows, 'Reported comments fetched.');
+    }
+
+    public function actionFeed(Request $request)
+    {
+        $request->validate([
+            'feed_id'      => 'required|string',
+            'action_level' => 'required|in:0,1,2,3',
+        ]);
+
+        $feed = Feed::find($request->feed_id);
+        if (!$feed) {
+            return ResponseHelper::sendResponse(null, 'Feed not found', false, 404);
+        }
+
+        $user = User::find($feed->user_id);
+        if ($user) {
+            $user->is_flagged = 0;
+        }
+
+        $level = (string) $request->action_level;
+        $notifyMsg = '';
+
+        if ($level !== '0') {
+            // Delete media (images, videos) from BunnyCDN
+            $bunny = new BunnyCDNService();
+            $cdnBase = rtrim((string) env('BUNNY_CDN_URL'), '/');
+
+            if (is_array($feed->images)) {
+                foreach ($feed->images as $image) {
+                    if (!empty($image['path'])) {
+                        $bunny->delete($this->cdnPath($image['path'], $cdnBase));
+                    }
+                }
+            }
+            if (is_array($feed->videos)) {
+                foreach ($feed->videos as $video) {
+                    if (!empty($video['path'])) {
+                        $bunny->delete($this->cdnPath($video['path'], $cdnBase));
+                    }
+                }
+            }
+
+            // Delete feed comments + audio attachments
+            $comments = FeedComments::where('feed_id', $feed->_id)->get();
+            foreach ($comments as $comment) {
+                if ($comment->comment_type === 'audio' && !empty($comment->audio)) {
+                    $bunny->delete($this->cdnPath($comment->audio, $cdnBase));
+                }
+                $comment->delete();
+            }
+
+            // Clear report records for this feed
+            ReportFeeds::where('feed_id', $feed->_id)->delete();
+
+            // Delete the feed
+            $feed->delete();
+
+            if ($user) {
+                if ($level === '1') {
+                    $user->is_flagged = 1;
+                    FlaggedUser::create([
+                        'user_id'      => $user->_id,
+                        'reason'       => $request->input('reason', 'Posted Feed'),
+                        'status'       => 0,
+                        'action_taken' => 1,
+                    ]);
+                    $notifyMsg = "Your feed has been deleted and you've been flagged.";
+                } elseif ($level === '2') {
+                    $user->old_level     = $user->level;
+                    $user->old_user_type = $user->user_type;
+                    $user->level         = 0;
+                    $user->user_type     = 'cultivated';
+                    $user->action_type   = 'downgrade';
+                    $user->action_duration = $this->resolveDuration($request->input('duration'));
+                    $notifyMsg = "Your feed has been deleted and you've been downgraded to Cultivated.";
+                } elseif ($level === '3') {
+                    $user->status        = 0;
+                    $user->action_type   = 'suspend';
+                    $user->action_duration = $this->resolveDuration($request->input('duration'));
+                    $notifyMsg = "Your feed has been deleted and you've been suspended.";
+                }
+
+                // Notification center entry
+                if ($notifyMsg) {
+                    NotificationCenter::create([
+                        'title'       => 'Feed Deleted',
+                        'description' => $notifyMsg,
+                        'user_id'     => $user->_id,
+                        'user_image'  => $user->image ?? null,
+                        'type'        => 'feeds',
+                        'is_read'     => 0,
+                    ]);
+                }
+            }
+        }
+
+        if ($user) {
+            $user->save();
+        }
+
+        return ResponseHelper::sendResponse([
+            'feed_id'      => $request->feed_id,
+            'action_level' => $level,
+        ], 'Action applied.');
+    }
+
+    private function resolveDuration($duration): Carbon
+    {
+        $d = (string) $duration;
+        if ($d === '24h') return Carbon::now()->addDay();
+        if ($d === '7d')  return Carbon::now()->addDays(7);
+        if ($d === '30d') return Carbon::now()->addDays(30);
+        if ($d === 'permanent' || $d === 'perm') return Carbon::now()->addYears(100);
+        // Numeric months from old project: 1, 2, 3
+        if ($d === '1') return Carbon::now()->addMonth();
+        if ($d === '2') return Carbon::now()->addMonths(2);
+        if ($d === '3') return Carbon::now()->addMonths(3);
+        return Carbon::now()->addDays(15);
+    }
+
+    private function cdnPath(string $fullUrl, string $cdnBase): string
+    {
+        if ($cdnBase !== '' && Str::startsWith($fullUrl, $cdnBase . '/')) {
+            return Str::after($fullUrl, $cdnBase . '/');
+        }
+        return ltrim($fullUrl, '/');
     }
 
     private function transformFeeds($feeds): array
