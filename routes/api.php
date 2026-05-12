@@ -678,6 +678,10 @@ Route::prefix('admin')->group(function () {
 
         // ─── User Clips ───
         Route::get('/clips/templates', [AdminUserClipsController::class, 'templates']);
+        Route::post('/clips/templates', [AdminUserClipsController::class, 'storeTemplate']);
+        Route::put('/clips/templates/{id}', [AdminUserClipsController::class, 'updateTemplate']);
+        Route::delete('/clips/templates/{id}', [AdminUserClipsController::class, 'destroyTemplate']);
+        Route::post('/clips/templates/generate-thumbnails', [AdminUserClipsController::class, 'generateTemplateThumbnails']);
         Route::get('/clips', [AdminUserClipsController::class, 'clips']);
         Route::get('/clips/reported', [AdminUserClipsController::class, 'reported']);
 
