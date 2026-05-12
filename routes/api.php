@@ -91,6 +91,7 @@ use App\Http\Controllers\Api\Admin\ContentBrowseAdminController;
 use App\Http\Controllers\Api\Admin\ContentHistoryAdminController;
 use App\Http\Controllers\Api\Admin\ContentAiVideoAdminController;
 use App\Http\Controllers\Api\Admin\ContentVotingsAdminController;
+use App\Http\Controllers\Api\Admin\OfficialsAdminController;
 use App\Http\Controllers\Api\Admin\FileController as AdminFileController;
 use App\Http\Controllers\Api\Admin\FeedsSettingsAdminController;
 use App\Http\Controllers\Api\Admin\SystemAdminController;
@@ -753,6 +754,34 @@ Route::prefix('admin')->group(function () {
 
         // ─── Generic file upload to BunnyCDN ───
         Route::post('/files/upload', [AdminFileController::class, 'upload']);
+
+        // ─── Officials ───
+        Route::get('/officials/counts', [OfficialsAdminController::class, 'counts']);
+
+        Route::get('/officials/constitutions', [OfficialsAdminController::class, 'constitutionsIndex']);
+        Route::post('/officials/constitutions', [OfficialsAdminController::class, 'constitutionsStore']);
+        Route::put('/officials/constitutions/{id}', [OfficialsAdminController::class, 'constitutionsUpdate']);
+        Route::delete('/officials/constitutions/{id}', [OfficialsAdminController::class, 'constitutionsDestroy']);
+
+        Route::get('/officials/people', [OfficialsAdminController::class, 'peopleIndex']);
+        Route::post('/officials/people', [OfficialsAdminController::class, 'peopleStore']);
+        Route::put('/officials/people/{id}', [OfficialsAdminController::class, 'peopleUpdate']);
+        Route::delete('/officials/people/{id}', [OfficialsAdminController::class, 'peopleDestroy']);
+
+        Route::get('/officials/ministries', [OfficialsAdminController::class, 'ministriesIndex']);
+        Route::post('/officials/ministries', [OfficialsAdminController::class, 'ministriesStore']);
+        Route::put('/officials/ministries/{id}', [OfficialsAdminController::class, 'ministriesUpdate']);
+        Route::delete('/officials/ministries/{id}', [OfficialsAdminController::class, 'ministriesDestroy']);
+
+        Route::get('/officials/civil-laws', [OfficialsAdminController::class, 'civilLawsIndex']);
+        Route::post('/officials/civil-laws', [OfficialsAdminController::class, 'civilLawsStore']);
+        Route::put('/officials/civil-laws/{id}', [OfficialsAdminController::class, 'civilLawsUpdate']);
+        Route::delete('/officials/civil-laws/{id}', [OfficialsAdminController::class, 'civilLawsDestroy']);
+
+        Route::get('/officials/holidays', [OfficialsAdminController::class, 'holidaysIndex']);
+        Route::post('/officials/holidays', [OfficialsAdminController::class, 'holidaysStore']);
+        Route::put('/officials/holidays/{id}', [OfficialsAdminController::class, 'holidaysUpdate']);
+        Route::delete('/officials/holidays/{id}', [OfficialsAdminController::class, 'holidaysDestroy']);
 
         // ─── Feeds settings (backgrounds / emojis) ───
         Route::get('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'backgrounds']);
