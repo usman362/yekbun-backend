@@ -816,6 +816,7 @@ Route::prefix('admin')->group(function () {
 
         // ─── System ───
         Route::get('/system/logs', [SystemAdminController::class, 'logs']);
+        Route::delete('/system/logs', [SystemAdminController::class, 'clearLogs']);
         Route::get('/system/health', [SystemAdminController::class, 'health']);
         Route::get('/system/backups', [SystemAdminController::class, 'backups']);
         Route::get('/system/api-status', [SystemAdminController::class, 'apiStatus']);

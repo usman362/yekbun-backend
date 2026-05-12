@@ -4,33 +4,56 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
+use App\Models\AdminActivityLog;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
 class SystemAdminController extends Controller
 {
-    public function logs()
+    public function logs(Request $request)
     {
-        $path = storage_path('logs/laravel.log');
-        $entries = [];
-        if (is_readable($path)) {
-            $lines = @file($path, FILE_IGNORE_NEW_LINES) ?: [];
-            $slice = array_slice($lines, -300);
-            $i = 0;
-            foreach ($slice as $line) {
-                $entries[] = [
-                    'id' => ++$i,
-                    'level' => str_contains($line, '.ERROR') || str_contains($line, ' ERROR ') ? 'error'
-                        : (str_contains($line, '.WARNING') || str_contains($line, ' WARNING ') ? 'warning' : 'info'),
-                    'timestamp' => now()->toDateTimeString(),
-                    'title' => 'Log',
-                    'description' => $line,
+        $limit = min((int) $request->get('limit', 300), 1000);
+
+        // Primary source: structured admin activity logs (MongoDB)
+        $rows = AdminActivityLog::orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($log, $i) {
+                return [
+                    'id'          => $log->_id ? (string) $log->_id : (string) $i,
+                    'level'       => $log->level ?? 'info',
+                    'timestamp'   => $log->created_at
+                        ? Carbon::parse($log->created_at)->format('Y-m-d H:i:s')
+                        : '',
+                    'title'       => $log->title ?? 'Activity',
+                    'description' => $log->description ?? '',
+                    'user'        => $log->user_name ?? null,
+                    'user_id'     => $log->user_id ?? null,
+                    'ip'          => $log->ip ?? '—',
+                    'device'      => $log->user_agent ? $this->parseDevice($log->user_agent) : 'unknown',
+                    'browser'     => $log->user_agent ? $this->parseBrowser($log->user_agent) : null,
+                    'endpoint'    => $log->endpoint ?? null,
+                    'session_id'  => $log->session_id ?? 'n/a',
+                    'category'    => $log->category ?? 'system',
+                    'payload'     => is_array($log->payload) ? $log->payload : null,
                 ];
-            }
+            });
+
+        // Fall back to laravel.log lines only if no structured logs exist yet
+        if ($rows->isEmpty()) {
+            $rows = collect($this->fileFallback($limit));
         }
 
-        return ResponseHelper::sendResponse($entries, 'Logs loaded.');
+        return ResponseHelper::sendResponse($rows->values()->toArray(), 'Logs loaded.');
+    }
+
+    public function clearLogs()
+    {
+        $deleted = AdminActivityLog::query()->delete();
+        return ResponseHelper::sendResponse(['deleted' => $deleted], 'Logs cleared.');
     }
 
     public function health()
@@ -85,5 +108,58 @@ class SystemAdminController extends Controller
         }
 
         return ResponseHelper::sendResponse(['routes' => $routes], 'API routes sample.');
+    }
+
+    /* ────────── helpers ────────── */
+
+    private function fileFallback(int $limit): array
+    {
+        $path = storage_path('logs/laravel.log');
+        $entries = [];
+        if (!is_readable($path)) return $entries;
+
+        $lines = @file($path, FILE_IGNORE_NEW_LINES) ?: [];
+        $slice = array_slice($lines, -$limit);
+        $i = 0;
+        foreach ($slice as $line) {
+            $level = str_contains($line, '.ERROR') || str_contains($line, ' ERROR ') ? 'error'
+                : (str_contains($line, '.WARNING') || str_contains($line, ' WARNING ') ? 'warning' : 'info');
+            $entries[] = [
+                'id'          => 'file_' . ++$i,
+                'level'       => $level,
+                'timestamp'   => now()->toDateTimeString(),
+                'title'       => 'Server Log',
+                'description' => $line,
+                'user'        => null,
+                'ip'          => '—',
+                'device'      => 'server',
+                'browser'     => null,
+                'endpoint'    => null,
+                'session_id'  => 'laravel',
+                'category'    => 'system',
+                'payload'     => null,
+            ];
+        }
+        return $entries;
+    }
+
+    private function parseDevice(string $ua): string
+    {
+        if (str_contains($ua, 'iPhone')) return 'iPhone';
+        if (str_contains($ua, 'iPad')) return 'iPad';
+        if (str_contains($ua, 'Android')) return 'Android';
+        if (str_contains($ua, 'Macintosh')) return 'MacBook';
+        if (str_contains($ua, 'Windows')) return 'Windows';
+        if (str_contains($ua, 'Linux')) return 'Linux';
+        return 'unknown';
+    }
+
+    private function parseBrowser(string $ua): ?string
+    {
+        if (str_contains($ua, 'Edg/')) return 'Edge';
+        if (str_contains($ua, 'Chrome')) return 'Chrome';
+        if (str_contains($ua, 'Firefox')) return 'Firefox';
+        if (str_contains($ua, 'Safari')) return 'Safari';
+        return null;
     }
 }

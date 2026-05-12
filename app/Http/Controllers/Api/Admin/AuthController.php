@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Helpers\ActivityLogHelper;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -55,6 +56,19 @@ class AuthController extends Controller
             return ResponseHelper::sendResponse([], 'Could not create token.', false, 500);
         }
 
+        ActivityLogHelper::record(
+            'Admin Login',
+            ($user->is_superadmin ? 'Super Admin' : 'Admin') . ' logged in successfully',
+            'success',
+            'auth',
+            [
+                'role' => $user->is_superadmin ? 'super_admin' : 'admin',
+                'method' => 'password',
+            ],
+            $request,
+            $user
+        );
+
         return ResponseHelper::sendResponse([
             'token' => $token,
             'user'  => [
@@ -82,13 +96,30 @@ class AuthController extends Controller
         ], 'User details fetched.');
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
+        $user = null;
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (\Throwable $e) {
+            // No valid token — that's fine, still record logout attempt
+        }
+
         try {
             JWTAuth::invalidate(JWTAuth::getToken());
         } catch (JWTException $e) {
             // Token already invalid — that's fine
         }
+
+        ActivityLogHelper::record(
+            'Admin Logout',
+            ($user?->is_superadmin ? 'Super Admin' : 'Admin') . ' session ended',
+            'info',
+            'auth',
+            ['role' => $user?->is_superadmin ? 'super_admin' : 'admin'],
+            $request,
+            $user
+        );
 
         return ResponseHelper::sendResponse([], 'Logged out successfully.');
     }
