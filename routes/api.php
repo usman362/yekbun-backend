@@ -76,6 +76,7 @@ use App\Http\Controllers\Api\UserRolesController;
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\Admin\UsersController as AdminUsersController;
+use App\Http\Controllers\Api\Admin\TeamRoleAdminController;
 use App\Http\Controllers\Api\Admin\FeedsController as AdminFeedsController;
 use App\Http\Controllers\Api\Admin\MusicController as AdminMusicController;
 use App\Http\Controllers\Api\Admin\RingtoneController as AdminRingtoneController;
@@ -651,6 +652,16 @@ Route::prefix('admin')->group(function () {
         Route::post('/users/{id}/wallet/accept', [AdminUsersController::class, 'walletAccept']);
         Route::post('/users/{id}/wallet/reject', [AdminUsersController::class, 'walletReject']);
 
+        // ─── Team & Role ───
+        Route::get('/team/roles', [TeamRoleAdminController::class, 'roles']);
+        Route::post('/team/roles', [TeamRoleAdminController::class, 'storeRole']);
+        Route::put('/team/roles/{id}', [TeamRoleAdminController::class, 'updateRole']);
+        Route::delete('/team/roles/{id}', [TeamRoleAdminController::class, 'destroyRole']);
+        Route::get('/team/members', [TeamRoleAdminController::class, 'members']);
+        Route::post('/team/members', [TeamRoleAdminController::class, 'storeMember']);
+        Route::put('/team/members/{id}', [TeamRoleAdminController::class, 'updateMember']);
+        Route::delete('/team/members/{id}', [TeamRoleAdminController::class, 'destroyMember']);
+
         // ─── Feeds ───
         Route::get('/feeds/latest', [AdminFeedsController::class, 'latest']);
         Route::get('/feeds/on-hold', [AdminFeedsController::class, 'onHold']);
@@ -691,8 +702,7 @@ Route::prefix('admin')->group(function () {
         Route::get('/clips/reported', [AdminUserClipsController::class, 'reported']);
 
         // ─── Team & Roles ───
-        Route::get('/team/roles', [AdminTeamController::class, 'roles']);
-        Route::get('/team/members', [AdminTeamController::class, 'members']);
+        // Team & Role GETs moved to TeamRoleAdminController (see below)
 
         // ─── Departments ───
         Route::get('/departments', [AdminDepartmentController::class, 'index']);
