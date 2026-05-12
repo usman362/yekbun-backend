@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Helpers\ResponseHelper;
 use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
+use App\Models\CommentsLike;
 use App\Models\Feed;
 use App\Models\FeedComments;
 use App\Models\FlaggedUser;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\BunnyCDNService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class FeedsController extends Controller
@@ -158,6 +160,78 @@ class FeedsController extends Controller
         })->values()->toArray();
 
         return ResponseHelper::sendResponse($rows, 'Comments fetched.');
+    }
+
+    public function addComment(Request $request, $id)
+    {
+        $request->validate([
+            'comment'   => 'required|string|max:2000',
+            'feed_type' => 'nullable|string',
+        ]);
+
+        $feed = Feed::find($id);
+        if (!$feed) {
+            return ResponseHelper::sendResponse(null, 'Feed not found', false, 404);
+        }
+
+        $comment = new FeedComments();
+        $comment->user_id      = optional(Auth::user())->id;
+        $comment->feed_id      = $id;
+        $comment->feed_type    = $request->input('feed_type', 'user_feeds');
+        $comment->comment_type = 'normal';
+        $comment->comment      = $request->comment;
+        $comment->status       = 1;
+        $comment->save();
+
+        $user = Auth::user();
+        return ResponseHelper::sendResponse([
+            'id'           => $comment->_id,
+            'feed_id'      => $comment->feed_id,
+            'parent_id'    => null,
+            'comment_type' => 'normal',
+            'text'         => $comment->comment,
+            'audio'        => null,
+            'image'        => null,
+            'emoji'        => null,
+            'username'     => $user->username ?? $user->name ?? 'Admin',
+            'avatar'       => Helpers::mediaUrl($user->image ?? null) ?? '',
+            'timestamp'    => 'just now',
+        ], 'Comment posted.', true, 201);
+    }
+
+    public function likeComment($id)
+    {
+        $comment = FeedComments::find($id);
+        if (!$comment) {
+            return ResponseHelper::sendResponse(null, 'Comment not found', false, 404);
+        }
+
+        $userId = optional(Auth::user())->id;
+        if (!$userId) {
+            return ResponseHelper::sendResponse(null, 'Unauthorized', false, 401);
+        }
+
+        $existing = CommentsLike::where('comment_id', $comment->_id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+            $liked = false;
+        } else {
+            CommentsLike::create([
+                'comment_id' => $comment->_id,
+                'user_id'    => $userId,
+            ]);
+            $liked = true;
+        }
+
+        $count = CommentsLike::where('comment_id', $comment->_id)->count();
+        return ResponseHelper::sendResponse([
+            'comment_id' => $comment->_id,
+            'liked'      => $liked,
+            'count'      => $count,
+        ], $liked ? 'Liked' : 'Unliked');
     }
 
     public function deleteComment($id)
