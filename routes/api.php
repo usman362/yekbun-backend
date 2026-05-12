@@ -805,6 +805,10 @@ Route::prefix('admin')->group(function () {
         Route::get('/settings/document', [SettingsAdminController::class, 'show']);
         Route::put('/settings/document', [SettingsAdminController::class, 'update']);
 
+        // ─── User tier permissions (cultivated / educated / academic) ───
+        Route::get('/user-settings/{tier}', [SettingsAdminController::class, 'tierShow']);
+        Route::put('/user-settings/{tier}', [SettingsAdminController::class, 'tierUpdate']);
+
         // ─── Transactions ───
         Route::get('/transactions', [TransactionsAdminController::class, 'index']);
         Route::get('/transactions/stats', [TransactionsAdminController::class, 'stats']);
