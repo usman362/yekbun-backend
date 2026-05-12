@@ -716,8 +716,13 @@ Route::prefix('admin')->group(function () {
 
         // ─── Languages ───
         Route::get('/languages/browse', [LanguagesAdminController::class, 'index']);
+        Route::post('/languages', [LanguagesAdminController::class, 'store']);
+        Route::put('/languages/{id}', [LanguagesAdminController::class, 'update']);
+        Route::delete('/languages/{id}', [LanguagesAdminController::class, 'destroy']);
         Route::get('/languages/{id}/keywords', [LanguagesAdminController::class, 'keywords']);
         Route::put('/languages/{languageId}/keywords/{translationId}', [LanguagesAdminController::class, 'updateKeyword']);
+        Route::get('/languages/{id}/keywords/export', [LanguagesAdminController::class, 'exportKeywords']);
+        Route::post('/languages/{id}/keywords/import', [LanguagesAdminController::class, 'importKeywords']);
 
         // ─── Policy ───
         Route::get('/policy', [PolicyAdminController::class, 'index']);
