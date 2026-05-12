@@ -375,6 +375,20 @@ class FeedsController extends Controller
         return Carbon::now()->addDays(15);
     }
 
+    private function formatUserType($type): string
+    {
+        if (empty($type)) return 'All Users';
+        $map = [
+            'friends & family' => 'Friends & Family',
+            'friends_family'   => 'Friends & Family',
+            'channel'          => 'Channel',
+            'all'              => 'All Users',
+            'public'           => 'Public',
+        ];
+        $key = strtolower((string) $type);
+        return $map[$key] ?? ucwords(str_replace('_', ' ', (string) $type));
+    }
+
     private function cdnPath(string $fullUrl, string $cdnBase): string
     {
         if ($cdnBase !== '' && Str::startsWith($fullUrl, $cdnBase . '/')) {
@@ -421,21 +435,23 @@ class FeedsController extends Controller
             })->values()->toArray();
 
             return [
-                'id'        => $feed->_id,
-                'username'  => $user->username ?? $user->name ?? 'Unknown',
-                'avatar'    => Helpers::mediaUrl($user->image) ?? '',
-                'timestamp' => Carbon::parse($feed->created_at)->diffForHumans(),
-                'image'     => $firstImage,
-                'media'     => count($media) > 1 ? $media : [],
-                'views'     => (int) ($feed->views_count ?? 0),
-                'shares'    => (int) ($feed->shares_count ?? 0),
-                'edits'     => 0,
-                'reports'   => (int) ($reportCounts->get($feed->_id, 0)),
-                'reactions' => (int) ($feed->likes_count ?? 0),
-                'flags'     => (int) ($reportCounts->get($feed->_id, 0)),
-                'maxFlags'  => 5,
-                'location'  => $feed->location ?? null,
-                'comments'  => $comments,
+                'id'              => $feed->_id,
+                'username'        => $user->username ?? $user->name ?? 'Unknown',
+                'avatar'          => Helpers::mediaUrl($user->image) ?? '',
+                'timestamp'       => Carbon::parse($feed->created_at)->diffForHumans(),
+                'image'           => $firstImage,
+                'media'           => count($media) > 1 ? $media : [],
+                'views'           => (int) ($feed->views_count ?? 0),
+                'shares'          => (int) ($feed->shares_count ?? 0),
+                'edits'           => 0,
+                'reports'         => (int) ($reportCounts->get($feed->_id, 0)),
+                'reactions'       => (int) ($feed->likes_count ?? 0),
+                'flags'           => (int) ($reportCounts->get($feed->_id, 0)),
+                'maxFlags'        => 5,
+                'location'        => $feed->location ?? null,
+                'comments'        => $comments,
+                'description'     => $feed->description ?? $feed->text ?? '',
+                'targetAudience'  => $this->formatUserType($feed->user_type),
             ];
         })->values()->toArray();
     }
