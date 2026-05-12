@@ -6,7 +6,7 @@ use App\Helpers\ResponseHelper;
 use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Language;
-use App\Models\Translation;
+use App\Models\LanguageDetail;
 use Illuminate\Http\Request;
 
 class LanguagesAdminController extends Controller
@@ -94,7 +94,7 @@ class LanguagesAdminController extends Controller
             return ResponseHelper::sendResponse(null, 'Language not found.', false, 404);
         }
 
-        Translation::where('language_id', $lang->_id)->delete();
+        LanguageDetail::where('language_id', (string) $lang->_id)->delete();
         $lang->delete();
 
         return ResponseHelper::sendResponse(['id' => $id], 'Language deleted.');
@@ -102,17 +102,19 @@ class LanguagesAdminController extends Controller
 
     public function exportKeywords(string $id)
     {
-        $language = Language::with('translations')->find($id);
+        $language = Language::find($id);
         if (!$language) {
             return ResponseHelper::sendResponse([], 'Language not found.', false, 404);
         }
 
-        $rows = $language->translations->map(function ($t) {
-            return [
-                'keyword'    => (string) ($t->keyword ?? $t->text_id ?? ''),
-                'translated' => (string) ($t->translated ?? $t->translation ?? ''),
-            ];
-        })->values()->toArray();
+        $rows = LanguageDetail::where('language_id', (string) $language->_id)
+            ->get()
+            ->map(function ($t) {
+                return [
+                    'keyword'    => (string) ($t->keyword ?? ''),
+                    'translated' => (string) ($t->translated ?? ''),
+                ];
+            })->values()->toArray();
 
         $safe = preg_replace('/[^A-Za-z0-9_-]+/', '_', $language->title ?? $language->code ?? 'language');
         $filename = $safe . '-translations.csv';
@@ -158,8 +160,8 @@ class LanguagesAdminController extends Controller
             return ResponseHelper::sendResponse(null, 'CSV must have keyword and translated columns.', false, 422);
         }
 
-        $existing = Translation::where('language_id', (string) $language->_id)->get()->keyBy(function ($t) {
-            return (string) ($t->keyword ?? $t->text_id ?? '');
+        $existing = LanguageDetail::where('language_id', (string) $language->_id)->get()->keyBy(function ($t) {
+            return (string) ($t->keyword ?? '');
         });
 
         $updated = 0;
@@ -172,17 +174,13 @@ class LanguagesAdminController extends Controller
             if (isset($existing[$keyword])) {
                 $tr = $existing[$keyword];
                 $tr->translated = $value;
-                $tr->translation = $value;
                 $tr->save();
                 $updated++;
             } else {
-                Translation::create([
-                    'language_id'   => (string) $language->_id,
-                    'language_code' => $language->code ?? '',
-                    'keyword'       => $keyword,
-                    'text_id'       => $keyword,
-                    'translated'    => $value,
-                    'translation'   => $value,
+                LanguageDetail::create([
+                    'language_id' => (string) $language->_id,
+                    'keyword'     => $keyword,
+                    'translated'  => $value,
                 ]);
                 $created++;
             }
@@ -197,17 +195,21 @@ class LanguagesAdminController extends Controller
 
     public function keywords(string $id)
     {
-        $language = Language::with('translations')->find($id);
+        $language = Language::find($id);
         if (!$language) {
             return ResponseHelper::sendResponse([], 'Language not found.', false, 404);
         }
-        $rows = $language->translations->map(function ($t) {
-            return [
-                'id' => (string) $t->_id,
-                'keyword' => $t->keyword ?? $t->text_id ?? '',
-                'translated' => $t->translated ?? $t->translation ?? '',
-            ];
-        });
+        $rows = LanguageDetail::where('language_id', (string) $language->_id)
+            ->orderBy('section_name')
+            ->get()
+            ->map(function ($t) {
+                return [
+                    'id'         => (string) $t->_id,
+                    'keyword'    => $t->keyword ?? '',
+                    'translated' => $t->translated ?? '',
+                    'section'    => $t->section_name ?? '',
+                ];
+            });
 
         return ResponseHelper::sendResponse($rows, 'Keywords loaded.');
     }
@@ -219,12 +221,11 @@ class LanguagesAdminController extends Controller
         if (!$language) {
             return ResponseHelper::sendResponse([], 'Language not found.', false, 404);
         }
-        $tr = Translation::find($translationId);
+        $tr = LanguageDetail::find($translationId);
         if (!$tr || (string) $tr->language_id !== (string) $language->_id) {
             return ResponseHelper::sendResponse([], 'Translation not found.', false, 404);
         }
         $tr->translated = $request->translated;
-        $tr->translation = $request->translated;
         $tr->save();
 
         return ResponseHelper::sendResponse($tr, 'Translation saved.');
