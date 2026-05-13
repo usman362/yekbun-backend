@@ -94,11 +94,44 @@ class ContentBrowseAdminController extends Controller
             'donation' => $ctrl->getDonations(),
             'surveys' => $ctrl->getSurveys(),
             'greetings' => $ctrl->getGreetings(),
+            'user-sos' => ResponseHelper::sendResponse(
+                PopFeeds::where('type', 'SOS')->orderBy('created_at', 'desc')->get(),
+                'SOS Feeds'
+            ),
+            'go-live' => ResponseHelper::sendResponse(
+                PopFeeds::where('type', 'Event')->orderBy('created_at', 'desc')->get(),
+                'Event Feeds'
+            ),
+            'agent-feeds' => ResponseHelper::sendResponse(
+                PopFeeds::where('type', 'AgentFeed')->orderBy('created_at', 'desc')->get(),
+                'Agent Feeds'
+            ),
             'public-feed' => ResponseHelper::sendResponse(
                 PopFeeds::with('user')->where('share_option', 'all-users')->orderBy('created_at', 'desc')->limit(150)->get(),
                 'Public admin activity feeds loaded.'
             ),
             default => ResponseHelper::sendResponse([], 'Unknown type.', false, 404),
         };
+    }
+
+    public function adminActivityStore(\Illuminate\Http\Request $request, string $type)
+    {
+        $ctrl = app(AdminActivityController::class);
+
+        return match ($type) {
+            'system' => $ctrl->store_systemInfo($request),
+            'donation' => $ctrl->store_donation($request),
+            'surveys' => $ctrl->store_surveys($request),
+            'greetings' => $ctrl->store_greetings($request),
+            'user-sos' => $ctrl->store_userSos($request),
+            'go-live' => $ctrl->store_goLive($request),
+            'agent-feeds' => $ctrl->store_agentFeed($request),
+            default => ResponseHelper::sendResponse([], 'Unknown type.', false, 404),
+        };
+    }
+
+    public function adminActivityDestroy(string $id)
+    {
+        return app(AdminActivityController::class)->destroyById($id);
     }
 }

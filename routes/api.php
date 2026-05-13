@@ -762,6 +762,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/content/complaints', [ContentBrowseAdminController::class, 'complaints']);
         Route::get('/content/posts-preview', [ContentBrowseAdminController::class, 'postsPreview']);
         Route::get('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivity']);
+        Route::post('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivityStore']);
+        Route::delete('/content/admin-activity/feed/{id}', [ContentBrowseAdminController::class, 'adminActivityDestroy']);
 
         // ─── Content: History (create/edit/delete + thumbnail generation) ───
         Route::post('/content/history/generate-thumbnails', [ContentHistoryAdminController::class, 'generateThumbnails']);

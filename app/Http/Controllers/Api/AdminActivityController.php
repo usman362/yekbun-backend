@@ -90,7 +90,7 @@ class AdminActivityController extends Controller
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'System',
         ];
 
-        foreach (['image' => 'images', 'icon1' => 'images/icons', 'icon2' => 'images/icons', 'icon3' => 'images/icons'] as $fileKey => $path) {
+        foreach (['image' => 'images', 'icon1' => 'images/icons', 'icon2' => 'images/icons', 'icon3' => 'images/icons', 'audio' => 'audio'] as $fileKey => $path) {
             if ($request->hasFile($fileKey)) {
                 $file = $request->file($fileKey);
                 $data[$fileKey] = $file->storeAs("/{$path}", time() . rand() . '-' . $fileKey . '.' . $file->getClientOriginalExtension(), 'public');
@@ -183,7 +183,7 @@ class AdminActivityController extends Controller
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'Greetings',
         ];
 
-        foreach (['image' => 'images', 'icon1' => 'images/icons', 'icon2' => 'images/icons', 'icon3' => 'images/icons'] as $fileKey => $path) {
+        foreach (['image' => 'images', 'icon1' => 'images/icons', 'icon2' => 'images/icons', 'icon3' => 'images/icons', 'audio' => 'audio'] as $fileKey => $path) {
             if ($request->hasFile($fileKey)) {
                 $file = $request->file($fileKey);
                 $data[$fileKey] = $file->storeAs("/{$path}", time() . rand() . '-' . $fileKey . '.' . $file->getClientOriginalExtension(), 'public');
@@ -199,10 +199,112 @@ class AdminActivityController extends Controller
         return response()->json(['message' => 'Greeting added successfully.', 'data' => PopFeeds::create($data)], 201);
     }
 
+    public function store_userSos(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:255',
+        ]);
+        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
+
+        $data = [
+            'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
+            'share_option' => $request->option ?? '', 'is_comments' => $request->comments ?? 0,
+            'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0, 'type' => 'SOS',
+        ];
+
+        foreach (['image' => 'images', 'audio' => 'audio'] as $fileKey => $path) {
+            if ($request->hasFile($fileKey)) {
+                $file = $request->file($fileKey);
+                $data[$fileKey] = $file->storeAs("/{$path}", time() . rand() . '-' . $fileKey . '.' . $file->getClientOriginalExtension(), 'public');
+            }
+        }
+
+        if ($request->id > 0) {
+            $postpop = PopFeeds::find($request->id);
+            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'SOS updated successfully.', 'data' => $postpop], 200); }
+            return response()->json(['message' => 'SOS not found.'], 404);
+        }
+        $data['user_id'] = 0; $data['status'] = 1;
+        return response()->json(['message' => 'SOS added successfully.', 'data' => PopFeeds::create($data)], 201);
+    }
+
+    public function store_goLive(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:255',
+        ]);
+        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
+
+        $data = [
+            'title' => $request->title,
+            'date_start' => $request->start_date,
+            'date_ends' => $request->end_date,
+            'share_option' => $request->option ?? $request->user_type ?? '',
+            'is_comments' => $request->comments ?? 1,
+            'type' => 'Event',
+            'txt1' => $request->description,
+            'txt2' => $request->start_time,
+            'txt3' => $request->end_time,
+        ];
+
+        if ($request->hasFile('image')) {
+            $image = $request->file('image');
+            $data['image'] = $image->storeAs('/images', time() . rand() . '-golive.' . $image->getClientOriginalExtension(), 'public');
+        }
+
+        if ($request->id > 0) {
+            $postpop = PopFeeds::find($request->id);
+            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Event updated successfully.', 'data' => $postpop], 200); }
+            return response()->json(['message' => 'Event not found.'], 404);
+        }
+        $data['user_id'] = 0; $data['status'] = 1;
+        return response()->json(['message' => 'Event added successfully.', 'data' => PopFeeds::create($data)], 201);
+    }
+
+    public function store_agentFeed(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:255',
+        ]);
+        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
+
+        $data = [
+            'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
+            'share_option' => $request->option ?? '', 'is_comments' => $request->comments ?? 0,
+            'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0,
+            'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'AgentFeed',
+        ];
+
+        foreach (['image' => 'images', 'icon1' => 'images/icons', 'icon2' => 'images/icons', 'icon3' => 'images/icons', 'audio' => 'audio'] as $fileKey => $path) {
+            if ($request->hasFile($fileKey)) {
+                $file = $request->file($fileKey);
+                $data[$fileKey] = $file->storeAs("/{$path}", time() . rand() . '-' . $fileKey . '.' . $file->getClientOriginalExtension(), 'public');
+            }
+        }
+
+        if ($request->id > 0) {
+            $postpop = PopFeeds::find($request->id);
+            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Agent Feed updated successfully.', 'data' => $postpop], 200); }
+            return response()->json(['message' => 'Agent Feed not found.'], 404);
+        }
+        $data['user_id'] = 0; $data['status'] = 1;
+        return response()->json(['message' => 'Agent Feed added successfully.', 'data' => PopFeeds::create($data)], 201);
+    }
+
     public function delete_pops(Request $request)
     {
         $popfeed = PopFeeds::where('_id', $request->id)->first();
         if ($popfeed) { $popfeed->delete(); return response()->json(['message' => 'Popup Feed deleted successfully.'], 200); }
         return response()->json(['message' => 'Popup Feed Not Found!'], 404);
+    }
+
+    public function destroyById(string $id)
+    {
+        $popfeed = PopFeeds::where('_id', $id)->first();
+        if (!$popfeed) {
+            return ResponseHelper::sendResponse(null, 'Popup Feed Not Found!', false, 404);
+        }
+        $popfeed->delete();
+        return ResponseHelper::sendResponse(['id' => $id], 'Popup Feed deleted successfully.');
     }
 }
