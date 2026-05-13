@@ -764,6 +764,12 @@ Route::prefix('admin')->group(function () {
         Route::get('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivity']);
         Route::post('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivityStore']);
         Route::delete('/content/admin-activity/feed/{id}', [ContentBrowseAdminController::class, 'adminActivityDestroy']);
+        // Comments + likes for admin-activity posts (dashboard view modal)
+        Route::get('/content/admin-activity/feed/{id}/comments', [ContentBrowseAdminController::class, 'adminActivityComments']);
+        Route::post('/content/admin-activity/feed/{id}/comments', [ContentBrowseAdminController::class, 'adminActivityAddComment']);
+        Route::post('/content/admin-activity/feed/{id}/likes', [ContentBrowseAdminController::class, 'adminActivityFeedLike']);
+        Route::delete('/content/admin-activity/comments/{id}', [ContentBrowseAdminController::class, 'adminActivityDeleteComment']);
+        Route::post('/content/admin-activity/comments/{id}/likes', [ContentBrowseAdminController::class, 'adminActivityCommentLike']);
 
         // ─── Content: History (create/edit/delete + thumbnail generation) ───
         Route::post('/content/history/generate-thumbnails', [ContentHistoryAdminController::class, 'generateThumbnails']);

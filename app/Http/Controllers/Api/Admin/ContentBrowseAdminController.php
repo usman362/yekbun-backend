@@ -3,17 +3,24 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\AdminActivityController;
 use App\Http\Controllers\Api\Admin\FeedsController as AdminFeedsCtrl;
 use App\Models\AIVideo;
+use App\Models\CommentsLike;
 use App\Models\Event;
 use App\Models\Feed;
+use App\Models\FeedComments;
+use App\Models\FeedLikes;
 use App\Models\History;
 use App\Models\PopFeeds;
 use App\Models\ReportFeeds;
+use App\Models\User;
 use App\Models\Voting;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ContentBrowseAdminController extends Controller
 {
@@ -127,13 +134,25 @@ class ContentBrowseAdminController extends Controller
      */
     private function transformFeeds($rows): \Illuminate\Support\Collection
     {
-        return $rows->map(function ($f) {
+        $ids = $rows->pluck('_id')->map(fn($id) => (string) $id)->toArray();
+
+        $likeCounts = FeedLikes::whereIn('feed_id', $ids)
+            ->where('feed_type', 'admin_feeds')
+            ->get()->groupBy('feed_id')->map(fn($g) => $g->count());
+
+        $commentCounts = FeedComments::whereIn('feed_id', $ids)
+            ->where('feed_type', 'admin_feeds')
+            ->get()->groupBy('feed_id')->map(fn($g) => $g->count());
+
+        return $rows->map(function ($f) use ($likeCounts, $commentCounts) {
             $arr = $f->toArray();
             foreach (['image', 'audio', 'video', 'icon1', 'icon2', 'icon3'] as $field) {
                 if (!empty($arr[$field])) {
-                    $arr[$field] = \App\Helpers\Helpers::mediaUrl($arr[$field]);
+                    $arr[$field] = Helpers::mediaUrl($arr[$field]);
                 }
             }
+            $arr['likes_count']    = (int) $likeCounts->get((string) $f->_id, 0);
+            $arr['comments_count'] = (int) $commentCounts->get((string) $f->_id, 0);
             return $arr;
         });
     }
@@ -157,5 +176,173 @@ class ContentBrowseAdminController extends Controller
     public function adminActivityDestroy(string $id)
     {
         return app(AdminActivityController::class)->destroyById($id);
+    }
+
+    // ─── Admin-activity comments + likes ─────────────────────────────────────
+    // Mobile uses the same FeedComments / FeedLikes tables with feed_type='admin_feeds'.
+    // These admin-prefixed endpoints expose the same data to the dashboard view modal.
+
+    public function adminActivityComments(string $id)
+    {
+        $feed = PopFeeds::find($id);
+        if (!$feed) {
+            return ResponseHelper::sendResponse(null, 'Activity not found', false, 404);
+        }
+
+        $comments = FeedComments::where('feed_id', $id)
+            ->where('feed_type', 'admin_feeds')
+            ->whereNull('parent_id')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $userIds = $comments->pluck('user_id')->unique()->filter()->toArray();
+        $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
+
+        $commentIds = $comments->pluck('_id')->map(fn($i) => (string) $i)->toArray();
+        $likeCounts = CommentsLike::whereIn('comment_id', $commentIds)
+            ->get()->groupBy('comment_id')->map(fn($g) => $g->count());
+
+        $authId = optional(Auth::user())->_id;
+        $likedByMe = $authId
+            ? CommentsLike::whereIn('comment_id', $commentIds)->where('user_id', $authId)->pluck('comment_id')->toArray()
+            : [];
+
+        $rows = $comments->map(function ($c) use ($users, $likeCounts, $likedByMe) {
+            $u = $users->get($c->user_id);
+            return [
+                'id'         => (string) $c->_id,
+                'username'   => $u->username ?? $u->name ?? 'User',
+                'avatar'     => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'text'       => $c->comment ?? '',
+                'audio'      => Helpers::mediaUrl($c->audio ?? null),
+                'image'      => Helpers::mediaUrl($c->image ?? null),
+                'emoji'      => $c->emoji ?? null,
+                'likes'      => (int) $likeCounts->get((string) $c->_id, 0),
+                'liked'      => in_array((string) $c->_id, $likedByMe, true),
+                'created_at' => Carbon::parse($c->created_at)->diffForHumans(),
+                'replies'    => [],
+            ];
+        })->values();
+
+        $feedLikeCount = FeedLikes::where('feed_id', $id)->where('feed_type', 'admin_feeds')->count();
+        $feedLiked = $authId
+            ? FeedLikes::where('feed_id', $id)->where('feed_type', 'admin_feeds')->where('user_id', $authId)->exists()
+            : false;
+
+        return ResponseHelper::sendResponse([
+            'comments'       => $rows,
+            'comments_count' => $rows->count(),
+            'likes_count'    => (int) $feedLikeCount,
+            'liked'          => $feedLiked,
+        ], 'Comments fetched.');
+    }
+
+    public function adminActivityAddComment(Request $request, string $id)
+    {
+        $request->validate(['comment' => 'required|string|max:2000']);
+
+        $feed = PopFeeds::find($id);
+        if (!$feed) {
+            return ResponseHelper::sendResponse(null, 'Activity not found', false, 404);
+        }
+
+        $auth = Auth::user();
+        $comment = FeedComments::create([
+            'user_id'      => optional($auth)->_id,
+            'feed_id'      => $id,
+            'feed_type'    => 'admin_feeds',
+            'comment_type' => 'normal',
+            'comment'      => $request->comment,
+            'status'       => 1,
+        ]);
+
+        return ResponseHelper::sendResponse([
+            'id'         => (string) $comment->_id,
+            'username'   => $auth->username ?? $auth->name ?? 'Admin',
+            'avatar'     => Helpers::mediaUrl($auth->image ?? null) ?? '',
+            'text'       => $comment->comment,
+            'audio'      => null,
+            'image'      => null,
+            'emoji'      => null,
+            'likes'      => 0,
+            'liked'      => false,
+            'created_at' => 'just now',
+            'replies'    => [],
+        ], 'Comment posted.', true, 201);
+    }
+
+    public function adminActivityDeleteComment(string $id)
+    {
+        $comment = FeedComments::find($id);
+        if (!$comment) {
+            return ResponseHelper::sendResponse(null, 'Comment not found', false, 404);
+        }
+        CommentsLike::where('comment_id', $id)->delete();
+        $comment->delete();
+        return ResponseHelper::sendResponse(['id' => $id], 'Comment deleted.');
+    }
+
+    public function adminActivityCommentLike(string $id)
+    {
+        $comment = FeedComments::find($id);
+        if (!$comment) {
+            return ResponseHelper::sendResponse(null, 'Comment not found', false, 404);
+        }
+
+        $userId = optional(Auth::user())->_id;
+        if (!$userId) {
+            return ResponseHelper::sendResponse(null, 'Unauthorized', false, 401);
+        }
+
+        $existing = CommentsLike::where('comment_id', $id)->where('user_id', $userId)->first();
+        if ($existing) {
+            $existing->delete();
+            $liked = false;
+        } else {
+            CommentsLike::create(['comment_id' => $id, 'user_id' => $userId]);
+            $liked = true;
+        }
+
+        return ResponseHelper::sendResponse([
+            'comment_id' => $id,
+            'liked'      => $liked,
+            'count'      => CommentsLike::where('comment_id', $id)->count(),
+        ], $liked ? 'Liked' : 'Unliked');
+    }
+
+    public function adminActivityFeedLike(string $id)
+    {
+        $feed = PopFeeds::find($id);
+        if (!$feed) {
+            return ResponseHelper::sendResponse(null, 'Activity not found', false, 404);
+        }
+
+        $userId = optional(Auth::user())->_id;
+        if (!$userId) {
+            return ResponseHelper::sendResponse(null, 'Unauthorized', false, 401);
+        }
+
+        $existing = FeedLikes::where('feed_id', $id)
+            ->where('feed_type', 'admin_feeds')
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+            $liked = false;
+        } else {
+            FeedLikes::create([
+                'feed_id'   => $id,
+                'feed_type' => 'admin_feeds',
+                'user_id'   => $userId,
+            ]);
+            $liked = true;
+        }
+
+        return ResponseHelper::sendResponse([
+            'feed_id' => $id,
+            'liked'   => $liked,
+            'count'   => FeedLikes::where('feed_id', $id)->where('feed_type', 'admin_feeds')->count(),
+        ], $liked ? 'Liked' : 'Unliked');
     }
 }
