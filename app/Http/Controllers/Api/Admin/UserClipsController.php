@@ -205,13 +205,23 @@ class UserClipsController extends Controller
 
         $result = $clips->map(function ($c) use ($users) {
             $user = $users->get($c->user_id);
+            $thumbnailUrl = Helpers::mediaUrl($c->thumbnail) ?? '';
+            $videoUrl     = Helpers::mediaUrl($c->clip) ?? '';
+
             return [
                 'id'        => $c->_id,
                 'username'  => $user->username ?? $user->name ?? 'Unknown',
                 'avatar'    => Helpers::mediaUrl($user->image) ?? '',
                 'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
-                'image'     => Helpers::mediaUrl($c->thumbnail) ?? '',
-                'media'     => [],
+                'image'     => $thumbnailUrl,
+                // Expose the actual video so the dashboard's gallery viewer can play it.
+                // Without this, the clip card only renders the thumbnail and click-to-play breaks.
+                'media'     => $videoUrl ? [[
+                    'id'        => (string) $c->_id,
+                    'type'      => 'video',
+                    'url'       => $videoUrl,
+                    'thumbnail' => $thumbnailUrl,
+                ]] : [],
                 'views'     => (int) ClipsViews::where('clip_id', $c->_id)->count(),
                 'shares'    => 0,
                 'edits'     => 0,
@@ -252,13 +262,21 @@ class UserClipsController extends Controller
         $result = $clips->map(function ($c) use ($users, $reportCounts) {
             $user = $users->get($c->user_id);
             $reports = $reportCounts->get($c->_id, 0);
+            $thumbnailUrl = Helpers::mediaUrl($c->thumbnail) ?? '';
+            $videoUrl     = Helpers::mediaUrl($c->clip) ?? '';
+
             return [
                 'id'        => $c->_id,
                 'username'  => $user->username ?? $user->name ?? 'Unknown',
                 'avatar'    => Helpers::mediaUrl($user->image) ?? '',
                 'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
-                'image'     => Helpers::mediaUrl($c->thumbnail) ?? '',
-                'media'     => [],
+                'image'     => $thumbnailUrl,
+                'media'     => $videoUrl ? [[
+                    'id'        => (string) $c->_id,
+                    'type'      => 'video',
+                    'url'       => $videoUrl,
+                    'thumbnail' => $thumbnailUrl,
+                ]] : [],
                 'views'     => (int) ClipsViews::where('clip_id', $c->_id)->count(),
                 'shares'    => 0,
                 'edits'     => 0,
