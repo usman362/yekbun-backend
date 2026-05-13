@@ -85,7 +85,7 @@ class AdminActivityController extends Controller
 
         $data = [
             'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? 'all-users', 'is_comments' => $request->comments ?? 0,
+            'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0,
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'System',
         ];
@@ -119,7 +119,7 @@ class AdminActivityController extends Controller
             'is_gpay' => $request->is_gpay ?? 0, 'is_pay_office' => $request->is_payoffice ?? 0,
             'is_pay_other' => $request->is_other ?? 0, 'title' => $request->title,
             'date_start' => $request->start_date, 'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? 'all-users', 'is_comments' => $request->comments ?? 0,
+            'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0, 'type' => 'Donation',
         ];
 
@@ -147,7 +147,7 @@ class AdminActivityController extends Controller
 
         $data = [
             'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? 'all-users', 'is_comments' => $request->comments ?? 0,
+            'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0,
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'Surveys',
         ];
@@ -178,7 +178,7 @@ class AdminActivityController extends Controller
 
         $data = [
             'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? 'all-users', 'is_comments' => $request->comments ?? 0,
+            'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0,
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'Greetings',
         ];
@@ -208,7 +208,7 @@ class AdminActivityController extends Controller
 
         $data = [
             'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? 'all-users', 'is_comments' => $request->comments ?? 0,
+            'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0, 'type' => 'SOS',
         ];
 
@@ -239,7 +239,7 @@ class AdminActivityController extends Controller
             'title' => $request->title,
             'date_start' => $request->start_date,
             'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? $request->user_type ?? 'all-users',
+            'share_option' => $request->option ?: ($request->user_type ?: 'all-users'),
             'is_comments' => $request->comments ?? 1,
             'type' => 'Event',
             'txt1' => $request->description,
@@ -270,7 +270,7 @@ class AdminActivityController extends Controller
 
         $data = [
             'title' => $request->title, 'date_start' => $request->start_date, 'date_ends' => $request->end_date,
-            'share_option' => $request->option ?? 'all-users', 'is_comments' => $request->comments ?? 0,
+            'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0,
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'AgentFeed',
         ];

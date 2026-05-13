@@ -4,6 +4,7 @@ namespace App\Models;
 
 use MongoDB\Laravel\Eloquent\Model;
 use App\Traits\UsesLegacyId;
+use Illuminate\Support\Facades\Auth;
 
 class PopFeeds extends Model
 {
@@ -34,4 +35,11 @@ class PopFeeds extends Model
     public function user() { return $this->belongsTo(User::class, 'user_id'); }
     public function likes() { return $this->hasMany(FeedLikes::class, 'feed_id'); }
     public function views() { return $this->hasMany(FeedViews::class, 'feed_id'); }
+
+    // Used by AdminActivityController::getpopFeeds — eager-loads the auth user's SOS dismissal
+    // state for this feed (so mobile knows whether to show SOS popup again).
+    public function sosPopups()
+    {
+        return $this->hasOne(SosPopup::class, 'sos_id', '_id')->where('user_id', Auth::id());
+    }
 }
