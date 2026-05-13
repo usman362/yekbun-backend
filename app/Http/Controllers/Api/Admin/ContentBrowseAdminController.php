@@ -87,31 +87,55 @@ class ContentBrowseAdminController extends Controller
 
     public function adminActivity(string $type)
     {
-        $ctrl = app(AdminActivityController::class);
+        $typeMap = [
+            'system'      => 'System',
+            'donation'    => 'Donation',
+            'surveys'     => 'Surveys',
+            'greetings'   => 'Greetings',
+            'user-sos'    => 'SOS',
+            'go-live'     => 'Event',
+            'agent-feeds' => 'AgentFeed',
+        ];
 
-        return match ($type) {
-            'system' => $ctrl->getSystemInfo(),
-            'donation' => $ctrl->getDonations(),
-            'surveys' => $ctrl->getSurveys(),
-            'greetings' => $ctrl->getGreetings(),
-            'user-sos' => ResponseHelper::sendResponse(
-                PopFeeds::where('type', 'SOS')->orderBy('created_at', 'desc')->get(),
-                'SOS Feeds'
-            ),
-            'go-live' => ResponseHelper::sendResponse(
-                PopFeeds::where('type', 'Event')->orderBy('created_at', 'desc')->get(),
-                'Event Feeds'
-            ),
-            'agent-feeds' => ResponseHelper::sendResponse(
-                PopFeeds::where('type', 'AgentFeed')->orderBy('created_at', 'desc')->get(),
-                'Agent Feeds'
-            ),
-            'public-feed' => ResponseHelper::sendResponse(
-                PopFeeds::with('user')->where('share_option', 'all-users')->orderBy('created_at', 'desc')->limit(150)->get(),
+        if ($type === 'public-feed') {
+            $rows = PopFeeds::with('user')
+                ->where('share_option', 'all-users')
+                ->orderBy('created_at', 'desc')
+                ->limit(150)
+                ->get();
+            return ResponseHelper::sendResponse(
+                $this->transformFeeds($rows),
                 'Public admin activity feeds loaded.'
-            ),
-            default => ResponseHelper::sendResponse([], 'Unknown type.', false, 404),
-        };
+            );
+        }
+
+        if (!isset($typeMap[$type])) {
+            return ResponseHelper::sendResponse([], 'Unknown type.', false, 404);
+        }
+
+        $rows = PopFeeds::with('user')
+            ->where('type', $typeMap[$type])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return ResponseHelper::sendResponse($this->transformFeeds($rows), ucfirst($type) . ' feeds');
+    }
+
+    /**
+     * Map raw PopFeeds records and resolve any local-storage paths to full URLs
+     * via Helpers::mediaUrl so the dashboard can render them directly.
+     */
+    private function transformFeeds($rows): \Illuminate\Support\Collection
+    {
+        return $rows->map(function ($f) {
+            $arr = $f->toArray();
+            foreach (['image', 'audio', 'video', 'icon1', 'icon2', 'icon3'] as $field) {
+                if (!empty($arr[$field])) {
+                    $arr[$field] = \App\Helpers\Helpers::mediaUrl($arr[$field]);
+                }
+            }
+            return $arr;
+        });
     }
 
     public function adminActivityStore(\Illuminate\Http\Request $request, string $type)
