@@ -45,15 +45,17 @@ class VotingController extends Controller
 
     public function latestVotes()
     {
-        // Mobile clients wrap response data into an array (latest = [data]). When no voting exists,
-        // the previous code returned `[]` which mobile wrapped as `[[]]` (empty array inside) and
-        // crashed when accessing properties. Returning an empty stdClass forces JSON `{}` so the
-        // shape stays consistent (always an object) and existing clients don't crash on the empty case.
-        $voting = Voting::where('status', '1')->with('reactions')->orderBy('created_at', 'desc')->first();
-        return ResponseHelper::sendResponse(
-            $voting ?: (object)[],
-            $voting ? 'Latest voting fetched.' : 'No latest voting.'
-        );
+        // Return a collection (always an array) for consistency with previousVotes / alreadyVoted /
+        // mostViews / waitingVote. Empty case => `data: []`, single-record case => `data: [{...}]`.
+        // Earlier this used `->first()` (object) and returned `[]` on empty, which caused mobile
+        // clients to crash because they wrapped single objects in an array and ended up with `[[]]`.
+        $votings = Voting::where('status', '1')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc')
+            ->limit(1)
+            ->get();
+
+        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
     public function previousVotes()
