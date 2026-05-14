@@ -852,6 +852,9 @@ Route::prefix('admin')->group(function () {
         Route::get('/logipay/new-requests', [LogipayAdminController::class, 'newRequests']);
         Route::get('/logipay/active-wallets', [LogipayAdminController::class, 'activeWallets']);
         Route::get('/logipay/closed-wallets', [LogipayAdminController::class, 'closedWallets']);
+        Route::get('/logipay/request/{userId}', [LogipayAdminController::class, 'showRequest']);
+        Route::post('/logipay/request/{userId}/approve', [LogipayAdminController::class, 'approveRequest']);
+        Route::post('/logipay/request/{userId}/reject', [LogipayAdminController::class, 'rejectRequest']);
 
         // ─── Zercash Products & Sale Managers ───
         Route::get('/products', [ProductsAdminController::class, 'index']);
