@@ -201,26 +201,63 @@ class UsersController extends Controller
                 ];
             })->values();
 
-        // Wallet
+        // Wallet — show the Wallet Request tab whenever ANY of these is true:
+        //   1. A `wallets` record exists for this user (full wallet flow).
+        //   2. A `kyc_verifications` submission exists (KYC submitted, wallet not yet created).
+        //   3. The user document itself carries a `wallet_status` / `kyc_status` (legacy mobile path
+        //      where mobile updates the user record directly without creating a Wallet row first).
+        // This guarantees admins always see the request as soon as the user starts the flow on mobile.
         $wallet = Wallet::where('user_id', $u->_id)->first();
         $kyc = KycVerification::where('user_id', $u->_id)->orderBy('created_at', 'desc')->first();
+
+        $userWalletStatus = (string) ($u->wallet_status ?? '');
+        $userKycStatus    = (string) ($u->kyc_status ?? '');
+        $hasUserKycSignal = $userKycStatus !== '' && $userKycStatus !== 'not_submitted';
+        $hasUserWalletSignal = $userWalletStatus !== '' && $userWalletStatus !== 'not_found';
+        // Mobile sets `kyc_otp_verified` once the user receives + confirms the OTP, even before they
+        // upload any documents. Admins should still see this row so they know a request is in progress.
+        $hasOtpSignal = !empty($u->kyc_otp_verified);
+
         $walletData = null;
-        if ($wallet) {
-            $walletStatus = (string) ($wallet->status ?? 'pending');
+        if ($wallet || $kyc || $hasUserKycSignal || $hasUserWalletSignal || $hasOtpSignal) {
+            // Resolve a single status precedence:
+            //   wallets.status > users.wallet_status > kyc.status > users.kyc_status > 'pending'
+            $statusRaw = $wallet?->status
+                ?? ($hasUserWalletSignal ? $userWalletStatus : null)
+                ?? $kyc?->status
+                ?? ($hasUserKycSignal ? $userKycStatus : null)
+                ?? 'pending';
+
+            // Normalise the various legacy values into the 3 states the dashboard cares about.
+            $status = in_array($statusRaw, ['active', 'activated', 'approved'], true)
+                ? 'active'
+                : (in_array($statusRaw, ['rejected', 'closed', 'suspended', 'deactivated'], true)
+                    ? 'rejected'
+                    : 'pending');
+
+            $createdSource = $wallet?->created_at ?? $kyc?->submitted_at ?? $kyc?->created_at ?? $u->created_at;
+            $updatedSource = $wallet?->updated_at ?? $kyc?->reviewed_at ?? $u->updated_at;
+            $sourceId = $wallet?->_id ?? $kyc?->_id ?? $u->_id;
+
             $walletData = [
                 'exists'             => true,
-                'status'             => $walletStatus,
-                'request_id'         => 'WR-' . substr((string) $wallet->_id, -8),
-                'request_date'       => $wallet->created_at ? Carbon::parse($wallet->created_at)->format('Y-m-d') : '',
-                'wallet_id'          => 'WLT-' . substr((string) $wallet->_id, -6),
-                'balance'            => number_format((float) ($wallet->balance ?? 0), 2) . ' ZER',
-                'cashback_balance'   => '0.00 ZER',
-                'wallet_status'      => $walletStatus === 'active' ? 'Active' : ucfirst($walletStatus),
-                'verification_level' => $kyc ? 'Plus' : 'Basic',
+                'status'             => $status,
+                'request_id'         => 'WR-' . strtoupper(substr((string) $sourceId, -8)),
+                'request_date'       => $createdSource ? Carbon::parse($createdSource)->format('Y-m-d') : '',
+                'wallet_id'          => $wallet
+                    ? 'WLT-' . strtoupper(substr((string) $wallet->_id, -6))
+                    : ((string) ($u->wallet_id ?? '')),
+                'balance'            => number_format((float) ($wallet?->balance ?? $u->wallet_balance ?? 0), 2) . ' ZER',
+                'cashback_balance'   => number_format((float) ($u->cashback_balance ?? 0), 2) . ' ZER',
+                'wallet_status'      => $status === 'active' ? 'Active' : ucfirst($status),
+                'verification_level' => $kyc && $kyc->status === 'approved' ? 'Plus' : 'Basic',
                 'country'            => $u->country ?? '',
-                'kyc_status'         => $kyc ? (string) ($kyc->status ?? 'Under Review') : 'Not Submitted',
-                'activation_date'    => $walletStatus === 'active' && $wallet->updated_at
-                    ? Carbon::parse($wallet->updated_at)->format('Y-m-d') : '',
+                'kyc_status'         => $kyc
+                    ? (string) ($kyc->status ?? 'Under Review')
+                    : ($userKycStatus !== '' ? $userKycStatus : 'Not Submitted'),
+                'activation_date'    => $status === 'active' && $updatedSource
+                    ? Carbon::parse($updatedSource)->format('Y-m-d')
+                    : '',
                 'documents'          => $kyc ? [
                     'front'  => Helpers::mediaUrl($kyc->front_image) ?? null,
                     'back'   => Helpers::mediaUrl($kyc->back_image) ?? null,
