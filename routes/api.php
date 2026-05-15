@@ -846,6 +846,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/zercash/overview', [ZercashAdminController::class, 'overview']);
         Route::get('/zercash/settings', [ZercashAdminController::class, 'settings']);
         Route::put('/zercash/settings', [ZercashAdminController::class, 'updateSettings']);
+        // Aggregated list of pending KYC / wallet / transaction requests — feeds the navbar dropdown.
+        Route::get('/zercash/pending-requests', [ZercashAdminController::class, 'pendingRequests']);
 
         // ─── Logipay / Wallet Users ───
         Route::get('/logipay/stats', [LogipayAdminController::class, 'stats']);

@@ -265,28 +265,98 @@ class UsersController extends Controller
         ], 'User details loaded.');
     }
 
+    /**
+     * Approve the user's wallet + KYC. This is the dashboard counterpart of the user-driven KYC
+     * flow on mobile — we need to update everything the mobile/api layer reads so the user sees
+     * their wallet active immediately:
+     *
+     *   - `wallets.status`               → `active` (status the dashboard sidebar polls)
+     *   - `users.wallet_status`          → `activated` (legacy field used by mobile profile API)
+     *   - `users.wallet_id`              → assign a short ID if missing
+     *   - `users.kyc_status`             → `approved`
+     *   - `kyc_verifications.status`     → `approved` + `reviewed_at` (used by KycApiController)
+     */
     public function walletAccept($id)
     {
-        $wallet = Wallet::where('user_id', $id)->first();
+        $user = User::find($id);
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found', false, 404);
+        }
+
+        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found', false, 404);
         }
+
         $wallet->status = 'active';
         $wallet->status_reason = null;
         $wallet->save();
-        return ResponseHelper::sendResponse(['status' => 'active'], 'Wallet activated.');
+
+        // Reflect on the user record so the mobile profile + admin lists agree.
+        $user->wallet_status = 'activated';
+        $user->kyc_status = 'approved';
+        if (empty($user->wallet_id)) {
+            $user->wallet_id = strtoupper(substr(bin2hex(random_bytes(8)), 0, 16));
+        }
+        $user->save();
+
+        // Mark the underlying KYC submission approved so KycApiController returns the right status.
+        $kyc = KycVerification::where('user_id', (string) $user->_id)
+            ->orderBy('created_at', 'desc')->first();
+        if ($kyc) {
+            $kyc->status = 'approved';
+            $kyc->reviewed_at = Carbon::now();
+            $kyc->rejection_reason = null;
+            $kyc->save();
+        }
+
+        return ResponseHelper::sendResponse([
+            'status'       => 'active',
+            'wallet_id'    => $user->wallet_id,
+            'kyc_status'   => 'approved',
+        ], 'Wallet activated.');
     }
 
+    /**
+     * Reject the wallet + KYC. Mirrors walletAccept but pushes everything to the rejected state
+     * and persists the admin-supplied reason on both the wallet and the KYC record.
+     */
     public function walletReject(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string|max:500']);
-        $wallet = Wallet::where('user_id', $id)->first();
+
+        $user = User::find($id);
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found', false, 404);
+        }
+
+        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
         if (!$wallet) {
             return ResponseHelper::sendResponse(null, 'Wallet not found', false, 404);
         }
+
         $wallet->status = 'rejected';
         $wallet->status_reason = $request->reason;
         $wallet->save();
-        return ResponseHelper::sendResponse(['status' => 'rejected'], 'Wallet rejected.');
+
+        $user->wallet_status = 'rejected';
+        $user->wallet_status_reason = $request->reason;
+        $user->kyc_status = 'rejected';
+        $user->save();
+
+        $kyc = KycVerification::where('user_id', (string) $user->_id)
+            ->orderBy('created_at', 'desc')->first();
+        if ($kyc) {
+            $kyc->status = 'rejected';
+            $kyc->rejection_reason = $request->reason;
+            $kyc->reviewed_at = Carbon::now();
+            $kyc->save();
+        }
+
+        return ResponseHelper::sendResponse([
+            'status'     => 'rejected',
+            'kyc_status' => 'rejected',
+            'reason'     => $request->reason,
+        ], 'Wallet rejected.');
     }
 }

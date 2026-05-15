@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Models\Transaction;
 use App\Models\Payment;
 use App\Models\Order;
 use App\Models\Wallet;
 use App\Models\User;
 use App\Models\Setting;
+use App\Models\KycVerification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -211,6 +213,140 @@ class ZercashAdminController extends Controller
         );
 
         return ResponseHelper::sendResponse($data, 'Zercash settings updated');
+    }
+
+    /**
+     * GET /admin/zercash/pending-requests
+     *
+     * Returns the top N pending Zercash-style requests aggregated from multiple sources so the
+     * navbar dropdown shows a unified list:
+     *  - Pending wallet KYC submissions  (type = "KYC")
+     *  - Pending wallet records          (type = "Wallet")
+     *  - Pending transactions            (type = "Top-up" / "Withdraw" / "Transfer" — derived
+     *                                     from the transaction's `category` / `type`).
+     *
+     * Each row carries enough data for the dropdown row + a `userId` the front-end uses to deep
+     * link into the manage-users page.
+     */
+    public function pendingRequests(Request $request)
+    {
+        $limit = min((int) $request->get('limit', 10), 50);
+
+        $pendingKyc = KycVerification::where('status', 'pending')
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+
+        $pendingWallets = Wallet::whereIn('status', ['pending', 'under_review'])
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+
+        $pendingTx = Transaction::where('status', 'pending')
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+
+        $userIds = $pendingKyc->pluck('user_id')
+            ->merge($pendingWallets->pluck('user_id'))
+            ->merge($pendingTx->pluck('user_id'))
+            ->filter()->map(fn ($id) => (string) $id)->unique()->values()->toArray();
+
+        $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
+
+        $rows = collect();
+
+        foreach ($pendingKyc as $kyc) {
+            $u = $users->get((string) $kyc->user_id);
+            $rows->push([
+                'id'        => 'kyc-' . (string) $kyc->_id,
+                'kind'      => 'kyc',
+                'userId'    => (string) ($u->_id ?? $kyc->user_id),
+                'userName'  => $u->name ?? 'Unknown',
+                'initials'  => $this->initials($u->name ?? $u->username ?? '?'),
+                'avatar'    => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'type'      => 'KYC',
+                'amount'    => '—',
+                'status'    => 'Pending',
+                'time'      => $kyc->created_at ? Carbon::parse($kyc->created_at)->diffForHumans() : '',
+                'createdAt' => $kyc->created_at,
+            ]);
+        }
+
+        foreach ($pendingWallets as $w) {
+            // Skip if this user already has a pending KYC row — same logical request.
+            if ($pendingKyc->contains(fn ($k) => (string) $k->user_id === (string) $w->user_id)) {
+                continue;
+            }
+            $u = $users->get((string) $w->user_id);
+            $rows->push([
+                'id'        => 'wallet-' . (string) $w->_id,
+                'kind'      => 'wallet',
+                'userId'    => (string) ($u->_id ?? $w->user_id),
+                'userName'  => $u->name ?? 'Unknown',
+                'initials'  => $this->initials($u->name ?? $u->username ?? '?'),
+                'avatar'    => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'type'      => 'Wallet',
+                'amount'    => number_format((float) ($w->balance ?? 0), 2) . ' ZER',
+                'status'    => 'Pending',
+                'time'      => $w->created_at ? Carbon::parse($w->created_at)->diffForHumans() : '',
+                'createdAt' => $w->created_at,
+            ]);
+        }
+
+        foreach ($pendingTx as $tx) {
+            $u = $users->get((string) $tx->user_id);
+            $rows->push([
+                'id'        => 'tx-' . (string) $tx->_id,
+                'kind'      => 'transaction',
+                'userId'    => (string) ($u->_id ?? $tx->user_id),
+                'userName'  => $u->name ?? 'Unknown',
+                'initials'  => $this->initials($u->name ?? $u->username ?? '?'),
+                'avatar'    => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'type'      => $this->mapTransactionType($tx),
+                'amount'    => number_format((float) ($tx->amount ?? 0), 2) . ' ZER',
+                'status'    => 'Pending',
+                'time'      => $tx->created_at ? Carbon::parse($tx->created_at)->diffForHumans() : '',
+                'createdAt' => $tx->created_at,
+            ]);
+        }
+
+        $sorted = $rows
+            ->sortByDesc(fn ($r) => $r['createdAt'] ? Carbon::parse($r['createdAt'])->timestamp : 0)
+            ->take($limit)
+            ->values()
+            ->map(function ($r) {
+                unset($r['createdAt']);
+                return $r;
+            });
+
+        return ResponseHelper::sendResponse([
+            'requests' => $sorted,
+            'total'    => $rows->count(),
+        ], 'Pending Zercash requests fetched');
+    }
+
+    private function initials(string $name): string
+    {
+        $clean = trim($name);
+        if ($clean === '') return '??';
+        $parts = preg_split('/\s+/', $clean) ?: [];
+        if (count($parts) >= 2) {
+            return strtoupper(mb_substr($parts[0], 0, 1) . mb_substr($parts[1], 0, 1));
+        }
+        return strtoupper(mb_substr($clean, 0, 2));
+    }
+
+    private function mapTransactionType($tx): string
+    {
+        $category = (string) ($tx->category ?? '');
+        $type = (string) ($tx->type ?? '');
+        return match (true) {
+            $category === 'payout' || $type === 'withdraw' => 'Withdraw',
+            $category === 'deposit' || $type === 'deposit' => 'Top-up',
+            $category === 'transfer' || $type === 'transfer' => 'Transfer',
+            default => ucfirst($category ?: $type ?: 'Transaction'),
+        };
     }
 
     // ── Helpers ──
