@@ -254,9 +254,24 @@ class ZercashAdminController extends Controller
 
         $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
 
+        // Belt-and-suspenders: even if a kyc/wallet row's `status` field somehow stayed `pending`
+        // after an admin action, the user record itself reflects the approved/rejected outcome —
+        // so if either flag on the user is set we treat this user as resolved and drop them.
+        $resolvedUserIds = $users
+            ->filter(function ($u) {
+                $kycDone = in_array((string) ($u->kyc_status ?? ''), ['approved', 'rejected'], true);
+                $walletDone = in_array((string) ($u->wallet_status ?? ''), ['activated', 'active', 'rejected', 'closed', 'suspended', 'deactivated'], true);
+                return $kycDone || $walletDone;
+            })
+            ->keys()
+            ->map(fn ($id) => (string) $id)
+            ->toArray();
+
         $rows = collect();
 
         foreach ($pendingKyc as $kyc) {
+            // Skip if the user has already been resolved via the admin actions endpoint.
+            if (in_array((string) $kyc->user_id, $resolvedUserIds, true)) continue;
             $u = $users->get((string) $kyc->user_id);
             $rows->push([
                 'id'        => 'kyc-' . (string) $kyc->_id,
@@ -274,6 +289,7 @@ class ZercashAdminController extends Controller
         }
 
         foreach ($pendingWallets as $w) {
+            if (in_array((string) $w->user_id, $resolvedUserIds, true)) continue;
             // Skip if this user already has a pending KYC row — same logical request.
             if ($pendingKyc->contains(fn ($k) => (string) $k->user_id === (string) $w->user_id)) {
                 continue;
@@ -295,6 +311,7 @@ class ZercashAdminController extends Controller
         }
 
         foreach ($pendingTx as $tx) {
+            if (in_array((string) $tx->user_id, $resolvedUserIds, true)) continue;
             $u = $users->get((string) $tx->user_id);
             $rows->push([
                 'id'        => 'tx-' . (string) $tx->_id,
@@ -322,6 +339,8 @@ class ZercashAdminController extends Controller
 
         return ResponseHelper::sendResponse([
             'requests' => $sorted,
+            // `$rows` is already filtered to exclude resolved users, so its count is the true
+            // number of outstanding pending requests for badges.
             'total'    => $rows->count(),
         ], 'Pending Zercash requests fetched');
     }

@@ -343,15 +343,18 @@ class UsersController extends Controller
         }
         $user->save();
 
-        // Mark the underlying KYC submission approved so KycApiController returns the right status.
-        $kyc = KycVerification::where('user_id', (string) $user->_id)
-            ->orderBy('created_at', 'desc')->first();
-        if ($kyc) {
-            $kyc->status = 'approved';
-            $kyc->reviewed_at = Carbon::now();
-            $kyc->rejection_reason = null;
-            $kyc->save();
-        }
+        // Mark the underlying KYC submission(s) approved so KycApiController returns the right
+        // status. Mobile sometimes stores `user_id` as ObjectId, the dashboard sometimes as a
+        // plain string — match both forms and update every pending row to be safe.
+        $userIdStr = (string) $user->_id;
+        $kycQuery = KycVerification::where(function ($q) use ($userIdStr, $user) {
+            $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
+        });
+        $kycQuery->update([
+            'status'           => 'approved',
+            'reviewed_at'      => Carbon::now(),
+            'rejection_reason' => null,
+        ]);
 
         return ResponseHelper::sendResponse([
             'status'       => 'active',
@@ -392,14 +395,15 @@ class UsersController extends Controller
         $user->kyc_status = 'rejected';
         $user->save();
 
-        $kyc = KycVerification::where('user_id', (string) $user->_id)
-            ->orderBy('created_at', 'desc')->first();
-        if ($kyc) {
-            $kyc->status = 'rejected';
-            $kyc->rejection_reason = $request->reason;
-            $kyc->reviewed_at = Carbon::now();
-            $kyc->save();
-        }
+        // Bulk-update all KYC rows for this user (handles ObjectId vs string user_id variants).
+        $userIdStr = (string) $user->_id;
+        KycVerification::where(function ($q) use ($userIdStr, $user) {
+            $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
+        })->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $request->reason,
+            'reviewed_at'      => Carbon::now(),
+        ]);
 
         return ResponseHelper::sendResponse([
             'status'     => 'rejected',
