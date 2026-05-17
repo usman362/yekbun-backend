@@ -344,22 +344,25 @@ class UsersController extends Controller
         $user->save();
 
         // Mark the underlying KYC submission(s) approved so KycApiController returns the right
-        // status. Mobile sometimes stores `user_id` as ObjectId, the dashboard sometimes as a
-        // plain string — match both forms and update every pending row to be safe.
+        // status to the mobile app. Mobile stores `user_id` as ObjectId, the dashboard sometimes
+        // as a plain string — fetch by both forms and `save()` each one so MongoDB applies the
+        // change reliably (bulk `update()` on the query builder has been flaky for some rows).
         $userIdStr = (string) $user->_id;
-        $kycQuery = KycVerification::where(function ($q) use ($userIdStr, $user) {
+        $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
-        });
-        $kycQuery->update([
-            'status'           => 'approved',
-            'reviewed_at'      => Carbon::now(),
-            'rejection_reason' => null,
-        ]);
+        })->get();
+        foreach ($kycs as $kyc) {
+            $kyc->status = 'approved';
+            $kyc->reviewed_at = Carbon::now();
+            $kyc->rejection_reason = null;
+            $kyc->save();
+        }
 
         return ResponseHelper::sendResponse([
             'status'       => 'active',
             'wallet_id'    => $user->wallet_id,
             'kyc_status'   => 'approved',
+            'kyc_records_updated' => $kycs->count(),
         ], 'Wallet activated.');
     }
 
@@ -395,20 +398,23 @@ class UsersController extends Controller
         $user->kyc_status = 'rejected';
         $user->save();
 
-        // Bulk-update all KYC rows for this user (handles ObjectId vs string user_id variants).
+        // Iterate + save() each KYC row for reliable MongoDB updates (handles ObjectId vs string).
         $userIdStr = (string) $user->_id;
-        KycVerification::where(function ($q) use ($userIdStr, $user) {
+        $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
-        })->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $request->reason,
-            'reviewed_at'      => Carbon::now(),
-        ]);
+        })->get();
+        foreach ($kycs as $kyc) {
+            $kyc->status = 'rejected';
+            $kyc->rejection_reason = $request->reason;
+            $kyc->reviewed_at = Carbon::now();
+            $kyc->save();
+        }
 
         return ResponseHelper::sendResponse([
             'status'     => 'rejected',
             'kyc_status' => 'rejected',
             'reason'     => $request->reason,
+            'kyc_records_updated' => $kycs->count(),
         ], 'Wallet rejected.');
     }
 }
