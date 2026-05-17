@@ -307,7 +307,9 @@ class UsersController extends Controller
      * flow on mobile — we need to update everything the mobile/api layer reads so the user sees
      * their wallet active immediately:
      *
-     *   - `wallets.status`               → `active` (status the dashboard sidebar polls)
+     *   - `wallets.status`               → `active`   (created if missing — admins sometimes
+     *                                                 approve users who only verified OTP and
+     *                                                 never had a wallets row written by mobile)
      *   - `users.wallet_status`          → `activated` (legacy field used by mobile profile API)
      *   - `users.wallet_id`              → assign a short ID if missing
      *   - `users.kyc_status`             → `approved`
@@ -320,11 +322,15 @@ class UsersController extends Controller
             return ResponseHelper::sendResponse(null, 'User not found', false, 404);
         }
 
+        // Find or create the wallet record. Mobile usually creates this on first wallet activation,
+        // but if the admin is approving from the dashboard before mobile got that far we still want
+        // to flip the status correctly.
         $wallet = Wallet::where('user_id', (string) $user->_id)->first();
         if (!$wallet) {
-            return ResponseHelper::sendResponse(null, 'Wallet not found', false, 404);
+            $wallet = new Wallet();
+            $wallet->user_id = (string) $user->_id;
+            $wallet->balance = 0;
         }
-
         $wallet->status = 'active';
         $wallet->status_reason = null;
         $wallet->save();
@@ -357,6 +363,10 @@ class UsersController extends Controller
     /**
      * Reject the wallet + KYC. Mirrors walletAccept but pushes everything to the rejected state
      * and persists the admin-supplied reason on both the wallet and the KYC record.
+     *
+     * As with walletAccept, we don't require an existing wallet record — KYC-only requests
+     * (mobile user verified OTP but never got far enough to create a wallets row) are still
+     * valid requests an admin should be able to decline.
      */
     public function walletReject(Request $request, $id)
     {
@@ -369,9 +379,10 @@ class UsersController extends Controller
 
         $wallet = Wallet::where('user_id', (string) $user->_id)->first();
         if (!$wallet) {
-            return ResponseHelper::sendResponse(null, 'Wallet not found', false, 404);
+            $wallet = new Wallet();
+            $wallet->user_id = (string) $user->_id;
+            $wallet->balance = 0;
         }
-
         $wallet->status = 'rejected';
         $wallet->status_reason = $request->reason;
         $wallet->save();
