@@ -11,26 +11,32 @@ use App\Models\KycVerification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
+/**
+ * Source-of-truth design:
+ *   - Wallet state  → `wallets` collection
+ *   - KYC state     → `kyc_verifications` collection
+ *
+ * We never read or write `users.wallet_status`, `users.kyc_status`, `users.wallet_id` etc.
+ * Deleting a wallet/kyc row removes the user from the corresponding list, and the user record
+ * itself stays clean (no orphan flags lingering).
+ */
 class LogipayAdminController extends Controller
 {
     /**
      * Stats cards for the top of LogipayManageUsersPage.
      *
-     * Data model notes:
-     *  - "New Requests"   = KYC submissions awaiting review (kyc_verifications.status = 'pending')
-     *                      OR users whose wallet_status = 'under_review' / 'pending'.
-     *  - "Active Wallets" = users with wallet_status = 'activated' / 'active'
-     *  - "Closed Wallets" = users with wallet_status in (closed / suspended / deactivated / rejected)
+     *  - "New Requests"   = wallets in pending/under_review  ∪  KYC submissions in pending/under_review
+     *                       (deduplicated by user_id so the same user isn't double-counted).
+     *  - "Active Wallets" = wallets with status in (active / activated / approved)
+     *  - "Closed Wallets" = wallets with status in (closed / suspended / deactivated / rejected)
      */
     public function stats()
     {
-        $newRequests = KycVerification::where('status', 'pending')->count()
-            + User::whereIn('wallet_status', ['under_review', 'pending'])
-                ->whereNotIn('_id', KycVerification::where('status', 'pending')->pluck('user_id')->toArray())
-                ->count();
+        $pendingUserIds = $this->pendingUserIds();
+        $newRequests = count($pendingUserIds);
 
-        $activeWallets = User::whereIn('wallet_status', ['activated', 'active'])->count();
-        $closedWallets = User::whereIn('wallet_status', ['closed', 'suspended', 'deactivated', 'rejected'])->count();
+        $activeWallets = Wallet::whereIn('status', ['active', 'activated', 'approved'])->count();
+        $closedWallets = Wallet::whereIn('status', ['closed', 'suspended', 'deactivated', 'rejected'])->count();
 
         $totalWallets = $newRequests + $activeWallets + $closedWallets;
 
@@ -45,8 +51,8 @@ class LogipayAdminController extends Controller
     /**
      * GET /admin/logipay/new-requests
      *
-     * Returns the pending KYC submissions joined with their submitting user. Falls back to users
-     * whose wallet_status is under_review when no KYC document was uploaded.
+     * Lists users with an outstanding wallet or KYC request. Pulls user_ids exclusively from the
+     * Wallet + KycVerification collections so deletion of a row removes them automatically.
      */
     public function newRequests(Request $request)
     {
@@ -54,21 +60,12 @@ class LogipayAdminController extends Controller
         $page    = (int) $request->get('page', 1);
         $perPage = min((int) $request->get('per_page', 10), 100);
 
-        // 1) Pending KYC records.
-        $kycQuery = KycVerification::where('status', 'pending')->orderBy('created_at', 'desc');
-        $pendingKyc = $kycQuery->get();
-        $kycUserIds = $pendingKyc->pluck('user_id')->filter()->map(fn($id) => (string) $id)->toArray();
+        $pendingUserIds = $this->pendingUserIds();
+        // Load pending KYC + wallet rows so we can attach metadata to each user row.
+        $pendingKyc = KycVerification::whereIn('status', ['pending', 'under_review'])->get()->keyBy(fn ($k) => (string) $k->user_id);
+        $pendingWallets = Wallet::whereIn('status', ['pending', 'under_review'])->get()->keyBy(fn ($w) => (string) $w->user_id);
 
-        // 2) Users in review without a KYC record yet (started OTP but didn't upload docs).
-        $extraUsers = User::whereIn('wallet_status', ['under_review', 'pending'])
-            ->whereNotIn('_id', $kycUserIds)
-            ->orderBy('updated_at', 'desc')
-            ->get();
-
-        // Merge into a single sortable list keyed by user.
-        $allUserIds = array_unique(array_merge($kycUserIds, $extraUsers->pluck('_id')->map(fn($id) => (string) $id)->toArray()));
-
-        $userQuery = User::whereIn('_id', $allUserIds);
+        $userQuery = User::whereIn('_id', $pendingUserIds);
         if ($search) {
             $userQuery->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -76,24 +73,25 @@ class LogipayAdminController extends Controller
                     ->orWhere('email', 'like', "%{$search}%");
             });
         }
-        $users = $userQuery->get()->keyBy('_id');
+        $users = $userQuery->get();
 
         $total = $users->count();
         $rows = $users->values()->slice(($page - 1) * $perPage, $perPage);
 
-        $result = $rows->map(function ($user) use ($pendingKyc) {
-            $kyc = $pendingKyc->first(fn($k) => (string) $k->user_id === (string) $user->_id);
+        $result = $rows->map(function ($user) use ($pendingKyc, $pendingWallets) {
+            $userIdStr = (string) $user->_id;
+            $kyc = $pendingKyc->get($userIdStr);
+            $wallet = $pendingWallets->get($userIdStr);
+            $createdSource = $wallet?->created_at ?? $kyc?->submitted_at ?? $kyc?->created_at;
 
             return [
-                'id'                => (string) $user->_id,
+                'id'                => $userIdStr,
                 'kycId'             => $kyc ? (string) $kyc->_id : null,
+                'walletId'          => $wallet ? 'W-' . substr((string) $wallet->_id, -6) : 'W-' . substr($userIdStr, -6),
                 'name'              => trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')),
                 'username'          => $user->username ?? '',
-                'walletId'          => $user->wallet_id ?? ('W-' . substr((string) $user->_id, -6)),
-                'requestDate'       => $kyc?->submitted_at
-                    ? Carbon::parse($kyc->submitted_at)->format('M d, Y')
-                    : ($user->updated_at ? Carbon::parse($user->updated_at)->format('M d, Y') : ''),
-                'kycStatus'         => $this->mapKycStatus($user, $kyc),
+                'requestDate'       => $createdSource ? Carbon::parse($createdSource)->format('M d, Y') : '',
+                'kycStatus'         => $this->mapKycStatus($kyc),
                 'verificationLevel' => $this->mapVerificationLevel($kyc),
                 'country'           => $user->country ?? '',
                 'avatar'            => Helpers::mediaUrl($user->image) ?? '',
@@ -109,7 +107,7 @@ class LogipayAdminController extends Controller
     }
 
     /**
-     * GET /admin/logipay/active-wallets
+     * GET /admin/logipay/active-wallets — users whose `wallets.status` is active/activated/approved.
      */
     public function activeWallets(Request $request)
     {
@@ -117,38 +115,49 @@ class LogipayAdminController extends Controller
         $page    = (int) $request->get('page', 1);
         $perPage = min((int) $request->get('per_page', 10), 100);
 
-        $query = User::whereIn('wallet_status', ['activated', 'active'])->orderBy('updated_at', 'desc');
+        $walletsQuery = Wallet::whereIn('status', ['active', 'activated', 'approved'])
+            ->orderBy('updated_at', 'desc');
+        $allActiveWallets = $walletsQuery->get();
+        $userIds = $allActiveWallets->pluck('user_id')->map(fn ($id) => (string) $id)->unique()->toArray();
 
+        $userQuery = User::whereIn('_id', $userIds);
         if ($search) {
-            $query->where(function ($q) use ($search) {
+            $userQuery->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             });
         }
+        $matchingUsers = $userQuery->get()->keyBy(fn ($u) => (string) $u->_id);
 
-        $total = $query->count();
-        $users = $query->skip(($page - 1) * $perPage)->take($perPage)->get();
+        // Filter the wallet list down to those whose user matched the search.
+        $filteredWallets = $allActiveWallets
+            ->filter(fn ($w) => $matchingUsers->has((string) $w->user_id))
+            ->values();
+        $total = $filteredWallets->count();
+        $page_wallets = $filteredWallets->slice(($page - 1) * $perPage, $perPage)->values();
 
-        $userIds = $users->pluck('_id')->map(fn($id) => (string) $id)->toArray();
-        $kycByUser = KycVerification::whereIn('user_id', $userIds)->get()
-            ->sortByDesc('created_at')->keyBy(fn($k) => (string) $k->user_id);
-        $walletByUser = Wallet::whereIn('user_id', $userIds)->get()->keyBy(fn($w) => (string) $w->user_id);
+        // KYC info for verification level.
+        $kycByUser = KycVerification::whereIn('user_id', $userIds)
+            ->get()
+            ->sortByDesc('created_at')
+            ->keyBy(fn ($k) => (string) $k->user_id);
 
-        $rows = $users->map(function ($user) use ($kycByUser, $walletByUser) {
-            $wallet = $walletByUser->get((string) $user->_id);
-            $kyc = $kycByUser->get((string) $user->_id);
+        $rows = $page_wallets->map(function ($wallet) use ($matchingUsers, $kycByUser) {
+            $userIdStr = (string) $wallet->user_id;
+            $user = $matchingUsers->get($userIdStr);
+            $kyc = $kycByUser->get($userIdStr);
 
             return [
-                'id'                => (string) $user->_id,
-                'name'              => trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')),
+                'id'                => $userIdStr,
+                'name'              => $user ? trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')) : 'Unknown',
                 'username'          => $user->username ?? '',
-                'walletId'          => $user->wallet_id ?? ('W-' . substr((string) $user->_id, -6)),
-                'walletStatus'      => ucfirst($user->wallet_status ?? 'Active'),
+                'walletId'          => 'W-' . substr((string) $wallet->_id, -6),
+                'walletStatus'      => ucfirst($wallet->status ?? 'Active'),
                 'verificationLevel' => $this->mapVerificationLevel($kyc),
-                'balance'           => number_format(($wallet->balance ?? $user->wallet_balance ?? 0), 2) . ' ZER',
-                'lastActivity'      => $user->updated_at ? Carbon::parse($user->updated_at)->diffForHumans() : '',
-                'avatar'            => Helpers::mediaUrl($user->image) ?? '',
+                'balance'           => number_format((float) ($wallet->balance ?? 0), 2) . ' ZER',
+                'lastActivity'      => $wallet->updated_at ? Carbon::parse($wallet->updated_at)->diffForHumans() : '',
+                'avatar'            => $user ? (Helpers::mediaUrl($user->image) ?? '') : '',
             ];
         })->values();
 
@@ -161,7 +170,7 @@ class LogipayAdminController extends Controller
     }
 
     /**
-     * GET /admin/logipay/closed-wallets
+     * GET /admin/logipay/closed-wallets — wallets with status in closed/suspended/deactivated/rejected.
      */
     public function closedWallets(Request $request)
     {
@@ -169,30 +178,40 @@ class LogipayAdminController extends Controller
         $page    = (int) $request->get('page', 1);
         $perPage = min((int) $request->get('per_page', 10), 100);
 
-        $query = User::whereIn('wallet_status', ['closed', 'suspended', 'deactivated', 'rejected'])
+        $walletsQuery = Wallet::whereIn('status', ['closed', 'suspended', 'deactivated', 'rejected'])
             ->orderBy('updated_at', 'desc');
+        $allClosedWallets = $walletsQuery->get();
+        $userIds = $allClosedWallets->pluck('user_id')->map(fn ($id) => (string) $id)->unique()->toArray();
 
+        $userQuery = User::whereIn('_id', $userIds);
         if ($search) {
-            $query->where(function ($q) use ($search) {
+            $userQuery->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             });
         }
+        $matchingUsers = $userQuery->get()->keyBy(fn ($u) => (string) $u->_id);
 
-        $total = $query->count();
-        $users = $query->skip(($page - 1) * $perPage)->take($perPage)->get();
+        $filteredWallets = $allClosedWallets
+            ->filter(fn ($w) => $matchingUsers->has((string) $w->user_id))
+            ->values();
+        $total = $filteredWallets->count();
+        $page_wallets = $filteredWallets->slice(($page - 1) * $perPage, $perPage)->values();
 
-        $rows = $users->map(function ($user) {
+        $rows = $page_wallets->map(function ($wallet) use ($matchingUsers) {
+            $userIdStr = (string) $wallet->user_id;
+            $user = $matchingUsers->get($userIdStr);
+
             return [
-                'id'         => (string) $user->_id,
-                'name'       => trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')),
+                'id'         => $userIdStr,
+                'name'       => $user ? trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')) : 'Unknown',
                 'username'   => $user->username ?? '',
-                'walletId'   => $user->wallet_id ?? ('W-' . substr((string) $user->_id, -6)),
-                'closedDate' => $user->updated_at ? Carbon::parse($user->updated_at)->format('M d, Y') : '',
-                'reason'     => $user->wallet_status_reason ?? 'N/A',
-                'lastStatus' => ucfirst($user->wallet_status ?? 'Closed'),
-                'avatar'     => Helpers::mediaUrl($user->image) ?? '',
+                'walletId'   => 'W-' . substr((string) $wallet->_id, -6),
+                'closedDate' => $wallet->updated_at ? Carbon::parse($wallet->updated_at)->format('M d, Y') : '',
+                'reason'     => $wallet->status_reason ?? 'N/A',
+                'lastStatus' => ucfirst($wallet->status ?? 'Closed'),
+                'avatar'     => $user ? (Helpers::mediaUrl($user->image) ?? '') : '',
             ];
         })->values();
 
@@ -205,9 +224,7 @@ class LogipayAdminController extends Controller
     }
 
     /**
-     * GET /admin/logipay/request/{userId}
-     *
-     * Returns full KYC + wallet detail for the request-detail side panel.
+     * GET /admin/logipay/request/{userId} — full KYC + wallet detail for the side panel.
      */
     public function showRequest(string $userId)
     {
@@ -216,12 +233,15 @@ class LogipayAdminController extends Controller
             return ResponseHelper::sendResponse(null, 'User not found', false, 404);
         }
 
-        $kyc = KycVerification::where('user_id', (string) $user->_id)->orderBy('created_at', 'desc')->first();
-        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        $userIdStr = (string) $user->_id;
+        $kyc = KycVerification::where(function ($q) use ($userIdStr, $user) {
+            $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
+        })->orderBy('created_at', 'desc')->first();
+        $wallet = Wallet::where('user_id', $userIdStr)->first();
 
         return ResponseHelper::sendResponse([
             'user' => [
-                'id'        => (string) $user->_id,
+                'id'        => $userIdStr,
                 'name'      => trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')),
                 'username'  => $user->username ?? '',
                 'email'     => $user->email ?? '',
@@ -230,9 +250,9 @@ class LogipayAdminController extends Controller
                 'city'      => $user->city ?? '',
                 'province'  => $user->province ?? '',
                 'avatar'    => Helpers::mediaUrl($user->image) ?? '',
-                'walletId'  => $user->wallet_id ?? null,
-                'walletStatus' => $user->wallet_status ?? 'not_found',
-                'walletBalance' => (float) ($user->wallet_balance ?? 0),
+                'walletId'      => $wallet ? (string) $wallet->_id : null,
+                'walletStatus'  => $wallet?->status ?? 'not_found',
+                'walletBalance' => (float) ($wallet?->balance ?? 0),
             ],
             'kyc' => $kyc ? [
                 'id'             => (string) $kyc->_id,
@@ -260,7 +280,8 @@ class LogipayAdminController extends Controller
     }
 
     /**
-     * POST /admin/logipay/request/{userId}/approve
+     * POST /admin/logipay/request/{userId}/approve — flip wallet active + KYC approved.
+     * Writes ONLY to Wallet + KycVerification (no user-table mirroring).
      */
     public function approveRequest(string $userId)
     {
@@ -268,33 +289,34 @@ class LogipayAdminController extends Controller
         if (!$user) {
             return ResponseHelper::sendResponse(null, 'User not found', false, 404);
         }
+        $userIdStr = (string) $user->_id;
 
-        $kyc = KycVerification::where('user_id', (string) $user->_id)->where('status', 'pending')->orderBy('created_at', 'desc')->first();
-        if ($kyc) {
+        $wallet = Wallet::firstOrNew(['user_id' => $userIdStr]);
+        $wallet->user_id = $userIdStr;
+        if (!isset($wallet->balance)) $wallet->balance = 0;
+        $wallet->status = 'active';
+        $wallet->status_reason = null;
+        $wallet->save();
+
+        $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
+            $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
+        })->get();
+        foreach ($kycs as $kyc) {
             $kyc->status = 'approved';
             $kyc->reviewed_at = Carbon::now();
+            $kyc->rejection_reason = null;
             $kyc->save();
         }
 
-        $user->kyc_status = 'approved';
-        $user->wallet_status = 'activated';
-        if (empty($user->wallet_id)) {
-            $user->wallet_id = strtoupper(substr(bin2hex(random_bytes(8)), 0, 16));
-        }
-        $user->save();
-
-        // Ensure wallet record exists.
-        $wallet = Wallet::firstOrNew(['user_id' => (string) $user->_id]);
-        $wallet->user_id = (string) $user->_id;
-        $wallet->status = 'active';
-        if (!isset($wallet->balance)) $wallet->balance = 0;
-        $wallet->save();
-
-        return ResponseHelper::sendResponse(['id' => (string) $user->_id], 'Request approved');
+        return ResponseHelper::sendResponse([
+            'id' => $userIdStr,
+            'wallet_status' => 'active',
+            'kyc_records_updated' => $kycs->count(),
+        ], 'Request approved');
     }
 
     /**
-     * POST /admin/logipay/request/{userId}/reject
+     * POST /admin/logipay/request/{userId}/reject — wallet rejected + KYC rejected with reason.
      */
     public function rejectRequest(Request $request, string $userId)
     {
@@ -302,36 +324,57 @@ class LogipayAdminController extends Controller
         if (!$user) {
             return ResponseHelper::sendResponse(null, 'User not found', false, 404);
         }
-
+        $userIdStr = (string) $user->_id;
         $reason = $request->input('reason', 'Rejected by admin');
 
-        $kyc = KycVerification::where('user_id', (string) $user->_id)->where('status', 'pending')->orderBy('created_at', 'desc')->first();
-        if ($kyc) {
+        $wallet = Wallet::firstOrNew(['user_id' => $userIdStr]);
+        $wallet->user_id = $userIdStr;
+        if (!isset($wallet->balance)) $wallet->balance = 0;
+        $wallet->status = 'rejected';
+        $wallet->status_reason = $reason;
+        $wallet->save();
+
+        $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
+            $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
+        })->get();
+        foreach ($kycs as $kyc) {
             $kyc->status = 'rejected';
             $kyc->rejection_reason = $reason;
             $kyc->reviewed_at = Carbon::now();
             $kyc->save();
         }
 
-        $user->kyc_status = 'rejected';
-        $user->wallet_status = 'rejected';
-        $user->wallet_status_reason = $reason;
-        $user->save();
-
-        return ResponseHelper::sendResponse(['id' => (string) $user->_id], 'Request rejected');
+        return ResponseHelper::sendResponse([
+            'id' => $userIdStr,
+            'wallet_status' => 'rejected',
+            'kyc_records_updated' => $kycs->count(),
+        ], 'Request rejected');
     }
 
     // ── Helpers ──
 
-    private function mapKycStatus(User $user, ?KycVerification $kyc): string
+    /**
+     * Distinct user_ids who have a pending wallet OR pending KYC submission. The two sources are
+     * merged so we don't show the same user twice in "New Requests".
+     */
+    private function pendingUserIds(): array
     {
-        $status = $kyc?->status ?? $user->kyc_status ?? null;
+        $kycUserIds = KycVerification::whereIn('status', ['pending', 'under_review'])
+            ->pluck('user_id')->map(fn ($id) => (string) $id)->toArray();
+        $walletUserIds = Wallet::whereIn('status', ['pending', 'under_review'])
+            ->pluck('user_id')->map(fn ($id) => (string) $id)->toArray();
+        return array_values(array_unique(array_merge($kycUserIds, $walletUserIds)));
+    }
+
+    private function mapKycStatus(?KycVerification $kyc): string
+    {
+        $status = $kyc?->status ?? null;
         return match ($status) {
             'approved'     => 'Approved',
             'rejected'     => 'Rejected',
             'under_review' => 'Under Review',
             'pending'      => 'Pending',
-            default        => $user->kyc_otp_verified ? 'Under Review' : 'Pending',
+            default        => 'Pending',
         };
     }
 

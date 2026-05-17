@@ -201,60 +201,46 @@ class UsersController extends Controller
                 ];
             })->values();
 
-        // Wallet — show the Wallet Request tab whenever ANY of these is true:
-        //   1. A `wallets` record exists for this user (full wallet flow).
-        //   2. A `kyc_verifications` submission exists (KYC submitted, wallet not yet created).
-        //   3. The user document itself carries a `wallet_status` / `kyc_status` (legacy mobile path
-        //      where mobile updates the user record directly without creating a Wallet row first).
-        // This guarantees admins always see the request as soon as the user starts the flow on mobile.
-        $wallet = Wallet::where('user_id', $u->_id)->first();
-        $kyc = KycVerification::where('user_id', $u->_id)->orderBy('created_at', 'desc')->first();
-
-        $userWalletStatus = (string) ($u->wallet_status ?? '');
-        $userKycStatus    = (string) ($u->kyc_status ?? '');
-        $hasUserKycSignal = $userKycStatus !== '' && $userKycStatus !== 'not_submitted';
-        $hasUserWalletSignal = $userWalletStatus !== '' && $userWalletStatus !== 'not_found';
-        // Mobile sets `kyc_otp_verified` once the user receives + confirms the OTP, even before they
-        // upload any documents. Admins should still see this row so they know a request is in progress.
-        $hasOtpSignal = !empty($u->kyc_otp_verified);
+        // Wallet — source of truth is `wallets` + `kyc_verifications` ONLY.
+        //
+        // We deliberately do NOT fall back to legacy user-table flags (kyc_otp_verified,
+        // user.wallet_status, user.kyc_status) any more. Those caused stale state to linger when
+        // the wallet/kyc rows themselves were deleted. The Wallet Request tab now shows up if and
+        // only if a real wallet or KYC record exists for this user.
+        $userIdStr = (string) $u->_id;
+        $wallet = Wallet::where('user_id', $userIdStr)->first();
+        $kyc = KycVerification::where(function ($q) use ($userIdStr, $u) {
+            $q->where('user_id', $userIdStr)->orWhere('user_id', $u->_id);
+        })->orderBy('created_at', 'desc')->first();
 
         $walletData = null;
-        if ($wallet || $kyc || $hasUserKycSignal || $hasUserWalletSignal || $hasOtpSignal) {
-            // Resolve a single status precedence:
-            //   wallets.status > users.wallet_status > kyc.status > users.kyc_status > 'pending'
-            $statusRaw = $wallet?->status
-                ?? ($hasUserWalletSignal ? $userWalletStatus : null)
-                ?? $kyc?->status
-                ?? ($hasUserKycSignal ? $userKycStatus : null)
-                ?? 'pending';
+        if ($wallet || $kyc) {
+            // Status precedence: wallets.status > kyc.status > 'pending'.
+            $statusRaw = $wallet?->status ?? $kyc?->status ?? 'pending';
 
-            // Normalise the various legacy values into the 3 states the dashboard cares about.
+            // Normalise legacy values into the 3 states the dashboard cares about.
             $status = in_array($statusRaw, ['active', 'activated', 'approved'], true)
                 ? 'active'
                 : (in_array($statusRaw, ['rejected', 'closed', 'suspended', 'deactivated'], true)
                     ? 'rejected'
                     : 'pending');
 
-            $createdSource = $wallet?->created_at ?? $kyc?->submitted_at ?? $kyc?->created_at ?? $u->created_at;
-            $updatedSource = $wallet?->updated_at ?? $kyc?->reviewed_at ?? $u->updated_at;
-            $sourceId = $wallet?->_id ?? $kyc?->_id ?? $u->_id;
+            $createdSource = $wallet?->created_at ?? $kyc?->submitted_at ?? $kyc?->created_at;
+            $updatedSource = $wallet?->updated_at ?? $kyc?->reviewed_at;
+            $sourceId = $wallet?->_id ?? $kyc?->_id;
 
             $walletData = [
                 'exists'             => true,
                 'status'             => $status,
-                'request_id'         => 'WR-' . strtoupper(substr((string) $sourceId, -8)),
+                'request_id'         => $sourceId ? 'WR-' . strtoupper(substr((string) $sourceId, -8)) : '',
                 'request_date'       => $createdSource ? Carbon::parse($createdSource)->format('Y-m-d') : '',
-                'wallet_id'          => $wallet
-                    ? 'WLT-' . strtoupper(substr((string) $wallet->_id, -6))
-                    : ((string) ($u->wallet_id ?? '')),
-                'balance'            => number_format((float) ($wallet?->balance ?? $u->wallet_balance ?? 0), 2) . ' ZER',
-                'cashback_balance'   => number_format((float) ($u->cashback_balance ?? 0), 2) . ' ZER',
+                'wallet_id'          => $wallet ? 'WLT-' . strtoupper(substr((string) $wallet->_id, -6)) : '',
+                'balance'            => number_format((float) ($wallet?->balance ?? 0), 2) . ' ZER',
+                'cashback_balance'   => number_format((float) ($wallet?->cashback_balance ?? 0), 2) . ' ZER',
                 'wallet_status'      => $status === 'active' ? 'Active' : ucfirst($status),
                 'verification_level' => $kyc && $kyc->status === 'approved' ? 'Plus' : 'Basic',
                 'country'            => $u->country ?? '',
-                'kyc_status'         => $kyc
-                    ? (string) ($kyc->status ?? 'Under Review')
-                    : ($userKycStatus !== '' ? $userKycStatus : 'Not Submitted'),
+                'kyc_status'         => $kyc ? (string) ($kyc->status ?? 'Under Review') : 'Not Submitted',
                 'activation_date'    => $status === 'active' && $updatedSource
                     ? Carbon::parse($updatedSource)->format('Y-m-d')
                     : '',
@@ -303,17 +289,12 @@ class UsersController extends Controller
     }
 
     /**
-     * Approve the user's wallet + KYC. This is the dashboard counterpart of the user-driven KYC
-     * flow on mobile — we need to update everything the mobile/api layer reads so the user sees
-     * their wallet active immediately:
+     * Approve the user's wallet + KYC.
      *
-     *   - `wallets.status`               → `active`   (created if missing — admins sometimes
-     *                                                 approve users who only verified OTP and
-     *                                                 never had a wallets row written by mobile)
-     *   - `users.wallet_status`          → `activated` (legacy field used by mobile profile API)
-     *   - `users.wallet_id`              → assign a short ID if missing
-     *   - `users.kyc_status`             → `approved`
-     *   - `kyc_verifications.status`     → `approved` + `reviewed_at` (used by KycApiController)
+     * Source-of-truth design (per data-integrity feedback): wallet state lives in `wallets`,
+     * KYC state lives in `kyc_verifications`. We do NOT mirror these onto the `users` document
+     * any more — that caused stale flags to remain on the user when wallet/kyc rows were deleted.
+     * Reads must derive status from the proper collections via the `walletViewFor()` helper.
      */
     public function walletAccept($id)
     {
@@ -322,32 +303,20 @@ class UsersController extends Controller
             return ResponseHelper::sendResponse(null, 'User not found', false, 404);
         }
 
-        // Find or create the wallet record. Mobile usually creates this on first wallet activation,
-        // but if the admin is approving from the dashboard before mobile got that far we still want
-        // to flip the status correctly.
-        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        $userIdStr = (string) $user->_id;
+
+        // Wallet: ensure a row exists, then mark it active.
+        $wallet = Wallet::where('user_id', $userIdStr)->first();
         if (!$wallet) {
             $wallet = new Wallet();
-            $wallet->user_id = (string) $user->_id;
+            $wallet->user_id = $userIdStr;
             $wallet->balance = 0;
         }
         $wallet->status = 'active';
         $wallet->status_reason = null;
         $wallet->save();
 
-        // Reflect on the user record so the mobile profile + admin lists agree.
-        $user->wallet_status = 'activated';
-        $user->kyc_status = 'approved';
-        if (empty($user->wallet_id)) {
-            $user->wallet_id = strtoupper(substr(bin2hex(random_bytes(8)), 0, 16));
-        }
-        $user->save();
-
-        // Mark the underlying KYC submission(s) approved so KycApiController returns the right
-        // status to the mobile app. Mobile stores `user_id` as ObjectId, the dashboard sometimes
-        // as a plain string — fetch by both forms and `save()` each one so MongoDB applies the
-        // change reliably (bulk `update()` on the query builder has been flaky for some rows).
-        $userIdStr = (string) $user->_id;
+        // KYC: per-record save (reliable on MongoDB) with type-safe matching for the user_id field.
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
         })->get();
@@ -359,20 +328,18 @@ class UsersController extends Controller
         }
 
         return ResponseHelper::sendResponse([
-            'status'       => 'active',
-            'wallet_id'    => $user->wallet_id,
-            'kyc_status'   => 'approved',
+            'wallet_id'           => (string) $wallet->_id,
+            'wallet_status'       => 'active',
+            'kyc_status'          => 'approved',
             'kyc_records_updated' => $kycs->count(),
         ], 'Wallet activated.');
     }
 
     /**
-     * Reject the wallet + KYC. Mirrors walletAccept but pushes everything to the rejected state
-     * and persists the admin-supplied reason on both the wallet and the KYC record.
+     * Reject the wallet + KYC.
      *
-     * As with walletAccept, we don't require an existing wallet record — KYC-only requests
-     * (mobile user verified OTP but never got far enough to create a wallets row) are still
-     * valid requests an admin should be able to decline.
+     * Same design rule as walletAccept — no user-table writes. The wallet row is created if it
+     * doesn't exist so the rejection is still recorded (KYC-only requests are valid).
      */
     public function walletReject(Request $request, $id)
     {
@@ -383,23 +350,18 @@ class UsersController extends Controller
             return ResponseHelper::sendResponse(null, 'User not found', false, 404);
         }
 
-        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        $userIdStr = (string) $user->_id;
+
+        $wallet = Wallet::where('user_id', $userIdStr)->first();
         if (!$wallet) {
             $wallet = new Wallet();
-            $wallet->user_id = (string) $user->_id;
+            $wallet->user_id = $userIdStr;
             $wallet->balance = 0;
         }
         $wallet->status = 'rejected';
         $wallet->status_reason = $request->reason;
         $wallet->save();
 
-        $user->wallet_status = 'rejected';
-        $user->wallet_status_reason = $request->reason;
-        $user->kyc_status = 'rejected';
-        $user->save();
-
-        // Iterate + save() each KYC row for reliable MongoDB updates (handles ObjectId vs string).
-        $userIdStr = (string) $user->_id;
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
         })->get();
@@ -411,9 +373,9 @@ class UsersController extends Controller
         }
 
         return ResponseHelper::sendResponse([
-            'status'     => 'rejected',
-            'kyc_status' => 'rejected',
-            'reason'     => $request->reason,
+            'wallet_status'       => 'rejected',
+            'kyc_status'          => 'rejected',
+            'reason'              => $request->reason,
             'kyc_records_updated' => $kycs->count(),
         ], 'Wallet rejected.');
     }

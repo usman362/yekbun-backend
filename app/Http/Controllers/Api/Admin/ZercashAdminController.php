@@ -254,18 +254,10 @@ class ZercashAdminController extends Controller
 
         $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
 
-        // Belt-and-suspenders: even if a kyc/wallet row's `status` field somehow stayed `pending`
-        // after an admin action, the user record itself reflects the approved/rejected outcome —
-        // so if either flag on the user is set we treat this user as resolved and drop them.
-        $resolvedUserIds = $users
-            ->filter(function ($u) {
-                $kycDone = in_array((string) ($u->kyc_status ?? ''), ['approved', 'rejected'], true);
-                $walletDone = in_array((string) ($u->wallet_status ?? ''), ['activated', 'active', 'rejected', 'closed', 'suspended', 'deactivated'], true);
-                return $kycDone || $walletDone;
-            })
-            ->keys()
-            ->map(fn ($id) => (string) $id)
-            ->toArray();
+        // Source of truth is the kyc/wallet rows themselves — by querying those with
+        // status='pending' above we've already filtered out resolved requests. No need to inspect
+        // the user record (which we no longer write wallet/kyc flags to).
+        $resolvedUserIds = [];
 
         $rows = collect();
 
