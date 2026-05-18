@@ -294,7 +294,11 @@ class UsersController extends Controller
      * Source-of-truth design (per data-integrity feedback): wallet state lives in `wallets`,
      * KYC state lives in `kyc_verifications`. We do NOT mirror these onto the `users` document
      * any more — that caused stale flags to remain on the user when wallet/kyc rows were deleted.
-     * Reads must derive status from the proper collections via the `walletViewFor()` helper.
+     * Reads must derive status from the proper collections.
+     *
+     * As part of every admin action we also `$unset` the legacy wallet/kyc flags from the user
+     * doc so old data submitted by mobile (kyc_status: 'pending', kyc_otp_verified, wallet_id,
+     * wallet_status, etc.) doesn't linger as orphan state.
      */
     public function walletAccept($id)
     {
@@ -305,16 +309,49 @@ class UsersController extends Controller
 
         $userIdStr = (string) $user->_id;
 
-        // Wallet: ensure a row exists, then mark it active.
+        // Wallet: ensure a row exists, then mark it activated with a friendly status message.
+        // We use the canonical mobile status string `activated` (not `active`) so the mobile
+        // `$walletStatusMessages['activated']` lookup actually matches and returns a message.
         $wallet = Wallet::where('user_id', $userIdStr)->first();
-        if (!$wallet) {
+        $isNewWallet = !$wallet;
+        if ($isNewWallet) {
             $wallet = new Wallet();
             $wallet->user_id = $userIdStr;
             $wallet->balance = 0;
         }
-        $wallet->status = 'active';
+        $wallet->status = 'activated';
         $wallet->status_reason = null;
+        $wallet->status_message = 'All wallet features are now available.';
+
+        // Welcome bonus — mobile used to grant 300 ZER on first PIN verify. Approving from the
+        // dashboard skips that path so the user never received it. Apply it here once instead.
+        $bonusGiven = false;
+        if (empty($wallet->welcome_bonus_claimed)) {
+            $bonus = 300;
+            $wallet->balance = (float) ($wallet->balance ?? 0) + $bonus;
+            $wallet->welcome_bonus_claimed = true;
+            $wallet->welcome_bonus_amount = $bonus;
+            $wallet->welcome_bonus_at = Carbon::now();
+            $bonusGiven = true;
+        }
+
         $wallet->save();
+
+        // Mirror the bonus into a transaction row so it shows up in the user's transaction list
+        // (same shape that WalletApiController::verifyPin writes).
+        if ($bonusGiven) {
+            $tx = new \App\Models\Transaction();
+            $tx->user_id = $userIdStr;
+            $tx->transaction_type = 'deposit';
+            $tx->category = 'welcome_bonus';
+            $tx->amount = 300;
+            $tx->currency = 'ZER';
+            $tx->status = 'COMPLETED';
+            $tx->description = 'Welcome Bonus';
+            $tx->date = Carbon::now()->format('Y-m-d');
+            $tx->created_at = Carbon::now();
+            $tx->save();
+        }
 
         // KYC: per-record save (reliable on MongoDB) with type-safe matching for the user_id field.
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
@@ -327,11 +364,17 @@ class UsersController extends Controller
             $kyc->save();
         }
 
+        // Strip the legacy wallet/kyc flags from the user document so they don't linger as stale
+        // duplicates of the now-authoritative wallets/kyc_verifications rows.
+        $this->stripLegacyWalletFields($user);
+
         return ResponseHelper::sendResponse([
             'wallet_id'           => (string) $wallet->_id,
-            'wallet_status'       => 'active',
+            'wallet_status'       => 'activated',
             'kyc_status'          => 'approved',
             'kyc_records_updated' => $kycs->count(),
+            'welcome_bonus'       => $bonusGiven ? 300 : 0,
+            'balance'             => (float) $wallet->balance,
         ], 'Wallet activated.');
     }
 
@@ -372,11 +415,46 @@ class UsersController extends Controller
             $kyc->save();
         }
 
+        // Clean up legacy user-table flags so the user record doesn't keep `kyc_status: pending`
+        // or similar after we've moved the authoritative state to wallets/kyc_verifications.
+        $this->stripLegacyWalletFields($user);
+
         return ResponseHelper::sendResponse([
             'wallet_status'       => 'rejected',
             'kyc_status'          => 'rejected',
             'reason'              => $request->reason,
             'kyc_records_updated' => $kycs->count(),
         ], 'Wallet rejected.');
+    }
+
+    /**
+     * Remove legacy wallet/kyc duplicate fields from a user document via MongoDB `$unset`.
+     *
+     * Mobile flows (KycApiController::submit, WalletApiController::*) historically wrote a copy
+     * of wallet/kyc status onto the user record. We're moving away from that — the wallets +
+     * kyc_verifications collections are now the only source of truth. Running this on every
+     * admin approval/rejection keeps the user document tidy as old data ages out.
+     */
+    private function stripLegacyWalletFields(User $user): void
+    {
+        User::raw(function ($collection) use ($user) {
+            $collection->updateOne(
+                ['_id' => $user->_id],
+                ['$unset' => [
+                    'wallet_status'         => '',
+                    'wallet_status_reason'  => '',
+                    'wallet_id'             => '',
+                    'wallet_balance'        => '',
+                    'wallet_pin'            => '',
+                    'wallet_created_at'     => '',
+                    'wallet_expire_at'      => '',
+                    'kyc_status'            => '',
+                    'kyc_otp'               => '',
+                    'kyc_otp_expires_at'    => '',
+                    'kyc_otp_verified'      => '',
+                    'zer_balance'           => '',
+                ]]
+            );
+        });
     }
 }

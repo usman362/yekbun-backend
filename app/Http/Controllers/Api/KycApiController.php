@@ -277,7 +277,7 @@ class KycApiController extends Controller
         if (!$kyc) {
             return ResponseHelper::sendResponse(['has_kyc' => false, 'kyc_status' => null, 'userDetails' => $userDetails,], 'No KYC submission found.');
         }
-        $statusMessages = ['draft' => 'KYC documents are being uploaded.', 'pending' => 'Your documents are submitted and waiting for review.', 'under_review' => 'Our team is currently reviewing your documents.', 'approved' => 'Your KYC is approved. Your wallet is now active!', 'rejected' => 'Your KYC was rejected. Please resubmit.',];
+        $statusMessages = ['draft' => 'KYC documents are being uploaded.', 'pending' => 'Your documents are submitted and waiting for review.', 'under_review' => 'Our team is currently reviewing your documents.', 'approved' => 'All wallet features are now available.', 'rejected' => 'Your KYC was rejected. Please resubmit.',];
         return ResponseHelper::sendResponse(['has_kyc' => true, 'kyc_id' => $kyc->_id, 'kyc_status' => $kyc->status, 'status_message' => $statusMessages[$kyc->status] ?? 'Unknown status.', 'document_type' => $kyc->document_type, 'full_name' => $kyc->full_name, 'rejection_reason' => $kyc->rejection_reason, 'submitted_at' => $kyc->submitted_at ? Carbon::parse($kyc->submitted_at)->format('d M Y H:i') : null, 'reviewed_at' => $kyc->reviewed_at ? Carbon::parse($kyc->reviewed_at)->format('d M Y H:i') : null, 'userDetails' => $userDetails,], 'KYC status fetched.');
     }
 
@@ -301,9 +301,13 @@ class KycApiController extends Controller
         $wallet = Wallet::where('user_id', $user->_id)->first();
         $walletStatusMessages = [
             'not_found'    => 'No wallet found. Please create one.',
+            'pending'      => 'Your request is pending review.',
             'under_review' => 'We will review your request. We will get back soon.',
-            'activated'    => 'Wallet is activated. Enjoy...',
+            'active'       => 'All wallet features are now available.',
+            'activated'    => 'All wallet features are now available.',
+            'approved'     => 'All wallet features are now available.',
             'on_hold'      => 'Wallet is on Hold. See the reason here.',
+            'rejected'     => 'Your wallet request was rejected.',
             'closed'       => 'Wallet is Closed. The account will be removed after 90 Days.',
         ];
 
@@ -316,12 +320,14 @@ class KycApiController extends Controller
 
             $walletData = [
                 'has_wallet'            => true,
-                'has_valid'             => ($wStatus === 'activated'),
+                // Accept both `active` and `activated` as a valid live wallet.
+                'has_valid'             => in_array($wStatus, ['activated', 'active', 'approved'], true),
                 'has_pin'               => !empty($wallet->pin),
                 'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
                 'wallet_id'             => $maskedWalletId,
                 'wallet_status'         => $wStatus,
-                'status_message'        => $walletStatusMessages[$wStatus] ?? 'Unknown status.',
+                // Admin-stored message wins; falls back to the static map.
+                'status_message'        => $wallet->status_message ?? ($walletStatusMessages[$wStatus] ?? 'Unknown status.'),
                 'hold_reason'           => $wallet->status_reason ?? null,
                 'balance'               => round($wallet->balance ?? 0, 2),
                 'expire_at'             => $wallet->expire_at ?? null,
@@ -349,7 +355,7 @@ class KycApiController extends Controller
             'not_submitted' => 'KYC not submitted yet.',
             'pending'       => 'Your documents are submitted and waiting for review.',
             'under_review'  => 'Our team is currently reviewing your documents.',
-            'approved'      => 'Your KYC is approved. Your wallet is now active!',
+            'approved'      => 'All wallet features are now available.',
             'rejected'      => 'Your KYC was rejected. Please resubmit.',
         ];
 

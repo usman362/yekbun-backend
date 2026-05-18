@@ -176,7 +176,7 @@ class AuthController extends Controller
                 'not_submitted' => 'KYC not submitted yet.',
                 'pending'       => 'Your documents are submitted and waiting for review.',
                 'under_review'  => 'Our team is currently reviewing your documents.',
-                'approved'      => 'Your KYC is approved. Your wallet is now active!',
+                'approved'      => 'All wallet features are now available.',
                 'rejected'      => 'Your KYC was rejected. Please resubmit.',
             ];
 

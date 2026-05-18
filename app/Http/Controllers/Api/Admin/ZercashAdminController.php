@@ -61,7 +61,7 @@ class ZercashAdminController extends Controller
         // ── Wallet Cards (5 cards) ──
         $totalZer      = Wallet::sum('balance') ?? 0;
         $totalCashback = Transaction::where('cashback', '>', 0)->sum('cashback') ?? 0;
-        $payoutWallets = Wallet::where('status', 'active')->count();
+        $payoutWallets = Wallet::whereIn('status', ['active', 'activated', 'approved'])->count();
         $feeCollected  = Transaction::sum('fee') ?? 0;
         $taxCollected  = Transaction::sum('tax') ?? 0;
 

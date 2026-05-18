@@ -236,9 +236,13 @@ class WalletApiController extends Controller
 
         $statusMessages = [
             'not_found'    => 'No wallet found. Please create one.',
+            'pending'      => 'Your request is pending review.',
             'under_review' => 'We will review your request. We will get back soon.',
-            'activated'    => 'Wallet is activated. Enjoy...',
+            'active'       => 'All wallet features are now available.',
+            'activated'    => 'All wallet features are now available.',
+            'approved'     => 'All wallet features are now available.',
             'on_hold'      => 'Wallet is on Hold. See the reason here.',
+            'rejected'     => 'Your wallet request was rejected.',
             'closed'       => 'Wallet is Closed. The account will be removed after 90 Days.',
         ];
 
@@ -248,7 +252,9 @@ class WalletApiController extends Controller
             'has_wallet'      => true,
             'wallet_id'       => $this->maskWalletId($wallet->_id),
             'wallet_status'   => $status,
-            'status_message'  => $statusMessages[$status] ?? 'Unknown status.',
+            // Prefer the message the admin saved on the wallet row (if any); fall back to the
+            // static map for legacy/mobile-initiated rows that don't carry a status_message.
+            'status_message'  => $wallet->status_message ?? ($statusMessages[$status] ?? 'Unknown status.'),
             'hold_reason'     => $wallet->status_reason ?? null,
             'expire_at'       => $wallet->expire_at ?? null,
             'created_at'      => $wallet->created_at ?? null,
@@ -349,9 +355,13 @@ class WalletApiController extends Controller
         $wallet = Wallet::where('user_id', $user->_id)->first();
         $walletStatusMessages = [
             'not_found'    => 'No wallet found. Please create one.',
+            'pending'      => 'Your request is pending review.',
             'under_review' => 'We will review your request. We will get back soon.',
-            'activated'    => 'Wallet is activated. Enjoy...',
+            'active'       => 'All wallet features are now available.',
+            'activated'    => 'All wallet features are now available.',
+            'approved'     => 'All wallet features are now available.',
             'on_hold'      => 'Wallet is on Hold. See the reason here.',
+            'rejected'     => 'Your wallet request was rejected.',
             'closed'       => 'Wallet is Closed. The account will be removed after 90 Days.',
         ];
 
@@ -359,12 +369,14 @@ class WalletApiController extends Controller
             $wStatus = $wallet->status ?? 'under_review';
             $walletData = [
                 'has_wallet'            => true,
-                'has_valid'             => ($wStatus === 'activated'),
+                // Treat both `active` and `activated` as a valid live wallet.
+                'has_valid'             => in_array($wStatus, ['activated', 'active', 'approved'], true),
                 'has_pin'               => !empty($wallet->pin),
                 'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
                 'wallet_id'             => $this->maskWalletId($wallet->_id),
                 'wallet_status'         => $wStatus,
-                'status_message'        => $walletStatusMessages[$wStatus] ?? 'Unknown status.',
+                // Stored admin message wins; falls back to the static map.
+                'status_message'        => $wallet->status_message ?? ($walletStatusMessages[$wStatus] ?? 'Unknown status.'),
                 'hold_reason'           => $wallet->status_reason ?? null,
                 'balance'               => round($wallet->balance ?? 0, 2),
                 'expire_at'             => $wallet->expire_at ?? null,
@@ -392,7 +404,7 @@ class WalletApiController extends Controller
             'not_submitted' => 'KYC not submitted yet.',
             'pending'       => 'Your documents are submitted and waiting for review.',
             'under_review'  => 'Our team is currently reviewing your documents.',
-            'approved'      => 'Your KYC is approved. Your wallet is now active!',
+            'approved'      => 'All wallet features are now available.',
             'rejected'      => 'Your KYC was rejected. Please resubmit.',
         ];
 

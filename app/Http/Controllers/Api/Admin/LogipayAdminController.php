@@ -282,6 +282,7 @@ class LogipayAdminController extends Controller
     /**
      * POST /admin/logipay/request/{userId}/approve — flip wallet active + KYC approved.
      * Writes ONLY to Wallet + KycVerification (no user-table mirroring).
+     * Also strips legacy wallet/kyc duplicate fields from the user document.
      */
     public function approveRequest(string $userId)
     {
@@ -294,9 +295,36 @@ class LogipayAdminController extends Controller
         $wallet = Wallet::firstOrNew(['user_id' => $userIdStr]);
         $wallet->user_id = $userIdStr;
         if (!isset($wallet->balance)) $wallet->balance = 0;
-        $wallet->status = 'active';
+        // Canonical mobile status string (matches mobile `$walletStatusMessages` lookup).
+        $wallet->status = 'activated';
         $wallet->status_reason = null;
+        $wallet->status_message = 'All wallet features are now available.';
+
+        // Welcome bonus on first activation (same 300 ZER mobile used to give on PIN verify).
+        $bonusGiven = false;
+        if (empty($wallet->welcome_bonus_claimed)) {
+            $bonus = 300;
+            $wallet->balance = (float) ($wallet->balance ?? 0) + $bonus;
+            $wallet->welcome_bonus_claimed = true;
+            $wallet->welcome_bonus_amount = $bonus;
+            $wallet->welcome_bonus_at = Carbon::now();
+            $bonusGiven = true;
+        }
         $wallet->save();
+
+        if ($bonusGiven) {
+            $tx = new \App\Models\Transaction();
+            $tx->user_id = $userIdStr;
+            $tx->transaction_type = 'deposit';
+            $tx->category = 'welcome_bonus';
+            $tx->amount = 300;
+            $tx->currency = 'ZER';
+            $tx->status = 'COMPLETED';
+            $tx->description = 'Welcome Bonus';
+            $tx->date = Carbon::now()->format('Y-m-d');
+            $tx->created_at = Carbon::now();
+            $tx->save();
+        }
 
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
@@ -308,10 +336,14 @@ class LogipayAdminController extends Controller
             $kyc->save();
         }
 
+        $this->stripLegacyWalletFields($user);
+
         return ResponseHelper::sendResponse([
-            'id' => $userIdStr,
-            'wallet_status' => 'active',
+            'id'                  => $userIdStr,
+            'wallet_status'       => 'activated',
             'kyc_records_updated' => $kycs->count(),
+            'welcome_bonus'       => $bonusGiven ? 300 : 0,
+            'balance'             => (float) $wallet->balance,
         ], 'Request approved');
     }
 
@@ -344,11 +376,41 @@ class LogipayAdminController extends Controller
             $kyc->save();
         }
 
+        $this->stripLegacyWalletFields($user);
+
         return ResponseHelper::sendResponse([
             'id' => $userIdStr,
             'wallet_status' => 'rejected',
             'kyc_records_updated' => $kycs->count(),
         ], 'Request rejected');
+    }
+
+    /**
+     * Same cleanup helper as UsersController::stripLegacyWalletFields — removes the historical
+     * wallet/kyc duplicate fields from the user document so they don't linger after an admin
+     * action. Authoritative state lives in wallets / kyc_verifications now.
+     */
+    private function stripLegacyWalletFields(User $user): void
+    {
+        User::raw(function ($collection) use ($user) {
+            $collection->updateOne(
+                ['_id' => $user->_id],
+                ['$unset' => [
+                    'wallet_status'         => '',
+                    'wallet_status_reason'  => '',
+                    'wallet_id'             => '',
+                    'wallet_balance'        => '',
+                    'wallet_pin'            => '',
+                    'wallet_created_at'     => '',
+                    'wallet_expire_at'      => '',
+                    'kyc_status'            => '',
+                    'kyc_otp'               => '',
+                    'kyc_otp_expires_at'    => '',
+                    'kyc_otp_verified'      => '',
+                    'zer_balance'           => '',
+                ]]
+            );
+        });
     }
 
     // ── Helpers ──
