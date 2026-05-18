@@ -312,9 +312,13 @@ class UsersController extends Controller
         // Wallet: ensure a row exists, then mark it activated with a friendly status message.
         // We use the canonical mobile status string `activated` (not `active`) so the mobile
         // `$walletStatusMessages['activated']` lookup actually matches and returns a message.
+        //
+        // NOTE: We deliberately DO NOT grant the welcome bonus here. The bonus is claimed by the
+        // mobile user via the in-app popup after they set their wallet PIN — that flow lives in
+        // `WalletApiController::verifyPin`. Auto-granting here breaks the popup (it never appears
+        // because `welcome_bonus_claimed` is already true).
         $wallet = Wallet::where('user_id', $userIdStr)->first();
-        $isNewWallet = !$wallet;
-        if ($isNewWallet) {
+        if (!$wallet) {
             $wallet = new Wallet();
             $wallet->user_id = $userIdStr;
             $wallet->balance = 0;
@@ -322,46 +326,31 @@ class UsersController extends Controller
         $wallet->status = 'activated';
         $wallet->status_reason = null;
         $wallet->status_message = 'All wallet features are now available.';
-
-        // Welcome bonus — mobile used to grant 300 ZER on first PIN verify. Approving from the
-        // dashboard skips that path so the user never received it. Apply it here once instead.
-        $bonusGiven = false;
-        if (empty($wallet->welcome_bonus_claimed)) {
-            $bonus = 300;
-            $wallet->balance = (float) ($wallet->balance ?? 0) + $bonus;
-            $wallet->welcome_bonus_claimed = true;
-            $wallet->welcome_bonus_amount = $bonus;
-            $wallet->welcome_bonus_at = Carbon::now();
-            $bonusGiven = true;
-        }
-
         $wallet->save();
-
-        // Mirror the bonus into a transaction row so it shows up in the user's transaction list
-        // (same shape that WalletApiController::verifyPin writes).
-        if ($bonusGiven) {
-            $tx = new \App\Models\Transaction();
-            $tx->user_id = $userIdStr;
-            $tx->transaction_type = 'deposit';
-            $tx->category = 'welcome_bonus';
-            $tx->amount = 300;
-            $tx->currency = 'ZER';
-            $tx->status = 'COMPLETED';
-            $tx->description = 'Welcome Bonus';
-            $tx->date = Carbon::now()->format('Y-m-d');
-            $tx->created_at = Carbon::now();
-            $tx->save();
-        }
 
         // KYC: per-record save (reliable on MongoDB) with type-safe matching for the user_id field.
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
         })->get();
-        foreach ($kycs as $kyc) {
+
+        if ($kycs->isEmpty()) {
+            // No KYC submission row exists yet (e.g. mobile user only verified OTP but never
+            // uploaded documents). Create one so the mobile `/kyc/status` endpoint returns the
+            // right state — otherwise it would still say `has_kyc: false`.
+            $kyc = new KycVerification();
+            $kyc->user_id = $userIdStr;
             $kyc->status = 'approved';
+            $kyc->submitted_at = Carbon::now();
             $kyc->reviewed_at = Carbon::now();
-            $kyc->rejection_reason = null;
             $kyc->save();
+            $kycs = collect([$kyc]);
+        } else {
+            foreach ($kycs as $kyc) {
+                $kyc->status = 'approved';
+                $kyc->reviewed_at = Carbon::now();
+                $kyc->rejection_reason = null;
+                $kyc->save();
+            }
         }
 
         // Strip the legacy wallet/kyc flags from the user document so they don't linger as stale
@@ -373,7 +362,6 @@ class UsersController extends Controller
             'wallet_status'       => 'activated',
             'kyc_status'          => 'approved',
             'kyc_records_updated' => $kycs->count(),
-            'welcome_bonus'       => $bonusGiven ? 300 : 0,
             'balance'             => (float) $wallet->balance,
         ], 'Wallet activated.');
     }
@@ -408,11 +396,24 @@ class UsersController extends Controller
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
         })->get();
-        foreach ($kycs as $kyc) {
+
+        if ($kycs->isEmpty()) {
+            // Synthesise a rejected KYC row so mobile sees consistent state (see walletAccept comment).
+            $kyc = new KycVerification();
+            $kyc->user_id = $userIdStr;
             $kyc->status = 'rejected';
             $kyc->rejection_reason = $request->reason;
+            $kyc->submitted_at = Carbon::now();
             $kyc->reviewed_at = Carbon::now();
             $kyc->save();
+            $kycs = collect([$kyc]);
+        } else {
+            foreach ($kycs as $kyc) {
+                $kyc->status = 'rejected';
+                $kyc->rejection_reason = $request->reason;
+                $kyc->reviewed_at = Carbon::now();
+                $kyc->save();
+            }
         }
 
         // Clean up legacy user-table flags so the user record doesn't keep `kyc_status: pending`

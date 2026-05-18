@@ -299,41 +299,32 @@ class LogipayAdminController extends Controller
         $wallet->status = 'activated';
         $wallet->status_reason = null;
         $wallet->status_message = 'All wallet features are now available.';
-
-        // Welcome bonus on first activation (same 300 ZER mobile used to give on PIN verify).
-        $bonusGiven = false;
-        if (empty($wallet->welcome_bonus_claimed)) {
-            $bonus = 300;
-            $wallet->balance = (float) ($wallet->balance ?? 0) + $bonus;
-            $wallet->welcome_bonus_claimed = true;
-            $wallet->welcome_bonus_amount = $bonus;
-            $wallet->welcome_bonus_at = Carbon::now();
-            $bonusGiven = true;
-        }
+        // Don't grant welcome bonus here — the mobile claims it via the popup that appears after
+        // the user sets a wallet PIN (see WalletApiController::verifyPin). Auto-granting on the
+        // admin side hides that popup because `welcome_bonus_claimed` would already be true.
         $wallet->save();
-
-        if ($bonusGiven) {
-            $tx = new \App\Models\Transaction();
-            $tx->user_id = $userIdStr;
-            $tx->transaction_type = 'deposit';
-            $tx->category = 'welcome_bonus';
-            $tx->amount = 300;
-            $tx->currency = 'ZER';
-            $tx->status = 'COMPLETED';
-            $tx->description = 'Welcome Bonus';
-            $tx->date = Carbon::now()->format('Y-m-d');
-            $tx->created_at = Carbon::now();
-            $tx->save();
-        }
 
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
         })->get();
-        foreach ($kycs as $kyc) {
+
+        if ($kycs->isEmpty()) {
+            // Synthesise a KYC record if none exists (e.g. user only OTP-verified, never uploaded
+            // documents) so mobile's `/kyc/status` returns approved state consistent with wallet.
+            $kyc = new KycVerification();
+            $kyc->user_id = $userIdStr;
             $kyc->status = 'approved';
+            $kyc->submitted_at = Carbon::now();
             $kyc->reviewed_at = Carbon::now();
-            $kyc->rejection_reason = null;
             $kyc->save();
+            $kycs = collect([$kyc]);
+        } else {
+            foreach ($kycs as $kyc) {
+                $kyc->status = 'approved';
+                $kyc->reviewed_at = Carbon::now();
+                $kyc->rejection_reason = null;
+                $kyc->save();
+            }
         }
 
         $this->stripLegacyWalletFields($user);
@@ -342,7 +333,6 @@ class LogipayAdminController extends Controller
             'id'                  => $userIdStr,
             'wallet_status'       => 'activated',
             'kyc_records_updated' => $kycs->count(),
-            'welcome_bonus'       => $bonusGiven ? 300 : 0,
             'balance'             => (float) $wallet->balance,
         ], 'Request approved');
     }
@@ -369,11 +359,23 @@ class LogipayAdminController extends Controller
         $kycs = KycVerification::where(function ($q) use ($userIdStr, $user) {
             $q->where('user_id', $userIdStr)->orWhere('user_id', $user->_id);
         })->get();
-        foreach ($kycs as $kyc) {
+
+        if ($kycs->isEmpty()) {
+            $kyc = new KycVerification();
+            $kyc->user_id = $userIdStr;
             $kyc->status = 'rejected';
             $kyc->rejection_reason = $reason;
+            $kyc->submitted_at = Carbon::now();
             $kyc->reviewed_at = Carbon::now();
             $kyc->save();
+            $kycs = collect([$kyc]);
+        } else {
+            foreach ($kycs as $kyc) {
+                $kyc->status = 'rejected';
+                $kyc->rejection_reason = $reason;
+                $kyc->reviewed_at = Carbon::now();
+                $kyc->save();
+            }
         }
 
         $this->stripLegacyWalletFields($user);
