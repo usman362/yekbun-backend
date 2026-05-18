@@ -41,13 +41,11 @@ class WalletApiController extends Controller
         $wallet = Wallet::where('user_id', $user->getKey())->first();
 
         if ($wallet) {
-            // Wallet already exists (created during KYC approval) — just set/update the PIN
+            // Wallet already exists (created during KYC approval) — just set/update the PIN.
+            // Don't mirror wallet fields back onto the user document; the wallets collection
+            // is the source of truth and getUserDetails() reads from it directly.
             $wallet->pin = bcrypt($request->pin);
             $wallet->save();
-
-            $user->wallet_id     = $wallet->getKey();
-            $user->wallet_status = $wallet->status ?? $user->wallet_status;
-            $user->save();
 
             return ResponseHelper::sendResponse([
                 'wallet'      => $wallet,
@@ -56,16 +54,11 @@ class WalletApiController extends Controller
         }
 
         $wallet = new Wallet();
-        $wallet->user_id    = $user->getKey();
+        $wallet->user_id    = (string) $user->getKey();
         $wallet->pin        = bcrypt($request->pin);
         $wallet->status     = 'under_review';
         $wallet->created_at = Carbon::now();
         $wallet->save();
-
-        // Save wallet_id on user for userDetails response
-        $user->wallet_id     = $wallet->getKey();
-        $user->wallet_status = 'under_review';
-        $user->save();
 
         return ResponseHelper::sendResponse([
             'wallet'      => $wallet,
@@ -99,12 +92,8 @@ class WalletApiController extends Controller
         $wallet->activated_at = Carbon::now();
         $wallet->save();
 
-        // Sync wallet status on user
+        // Wallet is source of truth — don't mirror status to user doc.
         $user = User::find($request->user_id);
-        if ($user) {
-            $user->wallet_status = 'activated';
-            $user->save();
-        }
 
         return ResponseHelper::sendResponse([
             'wallet'      => $wallet,
@@ -290,12 +279,8 @@ class WalletApiController extends Controller
         $wallet->updated_at = Carbon::now();
         $wallet->save();
 
-        // Sync wallet status on user
+        // Wallet collection is source of truth — no mirror to user doc.
         $user = User::find($request->user_id);
-        if ($user) {
-            $user->wallet_status = $request->status;
-            $user->save();
-        }
 
         return ResponseHelper::sendResponse([
             'wallet'      => $wallet,
@@ -456,18 +441,35 @@ class WalletApiController extends Controller
         if (!$user) {
             return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
         }
-        if (empty($user->wallet_id) || ($user->wallet_status ?? '') !== 'activated') {
-            return ResponseHelper::sendResponse(['has_wallet' => !empty($user->wallet_id), 'wallet_status' => $user->wallet_status ?? null,], 'Wallet not active.', false, 403);
+
+        // Source of truth: read everything from the wallets collection. The user document
+        // intentionally no longer carries wallet_id / wallet_status / wallet_balance — those
+        // got stripped on admin approve so we keep a single source of truth.
+        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        $status = $wallet->status ?? null;
+        $activeStatuses = ['activated', 'active', 'approved'];
+
+        if (!$wallet || !in_array($status, $activeStatuses, true)) {
+            return ResponseHelper::sendResponse([
+                'has_wallet'    => (bool) $wallet,
+                'wallet_status' => $status,
+            ], 'Wallet not active.', false, 403);
         }
-        $walletType = $request->query('type', 'private');
-        // private or business // Fetch settings for exchange rates
+
+        $walletType = $request->query('type', 'private'); // private or business
+
+        // Fetch settings for exchange rates
         $setting = ZercashSetting::where('key', 'general')->where('is_active', true)->first();
         $cashbackPercent = $setting->transaction_fee_percent ?? 5;
-        $currency = $setting->default_currency ?? 'EUR'; // Calculate totals from transactions
+        $currency = $setting->default_currency ?? 'EUR';
+
+        // Calculate totals from transactions
         $userId = Auth::id();
         $deposits = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')->where('status', 'COMPLETED')->sum('amount');
         $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
-        $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount'); // Weekly chart data (last 7 days)
+        $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
+
+        // Weekly chart data (last 7 days)
         $weeklyData = [];
         $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
         for ($i = 6; $i >= 0; $i--) {
@@ -475,7 +477,22 @@ class WalletApiController extends Controller
             $dayTotal = Transaction::where('user_id', $userId)->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
             $weeklyData[] = ['day' => $dayLabels[$date->dayOfWeek], 'date' => $date->format('Y-m-d'), 'amount' => round($dayTotal, 2), 'is_today' => $i === 0,];
         }
-        return ResponseHelper::sendResponse(['wallet_id' => $this->maskWalletId($user->wallet_id), 'wallet_type' => $walletType, 'expire_at' => $user->wallet_expire_at ?? null, 'balance' => round($user->wallet_balance ?? 0, 2), 'zer_balance' => round($user->zer_balance ?? 0, 2), 'cashback_percent' => $cashbackPercent, 'currency' => $currency, 'summary' => ['deposits' => round($deposits, 2), 'cashbacks' => round($cashbacks, 2), 'expenses' => round($expenses, 2),], 'weekly_chart' => $weeklyData,], 'Wallet dashboard fetched.');
+
+        return ResponseHelper::sendResponse([
+            'wallet_id'        => $this->maskWalletId((string) $wallet->_id),
+            'wallet_type'      => $walletType,
+            'expire_at'        => $wallet->expire_at ?? null,
+            'balance'          => round($wallet->balance ?? 0, 2),
+            'zer_balance'      => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
+            'cashback_percent' => $cashbackPercent,
+            'currency'         => $currency,
+            'summary'          => [
+                'deposits'  => round($deposits, 2),
+                'cashbacks' => round($cashbacks, 2),
+                'expenses'  => round($expenses, 2),
+            ],
+            'weekly_chart'     => $weeklyData,
+        ], 'Wallet dashboard fetched.');
     }
 
     // ─── DEPOSITS ────────────────────────────────────────────────── /** * GET /api/wallet/deposits * List user's deposit transactions. * * Query: ?page=1&per_page=10 */
@@ -561,13 +578,20 @@ class WalletApiController extends Controller
         if (!$user) {
             return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
         }
-        // Wallet info
-        $walletInfo = ['has_wallet' => !empty($user->wallet_id), 'wallet_id' => $user->wallet_id ? $this->maskWalletId($user->wallet_id) : null, 'wallet_status' => $user->wallet_status ?? null, 'balance' => round($user->wallet_balance ?? 0, 2), 'zer_balance' => round($user->zer_balance ?? 0, 2),];
+        // Wallet info — pulled from wallets collection (source of truth, NOT user fields).
+        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        $walletInfo = [
+            'has_wallet'    => (bool) $wallet,
+            'wallet_id'     => $wallet ? $this->maskWalletId((string) $wallet->_id) : null,
+            'wallet_status' => $wallet->status ?? null,
+            'balance'       => round($wallet->balance ?? 0, 2),
+            'zer_balance'   => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
+        ];
         // Open Terminal, Transactions count, Zer Status
         $transactionsCount = Transaction::where('user_id', $user->_id)->count();
         $depositChange = 0; // Percentage change - calculate if needed
         $expenseChange = 0;
-        $terminalStats = ['open_terminal' => 0, 'transactions' => $transactionsCount, 'deposit_change' => $depositChange . '%', 'expense_change' => $expenseChange . '%', 'zer_status' => round($user->zer_balance ?? 0, 2),]; // Channel info (if user has a channel)
+        $terminalStats = ['open_terminal' => 0, 'transactions' => $transactionsCount, 'deposit_change' => $depositChange . '%', 'expense_change' => $expenseChange . '%', 'zer_status' => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),]; // Channel info (if user has a channel)
         $channelInfo = ['has_channel' => !empty($user->channel_name), 'channel_name' => $user->channel_name ?? null, 'channel_id' => $user->channel_id ?? null, 'member_since' => $user->created_at ? Carbon::parse($user->created_at)->format('d-m-Y') : null, 'channel_status' => $user->channel_status ?? 'activated', 'status_message' => $user->channel_status_message ?? 'We wish good luck here', 'followers' => $user->followers_count ?? 0, 'members' => $user->members_count ?? 0, 'feeds' => $user->feeds_count ?? 0, 'follower_change' => '+25%', 'member_change' => '+25%', 'feed_change' => '+25%',]; // Shop info (if user has a shop)
         $shopInfo = ['has_shop' => !empty($user->shop_name), 'shop_name' => $user->shop_name ?? null, 'shop_id' => $user->shop_id ?? null, 'member_since' => $user->shop_created_at ?? ($user->created_at ? Carbon::parse($user->created_at)->format('d-m-Y') : null), 'shop_status' => $user->shop_status ?? 'activated', 'status_message' => $user->shop_status_message ?? 'We wish good luck here', 'followers' => $user->shop_followers_count ?? 0, 'reviews' => $user->shop_reviews_count ?? 0, 'offers' => $user->shop_offers_count ?? 0, 'follower_change' => '+25%', 'review_change' => '+25%', 'offer_change' => '+25%',];
         return ResponseHelper::sendResponse(['wallet' => $walletInfo, 'terminal' => $terminalStats, 'channel' => $channelInfo, 'shop' => $shopInfo,], 'Quick access data fetched.');
