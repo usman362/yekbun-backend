@@ -469,30 +469,218 @@ class WalletApiController extends Controller
         $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
         $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
 
-        // Weekly chart data (last 7 days)
-        $weeklyData = [];
-        $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-        for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i);
-            $dayTotal = Transaction::where('user_id', $userId)->where('status', 'COMPLETED')->where('date', $date->format('Y-m-d'))->sum('amount');
-            $weeklyData[] = ['day' => $dayLabels[$date->dayOfWeek], 'date' => $date->format('Y-m-d'), 'amount' => round($dayTotal, 2), 'is_today' => $i === 0,];
-        }
+        // Mobile dashboard renders three chart tabs (Week / Month / Year) without making
+        // additional round-trips, so we build all three series upfront here. Shape matches the
+        // contract agreed with the mobile dev: weekly carries day labels, monthly buckets are
+        // `{month, amount}`, yearly buckets are `{year, amount}`.
+        $chart = [
+            'weekly'  => $this->buildWeeklyChart($userId),
+            'monthly' => $this->buildMonthlyChart($userId),
+            'yearly'  => $this->buildYearlyChart($userId),
+        ];
+
+        // ── Recent activity lists ──────────────────────────────────────────────────────
+        // Three separate transaction streams the mobile dashboard renders inline:
+        //   - deposits           : recent deposit txns (top-up + welcome bonus rows)
+        //   - latest_cashbacks   : recent cashback %age accrued on purchases
+        //   - my_cashbacks       : cashback balance pending claim → user can sweep to wallet
+        //   - latest_transactions: recent expense/purchase txns (shopping list)
+        $depositsList = Transaction::where('user_id', $userId)
+            ->where('transaction_type', 'deposit')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapDepositRow($tx, $currency))
+            ->values();
+
+        $latestCashbacks = Transaction::where('user_id', $userId)
+            ->where('category', 'cashback')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapCashbackRow($tx, $currency))
+            ->values();
+
+        // "My cashback" = unclaimed cashback balance (status PENDING) that user can transfer
+        // to wallet. Once claimed, the row's status flips to COMPLETED and it drops off here.
+        $myCashbacks = Transaction::where('user_id', $userId)
+            ->where('category', 'cashback')
+            ->where('status', 'PENDING')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapCashbackRow($tx, $currency))
+            ->values();
+
+        $latestTransactions = Transaction::where('user_id', $userId)
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapTransactionRow($tx, $currency))
+            ->values();
 
         return ResponseHelper::sendResponse([
-            'wallet_id'        => $this->maskWalletId((string) $wallet->_id),
-            'wallet_type'      => $walletType,
-            'expire_at'        => $wallet->expire_at ?? null,
-            'balance'          => round($wallet->balance ?? 0, 2),
-            'zer_balance'      => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
-            'cashback_percent' => $cashbackPercent,
-            'currency'         => $currency,
-            'summary'          => [
+            'wallet_id'           => $this->maskWalletId((string) $wallet->_id),
+            'wallet_type'         => $walletType,
+            'currency'            => $currency,
+            'balance'             => round($wallet->balance ?? 0, 2),
+            'zer_balance'         => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
+            'cashback_percent'    => $cashbackPercent,
+            'expire_at'           => $wallet->expire_at ?? null,
+            'summary'             => [
                 'deposits'  => round($deposits, 2),
                 'cashbacks' => round($cashbacks, 2),
                 'expenses'  => round($expenses, 2),
             ],
-            'weekly_chart'     => $weeklyData,
+            'chart'               => $chart,
+            'deposits'            => $depositsList,
+            'latest_cashbacks'    => $latestCashbacks,
+            'my_cashbacks'        => $myCashbacks,
+            'latest_transactions' => $latestTransactions,
         ], 'Wallet dashboard fetched.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    //  Helpers — chart builders + row mappers used by dashboard()
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    /** Map a status string to the hex chip color the mobile UI uses on cards. */
+    private function statusColor(string $status): string
+    {
+        return match (strtoupper($status)) {
+            'COMPLETED', 'COMPLETE', 'SUCCESS', 'APPROVED' => '#22C55E', // emerald
+            'PENDING', 'IN_CART', 'UNDER_REVIEW'          => '#F59E0B', // amber
+            'FAILED', 'REJECTED', 'CANCELLED'             => '#EF4444', // rose
+            default                                       => '#94A3B8', // slate
+        };
+    }
+
+    /** Format a Transaction's date for UI display ("10 Nov 2025"). */
+    private function formatTxDate($tx): string
+    {
+        if (!empty($tx->date)) {
+            try { return Carbon::parse($tx->date)->format('d M Y'); } catch (\Throwable) {}
+        }
+        return $tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : '';
+    }
+
+    /** Deposit row shape (welcome bonus + top-ups). */
+    private function mapDepositRow($tx, string $defaultCurrency): array
+    {
+        $category = $tx->category ?? 'deposit';
+        return [
+            'id'           => (string) $tx->_id,
+            'title'        => $tx->description ?? ($category === 'welcome_bonus' ? 'YekBûn Welcome' : 'Deposit'),
+            'cb_id'        => $tx->tId ?? 'CB-ID',
+            'date'         => $this->formatTxDate($tx),
+            'amount'       => round($tx->amount ?? 0, 2),
+            'type'         => 'income',
+            'currency'     => $tx->currency ?? $defaultCurrency,
+            'icon'         => $category,
+            'status_color' => $this->statusColor($tx->status ?? 'COMPLETED'),
+        ];
+    }
+
+    /** Cashback row shape — used by both `latest_cashbacks` and `my_cashbacks`. */
+    private function mapCashbackRow($tx, string $defaultCurrency): array
+    {
+        return [
+            'id'           => (string) $tx->_id,
+            'title'        => $tx->description ?? 'YekBûn Cashback',
+            'cb_id'        => $tx->tId ?? 'CB-ID',
+            'date'         => $this->formatTxDate($tx),
+            'amount'       => round($tx->amount ?? 0, 2),
+            'currency'     => $tx->currency ?? $defaultCurrency,
+            'status'       => strtolower($tx->status ?? 'pending'),
+            'status_color' => $this->statusColor($tx->status ?? 'PENDING'),
+            'icon'         => 'cashback',
+        ];
+    }
+
+    /** Purchase / expense row shape for `latest_transactions`. */
+    private function mapTransactionRow($tx, string $defaultCurrency): array
+    {
+        return [
+            'id'           => (string) $tx->_id,
+            'merchant'     => $tx->shop_name ?? $tx->description ?? 'Unknown',
+            'cb_id'        => $tx->tId ?? 'CB-ID',
+            'date'         => $this->formatTxDate($tx),
+            'amount'       => round($tx->amount ?? 0, 2),
+            'currency'     => $tx->currency ?? $defaultCurrency,
+            'status'       => strtolower($tx->status ?? 'pending'),
+            'status_color' => $this->statusColor($tx->status ?? 'PENDING'),
+            'icon'         => $tx->icon ?? $tx->category ?? ($tx->transaction_type ?? 'transaction'),
+            'category'     => $tx->category ?? 'shopping',
+        ];
+    }
+
+    /** Weekly chart: last 7 days, one bucket per day with `{day, date, amount, is_today}`. */
+    private function buildWeeklyChart($userId): array
+    {
+        $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        $data = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i);
+            $dayTotal = Transaction::where('user_id', $userId)
+                ->where('status', 'COMPLETED')
+                ->where('date', $date->format('Y-m-d'))
+                ->sum('amount');
+            $data[] = [
+                'day'      => $dayLabels[$date->dayOfWeek],
+                'date'     => $date->format('Y-m-d'),
+                'amount'   => round($dayTotal, 2),
+                'is_today' => $i === 0,
+            ];
+        }
+        return $data;
+    }
+
+    /**
+     * Monthly chart: 12 months of the CURRENT calendar year, one bucket per month.
+     * Mobile dev's expected shape is `{month: "Jan", amount: 120}`. Empty months come back
+     * as 0 so the line chart stays continuous across the year.
+     */
+    private function buildMonthlyChart($userId): array
+    {
+        $data = [];
+        $year = (int) Carbon::now()->format('Y');
+        for ($m = 1; $m <= 12; $m++) {
+            $start = Carbon::create($year, $m, 1)->startOfMonth();
+            $end   = $start->copy()->endOfMonth();
+            $amount = Transaction::where('user_id', $userId)
+                ->where('status', 'COMPLETED')
+                ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+                ->sum('amount');
+            $data[] = [
+                'month'  => $start->format('M'),
+                'amount' => round($amount, 2),
+            ];
+        }
+        return $data;
+    }
+
+    /**
+     * Yearly chart: last 5 years inclusive of current year. Shape `{year: "2024", amount: 4200}`.
+     */
+    private function buildYearlyChart($userId): array
+    {
+        $data = [];
+        $currentYear = (int) Carbon::now()->format('Y');
+        for ($i = 4; $i >= 0; $i--) {
+            $year  = $currentYear - $i;
+            $start = Carbon::create($year, 1, 1)->startOfYear();
+            $end   = $start->copy()->endOfYear();
+            $amount = Transaction::where('user_id', $userId)
+                ->where('status', 'COMPLETED')
+                ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+                ->sum('amount');
+            $data[] = [
+                'year'   => (string) $year,
+                'amount' => round($amount, 2),
+            ];
+        }
+        return $data;
     }
 
     // ─── DEPOSITS ────────────────────────────────────────────────── /** * GET /api/wallet/deposits * List user's deposit transactions. * * Query: ?page=1&per_page=10 */
