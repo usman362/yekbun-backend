@@ -215,6 +215,95 @@ class ZercashAdminController extends Controller
         return ResponseHelper::sendResponse($data, 'Zercash settings updated');
     }
 
+    // ────────────────────────────────────────────────────────────────────────────
+    //  Cashback Manager + Zercash Countries
+    //
+    //  Both are list-based admin configs. Rather than spinning up dedicated collections
+    //  we piggyback on the existing `settings` table using distinct `group` keys
+    //  (`zercash_cashback`, `zercash_countries`). The whole list is replaced on save —
+    //  simple and matches how zercash settings already work.
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /** Defaults used the first time admin loads the Cashback Manager tab. */
+    private function defaultCashbackItems(): array
+    {
+        return [
+            ['id' => 'playlist',  'title' => 'Playlist',             'description' => 'Users receive cashback after playlist purchases.',  'enabled' => true,  'kind' => 'percent', 'value' => 2,   'minPurchase' => 0,  'icon' => 'TrendingUp'],
+            ['id' => 'streaming', 'title' => 'Streaming Minutes',    'description' => 'Cashback for streaming minutes spent on premium content.', 'enabled' => true,  'kind' => 'fixed',   'value' => 5,   'minPurchase' => 30, 'icon' => 'Coins'],
+            ['id' => 'upgrade',   'title' => 'Account Upgrade',      'description' => 'Reward users when upgrading their account tier.',   'enabled' => false, 'kind' => 'percent', 'value' => 3,   'minPurchase' => 0,  'icon' => 'Wallet'],
+            ['id' => 'market',    'title' => 'Market',               'description' => 'Cashback rewards for purchases inside the market.', 'enabled' => true,  'kind' => 'percent', 'value' => 1.5, 'minPurchase' => 10, 'icon' => 'Gift'],
+            ['id' => 'brands',    'title' => 'YekBûn Brands',        'description' => 'Cashback rewards for official YekBûn products.',    'enabled' => true,  'kind' => 'fixed',   'value' => 10,  'minPurchase' => 50, 'icon' => 'Gift'],
+            ['id' => 'events',    'title' => 'Events',               'description' => 'Cashback for event ticket purchases.',              'enabled' => false, 'kind' => 'percent', 'value' => 2,   'minPurchase' => 0,  'icon' => 'TrendingUp'],
+            ['id' => 'channel',   'title' => 'Channel Subscription', 'description' => 'Reward subscribers of premium channels.',           'enabled' => true,  'kind' => 'fixed',   'value' => 3,   'minPurchase' => 0,  'icon' => 'Coins'],
+            ['id' => 'delivery',  'title' => 'Delivery Services',    'description' => 'Cashback on delivery orders processed via Zercash.','enabled' => false, 'kind' => 'percent', 'value' => 1,   'minPurchase' => 5,  'icon' => 'Wallet'],
+        ];
+    }
+
+    /** Defaults used the first time admin loads the Zercash Countries tab. */
+    private function defaultCountries(): array
+    {
+        return [
+            ['id' => 'sy', 'name' => 'Syria',   'flag' => '🇸🇾', 'status' => 'Active',     'enabled' => true,  'note' => 'Zercash payments enabled'],
+            ['id' => 'iq', 'name' => 'Iraq',    'flag' => '🇮🇶', 'status' => 'Active',     'enabled' => true,  'note' => 'Zercash payments enabled'],
+            ['id' => 'de', 'name' => 'Germany', 'flag' => '🇩🇪', 'status' => 'Active',     'enabled' => true,  'note' => 'Zercash payments enabled'],
+            ['id' => 'tr', 'name' => 'Turkey',  'flag' => '🇹🇷', 'status' => 'Restricted', 'enabled' => false, 'note' => 'Limited payment support'],
+            ['id' => 'ae', 'name' => 'UAE',     'flag' => '🇦🇪', 'status' => 'Pending',    'enabled' => false, 'note' => 'Pending treasury approval'],
+            ['id' => 'lb', 'name' => 'Lebanon', 'flag' => '🇱🇧', 'status' => 'Restricted', 'enabled' => false, 'note' => 'Limited payment support'],
+        ];
+    }
+
+    /** GET /admin/zercash/cashback — full cashback items list. Seeds defaults on first read. */
+    public function cashback()
+    {
+        $row = Setting::where('group', 'zercash_cashback')->first();
+        $items = is_array($row->data ?? null) && count($row->data) > 0
+            ? array_values($row->data)
+            : $this->defaultCashbackItems();
+        return ResponseHelper::sendResponse(['items' => $items], 'Cashback items fetched');
+    }
+
+    /** PUT /admin/zercash/cashback — replaces the whole items list. */
+    public function updateCashback(Request $request)
+    {
+        $items = $request->input('items', []);
+        if (!is_array($items)) {
+            return ResponseHelper::sendResponse(null, 'items must be an array', false, 422);
+        }
+
+        Setting::updateOrCreate(
+            ['group' => 'zercash_cashback'],
+            ['group' => 'zercash_cashback', 'data' => $items, 'updated_at' => now()]
+        );
+
+        return ResponseHelper::sendResponse(['items' => $items], 'Cashback items saved');
+    }
+
+    /** GET /admin/zercash/countries — country availability matrix. Seeds defaults on first read. */
+    public function countries()
+    {
+        $row = Setting::where('group', 'zercash_countries')->first();
+        $items = is_array($row->data ?? null) && count($row->data) > 0
+            ? array_values($row->data)
+            : $this->defaultCountries();
+        return ResponseHelper::sendResponse(['items' => $items], 'Zercash countries fetched');
+    }
+
+    /** PUT /admin/zercash/countries — replaces the whole country list. */
+    public function updateCountries(Request $request)
+    {
+        $items = $request->input('items', []);
+        if (!is_array($items)) {
+            return ResponseHelper::sendResponse(null, 'items must be an array', false, 422);
+        }
+
+        Setting::updateOrCreate(
+            ['group' => 'zercash_countries'],
+            ['group' => 'zercash_countries', 'data' => $items, 'updated_at' => now()]
+        );
+
+        return ResponseHelper::sendResponse(['items' => $items], 'Zercash countries saved');
+    }
+
     /**
      * GET /admin/zercash/pending-requests
      *

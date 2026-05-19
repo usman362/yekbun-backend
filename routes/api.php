@@ -416,6 +416,10 @@ Route::get('zercash/products/{id}', [ZercashApiController::class, 'productDetail
 Route::get('zercash/categories', [ZercashApiController::class, 'categories']);
 Route::get('zercash/plans', [ZercashApiController::class, 'plans']);
 Route::get('zercash/settings', [ZercashApiController::class, 'settings']);
+// Mobile read endpoints for the admin-managed Cashback Manager + Country matrix.
+// Only enabled / active rows are returned. Admin writes via /admin/zercash/* (auth-gated).
+Route::get('zercash/cashback-rules', [ZercashApiController::class, 'cashbackRules']);
+Route::get('zercash/countries', [ZercashApiController::class, 'zercashCountries']);
 Route::get('zercash/shops', [ZercashApiController::class, 'shops']);
 Route::get('zercash/sale-managers', [ZercashApiController::class, 'saleManagers']);
 Route::get('zercash/faqs', [ZercashApiController::class, 'faqs']);
@@ -846,6 +850,12 @@ Route::prefix('admin')->group(function () {
         Route::get('/zercash/overview', [ZercashAdminController::class, 'overview']);
         Route::get('/zercash/settings', [ZercashAdminController::class, 'settings']);
         Route::put('/zercash/settings', [ZercashAdminController::class, 'updateSettings']);
+        // Cashback Manager (tab) — list of reward categories with kind/value/min-purchase per row.
+        Route::get('/zercash/cashback', [ZercashAdminController::class, 'cashback']);
+        Route::put('/zercash/cashback', [ZercashAdminController::class, 'updateCashback']);
+        // Zercash Countries (tab) — country availability matrix (Active / Restricted / Pending).
+        Route::get('/zercash/countries', [ZercashAdminController::class, 'countries']);
+        Route::put('/zercash/countries', [ZercashAdminController::class, 'updateCountries']);
         // Aggregated list of pending KYC / wallet / transaction requests — feeds the navbar dropdown.
         Route::get('/zercash/pending-requests', [ZercashAdminController::class, 'pendingRequests']);
 

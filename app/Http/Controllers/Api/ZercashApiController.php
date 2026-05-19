@@ -60,6 +60,69 @@ class ZercashApiController extends Controller
         return ResponseHelper::sendResponse($settings, 'Settings fetched successfully.');
     }
 
+    /**
+     * GET /api/zercash/cashback-rules
+     *
+     * Mobile-facing view of the Cashback Manager. Returns only `enabled=true` rows so the
+     * mobile app can show users what categories earn cashback and at what rate. Admin-only
+     * metadata (description / icon name) is kept since the mobile UI uses both. List is
+     * stored by the admin under `settings` row group=zercash_cashback.
+     */
+    public function cashbackRules()
+    {
+        $row = DB::connection('mongodb')->collection('settings')
+            ->where('group', 'zercash_cashback')
+            ->first();
+
+        $items = is_array($row['data'] ?? null) ? $row['data'] : [];
+        $enabled = array_values(array_filter($items, fn ($it) => !empty($it['enabled'])));
+
+        // Trim to just the fields mobile needs — drop internal `enabled` (always true here).
+        $rules = array_map(fn ($it) => [
+            'id'           => $it['id']           ?? '',
+            'title'        => $it['title']        ?? '',
+            'description'  => $it['description']  ?? '',
+            'kind'         => $it['kind']         ?? 'percent', // 'percent' | 'fixed'
+            'value'        => (float) ($it['value']        ?? 0),
+            'min_purchase' => (float) ($it['minPurchase']  ?? 0),
+            'icon'         => $it['icon']         ?? 'gift',
+        ], $enabled);
+
+        return ResponseHelper::sendResponse(['items' => $rules], 'Cashback rules fetched.');
+    }
+
+    /**
+     * GET /api/zercash/countries
+     *
+     * Mobile-facing country availability matrix. By default returns ONLY `Active` countries
+     * (i.e. where Zercash payments work) — that's what the country picker needs. Pass
+     * `?include_all=1` to also receive Restricted / Pending rows (useful for showing the
+     * user a "currently unavailable in your region" message).
+     */
+    public function zercashCountries(Request $request)
+    {
+        $row = DB::connection('mongodb')->collection('settings')
+            ->where('group', 'zercash_countries')
+            ->first();
+
+        $items = is_array($row['data'] ?? null) ? $row['data'] : [];
+        $includeAll = (bool) $request->query('include_all', false);
+
+        $filtered = $includeAll
+            ? $items
+            : array_filter($items, fn ($c) => ($c['status'] ?? '') === 'Active');
+
+        $countries = array_map(fn ($c) => [
+            'id'     => $c['id']     ?? '',
+            'name'   => $c['name']   ?? '',
+            'flag'   => $c['flag']   ?? '',
+            'status' => $c['status'] ?? 'Restricted',
+            'note'   => $c['note']   ?? '',
+        ], array_values($filtered));
+
+        return ResponseHelper::sendResponse(['items' => $countries], 'Zercash countries fetched.');
+    }
+
     public function plans()
     {
         $plans = DB::connection('mongodb')->collection('zercash_products')
