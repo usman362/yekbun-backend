@@ -469,36 +469,9 @@ class WalletApiController extends Controller
         $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
         $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
 
-        // ── Recent activity lists ──────────────────────────────────────────────────────
-        // Four separate streams the mobile dashboard renders inline:
-        //   - deposits            : recent deposit txns (top-up + welcome bonus rows)
-        //   - latest_cashbacks    : recent purchase txns that EARNED cashback — same shape as
-        //                            latest_transactions but with cashback_percent / amount
-        //                            replacing status / status_color
-        //   - my_cashbacks        : unclaimed cashback balance — user can sweep to wallet
-        //   - latest_transactions : recent purchase / expense txns (shopping list)
-        $depositsList = Transaction::where('user_id', $userId)
-            ->where('transaction_type', 'deposit')
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(fn($tx) => $this->mapDepositRow($tx, $currency))
-            ->values();
-
-        // Latest cashbacks = purchase transactions where some cashback was earned. We mirror
-        // the latest_transactions data and just swap status fields for cashback fields. Filter
-        // is `cashback_amount > 0` so rows without cashback are excluded.
-        $latestCashbacks = Transaction::where('user_id', $userId)
-            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
-            ->where('cashback_amount', '>', 0)
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(fn($tx) => $this->mapCashbackEarnedRow($tx, $currency))
-            ->values();
-
-        // "My cashback" = unclaimed cashback balance (status PENDING) that user can transfer
-        // to wallet. Once claimed, the row's status flips to COMPLETED and it drops off here.
+        // "My cashback" stays on the dashboard — it's the unclaimed cashback balance card on
+        // the main wallet screen (user can sweep it to wallet). The other three lists
+        // (deposits, latest_cashbacks, latest_transactions) live on /wallet/payments instead.
         $myCashbacks = Transaction::where('user_id', $userId)
             ->where('category', 'cashback')
             ->where('status', 'PENDING')
@@ -508,51 +481,39 @@ class WalletApiController extends Controller
             ->map(fn($tx) => $this->mapCashbackRow($tx, $currency))
             ->values();
 
-        $latestTransactions = Transaction::where('user_id', $userId)
-            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(fn($tx) => $this->mapTransactionRow($tx, $currency))
-            ->values();
-
         return ResponseHelper::sendResponse([
-            'wallet_id'           => $this->maskWalletId((string) $wallet->_id),
-            'wallet_type'         => $walletType,
-            'currency'            => $currency,
-            'balance'             => round($wallet->balance ?? 0, 2),
-            'zer_balance'         => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
-            'cashback_percent'    => $cashbackPercent,
-            'expire_at'           => $wallet->expire_at ?? null,
-            'summary'             => [
+            'wallet_id'        => $this->maskWalletId((string) $wallet->_id),
+            'wallet_type'      => $walletType,
+            'currency'         => $currency,
+            'balance'          => round($wallet->balance ?? 0, 2),
+            'zer_balance'      => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
+            'cashback_percent' => $cashbackPercent,
+            'expire_at'        => $wallet->expire_at ?? null,
+            'summary'          => [
                 'deposits'  => round($deposits, 2),
                 'cashbacks' => round($cashbacks, 2),
                 'expenses'  => round($expenses, 2),
             ],
-            'deposits'            => $depositsList,
-            'latest_cashbacks'    => $latestCashbacks,
-            'my_cashbacks'        => $myCashbacks,
-            'latest_transactions' => $latestTransactions,
+            'my_cashbacks'     => $myCashbacks,
         ], 'Wallet dashboard fetched.');
     }
 
     /**
      * GET /api/wallet/payments
      *
-     * Standalone payments chart endpoint — mobile renders this as the bar-chart card on the
-     * dashboard with a Week / Month / Year toggle. Returns all three series in one response
-     * so toggling between periods is local-only (no re-fetch). If the caller wants only one
-     * period back, pass `?period=week|month|year`.
+     * The "Payments" screen on mobile — bundles four things in one call so the page
+     * renders top-to-bottom without extra round-trips:
      *
-     * Shape:
-     *   {
-     *     "currency": "EUR",
-     *     "chart": {
-     *       "weekly":  [{ day, date, amount, is_today }, ...7],
-     *       "monthly": [{ month, amount }, ...12],
-     *       "yearly":  [{ year,  amount }, ...5],
-     *     }
-     *   }
+     *   1. `chart`               : bar chart with Week / Month / Year series (toggle)
+     *   2. `deposits`            : recent deposit txns (welcome bonus / cashback transfer
+     *                              / zercash charging) — the "My Deposit" card
+     *   3. `latest_cashbacks`    : recent purchase txns that EARNED cashback — shows the
+     *                              merchant + amount + `cashback_percent` / `cashback_amount`
+     *                              (no status pill) — the "Latest Cashbacks" card
+     *   4. `latest_transactions` : recent purchase / payment / expense txns — the
+     *                              "Latest Payments" card
+     *
+     * If the caller wants only one chart period back, pass `?period=week|month|year`.
      */
     public function payments(Request $request)
     {
@@ -583,10 +544,42 @@ class WalletApiController extends Controller
             ];
         }
 
+        // Recent activity lists (moved here from /wallet/dashboard per mobile dev request).
+        $depositsList = Transaction::where('user_id', $userId)
+            ->where('transaction_type', 'deposit')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapDepositRow($tx, $currency))
+            ->values();
+
+        // Latest cashbacks = purchase transactions where some cashback was earned. Same data
+        // as latest_transactions but rows are filtered to `cashback_amount > 0` and status
+        // fields are swapped for cashback_percent / cashback_amount.
+        $latestCashbacks = Transaction::where('user_id', $userId)
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->where('cashback_amount', '>', 0)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapCashbackEarnedRow($tx, $currency))
+            ->values();
+
+        $latestTransactions = Transaction::where('user_id', $userId)
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapTransactionRow($tx, $currency))
+            ->values();
+
         return ResponseHelper::sendResponse([
-            'currency' => $currency,
-            'chart'    => $chart,
-        ], 'Wallet payments chart fetched.');
+            'currency'            => $currency,
+            'chart'               => $chart,
+            'deposits'            => $depositsList,
+            'latest_cashbacks'    => $latestCashbacks,
+            'latest_transactions' => $latestTransactions,
+        ], 'Wallet payments fetched.');
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────
