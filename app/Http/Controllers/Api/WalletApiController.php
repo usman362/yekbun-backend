@@ -469,9 +469,18 @@ class WalletApiController extends Controller
         $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
         $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
 
+        // Chart series — also exposed (in fuller form with all lists) on /wallet/payments.
+        // Kept here too so the dashboard screen can render the bar chart inline without an
+        // extra round-trip.
+        $chart = [
+            'weekly'  => $this->buildWeeklyChart($userId),
+            'monthly' => $this->buildMonthlyChart($userId),
+            'yearly'  => $this->buildYearlyChart($userId),
+        ];
+
         // "My cashback" stays on the dashboard — it's the unclaimed cashback balance card on
-        // the main wallet screen (user can sweep it to wallet). The other three lists
-        // (deposits, latest_cashbacks, latest_transactions) live on /wallet/payments instead.
+        // the main wallet screen (user can sweep it to wallet). The recent activity lists
+        // (deposits, latest_cashbacks, latest_transactions) live on /wallet/payments.
         $myCashbacks = Transaction::where('user_id', $userId)
             ->where('category', 'cashback')
             ->where('status', 'PENDING')
@@ -494,6 +503,7 @@ class WalletApiController extends Controller
                 'cashbacks' => round($cashbacks, 2),
                 'expenses'  => round($expenses, 2),
             ],
+            'chart'            => $chart,
             'my_cashbacks'     => $myCashbacks,
         ], 'Wallet dashboard fetched.');
     }
