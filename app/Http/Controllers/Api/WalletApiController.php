@@ -469,14 +469,10 @@ class WalletApiController extends Controller
         $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
         $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
 
-        // Chart series — also exposed (in fuller form with all lists) on /wallet/payments.
-        // Kept here too so the dashboard screen can render the bar chart inline without an
-        // extra round-trip.
-        $chart = [
-            'weekly'  => $this->buildWeeklyChart($userId),
-            'monthly' => $this->buildMonthlyChart($userId),
-            'yearly'  => $this->buildYearlyChart($userId),
-        ];
+        // Overall payments chart — sum of ALL completed transactions per period. Used by the
+        // single bar-chart card on the dashboard. Per-section charts (deposits / cashbacks /
+        // transactions) are returned on /wallet/payments.
+        $chart = $this->buildChartFor($this->defaultChartQuery($userId));
 
         // Recent activity lists — dashboard renders all four cards inline on the main wallet
         // screen, so we send everything in one response. The /wallet/payments endpoint
@@ -541,19 +537,18 @@ class WalletApiController extends Controller
     /**
      * GET /api/wallet/payments
      *
-     * The "Payments" screen on mobile — bundles four things in one call so the page
-     * renders top-to-bottom without extra round-trips:
+     * The "Payments" screen on mobile. Each section is `{ chart, items }` so the page can
+     * render a chart card + list per category without juggling sibling fields:
      *
-     *   1. `chart`               : bar chart with Week / Month / Year series (toggle)
-     *   2. `deposits`            : recent deposit txns (welcome bonus / cashback transfer
-     *                              / zercash charging) — the "My Deposit" card
-     *   3. `latest_cashbacks`    : recent purchase txns that EARNED cashback — shows the
-     *                              merchant + amount + `cashback_percent` / `cashback_amount`
-     *                              (no status pill) — the "Latest Cashbacks" card
-     *   4. `latest_transactions` : recent purchase / payment / expense txns — the
-     *                              "Latest Payments" card
-     *
-     * If the caller wants only one chart period back, pass `?period=week|month|year`.
+     *   - `chart`               : overall bar chart (week/month/year) — top of the page
+     *   - `deposits.chart`      : chart for deposit transactions only
+     *   - `deposits.items`      : recent deposit txns (welcome bonus / cashback transfer
+     *                             / zercash charging)
+     *   - `latest_cashbacks.chart` : chart of cashback_amount earned per period
+     *   - `latest_cashbacks.items` : purchase txns where cashback was earned (carries
+     *                             cashback_percent / cashback_amount per row)
+     *   - `latest_transactions.chart` : chart of purchase / payment / expense amounts
+     *   - `latest_transactions.items` : recent purchase txns
      */
     public function payments(Request $request)
     {
@@ -566,25 +561,30 @@ class WalletApiController extends Controller
         $setting = ZercashSetting::where('key', 'general')->where('is_active', true)->first();
         $currency = $setting->default_currency ?? 'EUR';
 
-        $period = strtolower((string) $request->query('period', ''));
+        // Base-query factories — each section's chart sums only that section's transactions.
+        // Closures so buildChartFor() can re-instantiate the query inside its date loop.
+        $depositsQuery     = fn () => Transaction::where('user_id', $userId)
+            ->where('status', 'COMPLETED')
+            ->where('transaction_type', 'deposit');
 
-        // If a specific period is requested, return just that series; otherwise send all
-        // three so the toggle doesn't trigger extra round-trips.
-        if (in_array($period, ['week', 'month', 'year'], true)) {
-            $chart = match ($period) {
-                'week'  => ['weekly'  => $this->buildWeeklyChart($userId)],
-                'month' => ['monthly' => $this->buildMonthlyChart($userId)],
-                'year'  => ['yearly'  => $this->buildYearlyChart($userId)],
-            };
-        } else {
-            $chart = [
-                'weekly'  => $this->buildWeeklyChart($userId),
-                'monthly' => $this->buildMonthlyChart($userId),
-                'yearly'  => $this->buildYearlyChart($userId),
-            ];
-        }
+        $cashbacksQuery    = fn () => Transaction::where('user_id', $userId)
+            ->where('status', 'COMPLETED')
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->where('cashback_amount', '>', 0);
 
-        // Recent activity lists (moved here from /wallet/dashboard per mobile dev request).
+        $transactionsQuery = fn () => Transaction::where('user_id', $userId)
+            ->where('status', 'COMPLETED')
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout']);
+
+        // Overall chart kept (same as before) — bar chart at the top of the Payments page.
+        $chart = $this->buildChartFor($this->defaultChartQuery($userId));
+
+        // Per-section charts — cashbacks sum the cashback_amount field, not the purchase amount.
+        $depositsChart     = $this->buildChartFor($depositsQuery);
+        $cashbacksChart    = $this->buildChartFor($cashbacksQuery, 'cashback_amount');
+        $transactionsChart = $this->buildChartFor($transactionsQuery);
+
+        // Recent activity lists.
         $depositsList = Transaction::where('user_id', $userId)
             ->where('transaction_type', 'deposit')
             ->orderBy('created_at', 'desc')
@@ -593,9 +593,6 @@ class WalletApiController extends Controller
             ->map(fn($tx) => $this->mapDepositRow($tx, $currency))
             ->values();
 
-        // Latest cashbacks = purchase transactions where some cashback was earned. Same data
-        // as latest_transactions but rows are filtered to `cashback_amount > 0` and status
-        // fields are swapped for cashback_percent / cashback_amount.
         $latestCashbacks = Transaction::where('user_id', $userId)
             ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
             ->where('cashback_amount', '>', 0)
@@ -613,12 +610,23 @@ class WalletApiController extends Controller
             ->map(fn($tx) => $this->mapTransactionRow($tx, $currency))
             ->values();
 
+        // Each section bundles its own chart + items so the mobile page can render
+        // "{title} {chart} {list}" cards without juggling sibling keys.
         return ResponseHelper::sendResponse([
             'currency'            => $currency,
-            'chart'               => $chart,
-            'deposits'            => $depositsList,
-            'latest_cashbacks'    => $latestCashbacks,
-            'latest_transactions' => $latestTransactions,
+            'chart'               => $chart, // overall (kept for backward compatibility)
+            'deposits'            => [
+                'chart' => $depositsChart,
+                'items' => $depositsList,
+            ],
+            'latest_cashbacks'    => [
+                'chart' => $cashbacksChart,
+                'items' => $latestCashbacks,
+            ],
+            'latest_transactions' => [
+                'chart' => $transactionsChart,
+                'items' => $latestTransactions,
+            ],
         ], 'Wallet payments fetched.');
     }
 
@@ -750,17 +758,42 @@ class WalletApiController extends Controller
         ];
     }
 
-    /** Weekly chart: last 7 days, one bucket per day with `{day, date, amount, is_today}`. */
-    private function buildWeeklyChart($userId): array
+    /**
+     * Default base-query factory: all of the user's COMPLETED transactions. Used for the
+     * top-level overall chart. Other sections pass their own factory closure to filter
+     * (e.g. deposits only, or cashback-earning purchases only).
+     */
+    private function defaultChartQuery($userId): callable
+    {
+        return fn () => Transaction::where('user_id', $userId)->where('status', 'COMPLETED');
+    }
+
+    /** Convenience — chart series wrapper that builds week/month/year in one go. */
+    private function buildChartFor(callable $baseQuery, string $sumField = 'amount'): array
+    {
+        return [
+            'weekly'  => $this->buildWeeklyChart($baseQuery, $sumField),
+            'monthly' => $this->buildMonthlyChart($baseQuery, $sumField),
+            'yearly'  => $this->buildYearlyChart($baseQuery, $sumField),
+        ];
+    }
+
+    /**
+     * Weekly chart: last 7 days, one bucket per day with `{day, date, amount, is_today}`.
+     *
+     * @param  callable  $baseQuery  Closure returning a fresh Transaction query (no date filter).
+     * @param  string    $sumField   Which numeric field to sum (default `amount`; cashback
+     *                               charts pass `cashback_amount`).
+     */
+    private function buildWeeklyChart(callable $baseQuery, string $sumField = 'amount'): array
     {
         $dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
         $data = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
-            $dayTotal = Transaction::where('user_id', $userId)
-                ->where('status', 'COMPLETED')
+            $dayTotal = $baseQuery()
                 ->where('date', $date->format('Y-m-d'))
-                ->sum('amount');
+                ->sum($sumField);
             $data[] = [
                 'day'      => $dayLabels[$date->dayOfWeek],
                 'date'     => $date->format('Y-m-d'),
@@ -776,17 +809,16 @@ class WalletApiController extends Controller
      * Mobile dev's expected shape is `{month: "Jan", amount: 120}`. Empty months come back
      * as 0 so the line chart stays continuous across the year.
      */
-    private function buildMonthlyChart($userId): array
+    private function buildMonthlyChart(callable $baseQuery, string $sumField = 'amount'): array
     {
         $data = [];
         $year = (int) Carbon::now()->format('Y');
         for ($m = 1; $m <= 12; $m++) {
             $start = Carbon::create($year, $m, 1)->startOfMonth();
             $end   = $start->copy()->endOfMonth();
-            $amount = Transaction::where('user_id', $userId)
-                ->where('status', 'COMPLETED')
+            $amount = $baseQuery()
                 ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-                ->sum('amount');
+                ->sum($sumField);
             $data[] = [
                 'month'  => $start->format('M'),
                 'amount' => round($amount, 2),
@@ -798,7 +830,7 @@ class WalletApiController extends Controller
     /**
      * Yearly chart: last 5 years inclusive of current year. Shape `{year: "2024", amount: 4200}`.
      */
-    private function buildYearlyChart($userId): array
+    private function buildYearlyChart(callable $baseQuery, string $sumField = 'amount'): array
     {
         $data = [];
         $currentYear = (int) Carbon::now()->format('Y');
@@ -806,10 +838,9 @@ class WalletApiController extends Controller
             $year  = $currentYear - $i;
             $start = Carbon::create($year, 1, 1)->startOfYear();
             $end   = $start->copy()->endOfYear();
-            $amount = Transaction::where('user_id', $userId)
-                ->where('status', 'COMPLETED')
+            $amount = $baseQuery()
                 ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-                ->sum('amount');
+                ->sum($sumField);
             $data[] = [
                 'year'   => (string) $year,
                 'amount' => round($amount, 2),
