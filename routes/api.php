@@ -612,6 +612,9 @@ Route::middleware('jwt.custom')->group(function () {
     Route::post('wallet/change-pin', [WalletApiController::class, 'changePin']);
     Route::get('wallet/status', [WalletApiController::class, 'walletStatus']);
     Route::get('wallet/dashboard', [WalletApiController::class, 'dashboard']);
+    // Standalone payments chart — week / month / year bar chart on the dashboard.
+    // Pass `?period=week|month|year` for a single series, or omit to get all three.
+    Route::get('wallet/payments', [WalletApiController::class, 'payments']);
     Route::get('wallet/quick-access', [WalletApiController::class, 'quickAccess']);
     Route::get('wallet/chart', [WalletApiController::class, 'chartData']);
     Route::get('wallet/deposits', [WalletApiController::class, 'deposits']);

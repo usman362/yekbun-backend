@@ -469,22 +469,14 @@ class WalletApiController extends Controller
         $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')->where('status', 'COMPLETED')->sum('amount');
         $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', ['purchase', 'payment', 'expense'])->where('status', 'COMPLETED')->sum('amount');
 
-        // Mobile dashboard renders three chart tabs (Week / Month / Year) without making
-        // additional round-trips, so we build all three series upfront here. Shape matches the
-        // contract agreed with the mobile dev: weekly carries day labels, monthly buckets are
-        // `{month, amount}`, yearly buckets are `{year, amount}`.
-        $chart = [
-            'weekly'  => $this->buildWeeklyChart($userId),
-            'monthly' => $this->buildMonthlyChart($userId),
-            'yearly'  => $this->buildYearlyChart($userId),
-        ];
-
         // ── Recent activity lists ──────────────────────────────────────────────────────
-        // Three separate transaction streams the mobile dashboard renders inline:
-        //   - deposits           : recent deposit txns (top-up + welcome bonus rows)
-        //   - latest_cashbacks   : recent cashback %age accrued on purchases
-        //   - my_cashbacks       : cashback balance pending claim → user can sweep to wallet
-        //   - latest_transactions: recent expense/purchase txns (shopping list)
+        // Four separate streams the mobile dashboard renders inline:
+        //   - deposits            : recent deposit txns (top-up + welcome bonus rows)
+        //   - latest_cashbacks    : recent purchase txns that EARNED cashback — same shape as
+        //                            latest_transactions but with cashback_percent / amount
+        //                            replacing status / status_color
+        //   - my_cashbacks        : unclaimed cashback balance — user can sweep to wallet
+        //   - latest_transactions : recent purchase / expense txns (shopping list)
         $depositsList = Transaction::where('user_id', $userId)
             ->where('transaction_type', 'deposit')
             ->orderBy('created_at', 'desc')
@@ -493,12 +485,16 @@ class WalletApiController extends Controller
             ->map(fn($tx) => $this->mapDepositRow($tx, $currency))
             ->values();
 
+        // Latest cashbacks = purchase transactions where some cashback was earned. We mirror
+        // the latest_transactions data and just swap status fields for cashback fields. Filter
+        // is `cashback_amount > 0` so rows without cashback are excluded.
         $latestCashbacks = Transaction::where('user_id', $userId)
-            ->where('category', 'cashback')
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->where('cashback_amount', '>', 0)
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
-            ->map(fn($tx) => $this->mapCashbackRow($tx, $currency))
+            ->map(fn($tx) => $this->mapCashbackEarnedRow($tx, $currency))
             ->values();
 
         // "My cashback" = unclaimed cashback balance (status PENDING) that user can transfer
@@ -533,12 +529,64 @@ class WalletApiController extends Controller
                 'cashbacks' => round($cashbacks, 2),
                 'expenses'  => round($expenses, 2),
             ],
-            'chart'               => $chart,
             'deposits'            => $depositsList,
             'latest_cashbacks'    => $latestCashbacks,
             'my_cashbacks'        => $myCashbacks,
             'latest_transactions' => $latestTransactions,
         ], 'Wallet dashboard fetched.');
+    }
+
+    /**
+     * GET /api/wallet/payments
+     *
+     * Standalone payments chart endpoint — mobile renders this as the bar-chart card on the
+     * dashboard with a Week / Month / Year toggle. Returns all three series in one response
+     * so toggling between periods is local-only (no re-fetch). If the caller wants only one
+     * period back, pass `?period=week|month|year`.
+     *
+     * Shape:
+     *   {
+     *     "currency": "EUR",
+     *     "chart": {
+     *       "weekly":  [{ day, date, amount, is_today }, ...7],
+     *       "monthly": [{ month, amount }, ...12],
+     *       "yearly":  [{ year,  amount }, ...5],
+     *     }
+     *   }
+     */
+    public function payments(Request $request)
+    {
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+
+        $userId = Auth::id();
+        $setting = ZercashSetting::where('key', 'general')->where('is_active', true)->first();
+        $currency = $setting->default_currency ?? 'EUR';
+
+        $period = strtolower((string) $request->query('period', ''));
+
+        // If a specific period is requested, return just that series; otherwise send all
+        // three so the toggle doesn't trigger extra round-trips.
+        if (in_array($period, ['week', 'month', 'year'], true)) {
+            $chart = match ($period) {
+                'week'  => ['weekly'  => $this->buildWeeklyChart($userId)],
+                'month' => ['monthly' => $this->buildMonthlyChart($userId)],
+                'year'  => ['yearly'  => $this->buildYearlyChart($userId)],
+            };
+        } else {
+            $chart = [
+                'weekly'  => $this->buildWeeklyChart($userId),
+                'monthly' => $this->buildMonthlyChart($userId),
+                'yearly'  => $this->buildYearlyChart($userId),
+            ];
+        }
+
+        return ResponseHelper::sendResponse([
+            'currency' => $currency,
+            'chart'    => $chart,
+        ], 'Wallet payments chart fetched.');
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────
@@ -565,19 +613,43 @@ class WalletApiController extends Controller
         return $tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : '';
     }
 
-    /** Deposit row shape (welcome bonus + top-ups). */
+    /**
+     * Deposit row shape — covers the three "My Deposit" cards the mobile UI renders:
+     *   - YekBûn Welcome    (category = welcome_bonus)
+     *   - Cashback Transfer (category = cashback_transfer)  → user sweeps my_cashbacks to wallet
+     *   - Zêrcash Charging  (category = zercash_charging / top_up / topup / charge)
+     *
+     * Mobile maps `icon` (a stable string) to its own asset. Per request from mobile dev:
+     * `welcome_bonus` stays as-is; `cashback_transfer` and `zercash_charging` are the unique
+     * names for the other two. Anything outside these three falls back to the stored category.
+     */
     private function mapDepositRow($tx, string $defaultCurrency): array
     {
-        $category = $tx->category ?? 'deposit';
+        $category = strtolower((string) ($tx->category ?? 'deposit'));
+
+        // Normalize category → {icon, title}. Aliases for "top up" rolled into
+        // zercash_charging so historic rows render the same way.
+        $iconMap = [
+            'welcome_bonus'     => ['icon' => 'welcome_bonus',     'title' => 'YekBûn Welcome'],
+            'cashback_transfer' => ['icon' => 'cashback_transfer', 'title' => 'Cashback Transfer'],
+            'zercash_charging'  => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
+            'top_up'            => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
+            'topup'             => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
+            'charge'            => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
+        ];
+
+        $mapped = $iconMap[$category] ?? ['icon' => $category, 'title' => 'Deposit'];
+
         return [
             'id'           => (string) $tx->_id,
-            'title'        => $tx->description ?? ($category === 'welcome_bonus' ? 'YekBûn Welcome' : 'Deposit'),
+            // Stored description wins if present, otherwise the normalized title from the map.
+            'title'        => $tx->description ?? $mapped['title'],
             'cb_id'        => $tx->tId ?? 'CB-ID',
             'date'         => $this->formatTxDate($tx),
             'amount'       => round($tx->amount ?? 0, 2),
             'type'         => 'income',
             'currency'     => $tx->currency ?? $defaultCurrency,
-            'icon'         => $category,
+            'icon'         => $mapped['icon'],
             'status_color' => $this->statusColor($tx->status ?? 'COMPLETED'),
         ];
     }
@@ -612,6 +684,36 @@ class WalletApiController extends Controller
             'status_color' => $this->statusColor($tx->status ?? 'PENDING'),
             'icon'         => $tx->icon ?? $tx->category ?? ($tx->transaction_type ?? 'transaction'),
             'category'     => $tx->category ?? 'shopping',
+        ];
+    }
+
+    /**
+     * Row shape for `latest_cashbacks` — same data as `mapTransactionRow` but trades
+     * `status` / `status_color` for `cashback_percent` / `cashback_amount`. Mobile renders
+     * a small chip like "5% 25.00" beside the purchase amount instead of a status pill.
+     *
+     * If the transaction has an explicit `cashback_percent` field we use that; otherwise we
+     * derive it from `cashback_amount / amount * 100` so older rows still render correctly.
+     */
+    private function mapCashbackEarnedRow($tx, string $defaultCurrency): array
+    {
+        $purchaseAmount = (float) ($tx->amount ?? 0);
+        $cashbackAmount = (float) ($tx->cashback_amount ?? 0);
+        $cashbackPercent = isset($tx->cashback_percent)
+            ? (float) $tx->cashback_percent
+            : ($purchaseAmount > 0 ? round(($cashbackAmount / $purchaseAmount) * 100, 2) : 0);
+
+        return [
+            'id'               => (string) $tx->_id,
+            'merchant'         => $tx->shop_name ?? $tx->description ?? 'Unknown',
+            'cb_id'            => $tx->tId ?? 'CB-ID',
+            'date'             => $this->formatTxDate($tx),
+            'amount'           => round($purchaseAmount, 2),
+            'currency'         => $tx->currency ?? $defaultCurrency,
+            'cashback_percent' => $cashbackPercent,
+            'cashback_amount'  => round($cashbackAmount, 2),
+            'icon'             => $tx->icon ?? $tx->category ?? ($tx->transaction_type ?? 'transaction'),
+            'category'         => $tx->category ?? 'shopping',
         ];
     }
 
