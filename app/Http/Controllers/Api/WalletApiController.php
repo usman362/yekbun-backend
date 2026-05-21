@@ -478,9 +478,28 @@ class WalletApiController extends Controller
             'yearly'  => $this->buildYearlyChart($userId),
         ];
 
-        // "My cashback" stays on the dashboard — it's the unclaimed cashback balance card on
-        // the main wallet screen (user can sweep it to wallet). The recent activity lists
-        // (deposits, latest_cashbacks, latest_transactions) live on /wallet/payments.
+        // Recent activity lists — dashboard renders all four cards inline on the main wallet
+        // screen, so we send everything in one response. The /wallet/payments endpoint
+        // returns the same lists (minus my_cashbacks) for the dedicated Payments page.
+        $depositsList = Transaction::where('user_id', $userId)
+            ->where('transaction_type', 'deposit')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapDepositRow($tx, $currency))
+            ->values();
+
+        $latestCashbacks = Transaction::where('user_id', $userId)
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->where('cashback_amount', '>', 0)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapCashbackEarnedRow($tx, $currency))
+            ->values();
+
+        // "My cashback" = unclaimed cashback balance card on the main wallet screen
+        // (user can sweep it to wallet). Status PENDING only.
         $myCashbacks = Transaction::where('user_id', $userId)
             ->where('category', 'cashback')
             ->where('status', 'PENDING')
@@ -490,21 +509,32 @@ class WalletApiController extends Controller
             ->map(fn($tx) => $this->mapCashbackRow($tx, $currency))
             ->values();
 
+        $latestTransactions = Transaction::where('user_id', $userId)
+            ->whereIn('transaction_type', ['purchase', 'payment', 'expense', 'payout'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($tx) => $this->mapTransactionRow($tx, $currency))
+            ->values();
+
         return ResponseHelper::sendResponse([
-            'wallet_id'        => $this->maskWalletId((string) $wallet->_id),
-            'wallet_type'      => $walletType,
-            'currency'         => $currency,
-            'balance'          => round($wallet->balance ?? 0, 2),
-            'zer_balance'      => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
-            'cashback_percent' => $cashbackPercent,
-            'expire_at'        => $wallet->expire_at ?? null,
-            'summary'          => [
+            'wallet_id'           => $this->maskWalletId((string) $wallet->_id),
+            'wallet_type'         => $walletType,
+            'currency'            => $currency,
+            'balance'             => round($wallet->balance ?? 0, 2),
+            'zer_balance'         => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
+            'cashback_percent'    => $cashbackPercent,
+            'expire_at'           => $wallet->expire_at ?? null,
+            'summary'             => [
                 'deposits'  => round($deposits, 2),
                 'cashbacks' => round($cashbacks, 2),
                 'expenses'  => round($expenses, 2),
             ],
-            'chart'            => $chart,
-            'my_cashbacks'     => $myCashbacks,
+            'chart'               => $chart,
+            'deposits'            => $depositsList,
+            'latest_cashbacks'    => $latestCashbacks,
+            'my_cashbacks'        => $myCashbacks,
+            'latest_transactions' => $latestTransactions,
         ], 'Wallet dashboard fetched.');
     }
 
