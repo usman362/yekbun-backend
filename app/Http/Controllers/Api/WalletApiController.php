@@ -513,12 +513,20 @@ class WalletApiController extends Controller
             ->map(fn($tx) => $this->mapTransactionRow($tx, $currency))
             ->values();
 
+        // Cashback balance = total claimable amount (sum of all PENDING cashback rows).
+        // This is what the user can sweep into their main wallet balance.
+        $cashbackBalance = Transaction::where('user_id', $userId)
+            ->where('category', 'cashback')
+            ->where('status', 'PENDING')
+            ->sum('amount');
+
         return ResponseHelper::sendResponse([
             'wallet_id'           => $this->maskWalletId((string) $wallet->_id),
             'wallet_type'         => $walletType,
             'currency'            => $currency,
             'balance'             => round($wallet->balance ?? 0, 2),
             'zer_balance'         => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),
+            'cashback_balance'    => round($cashbackBalance, 2),
             'cashback_percent'    => $cashbackPercent,
             'expire_at'           => $wallet->expire_at ?? null,
             'summary'             => [
@@ -656,27 +664,30 @@ class WalletApiController extends Controller
 
     /**
      * Deposit row shape — covers the three "My Deposit" cards the mobile UI renders:
-     *   - YekBûn Welcome    (category = welcome_bonus)
-     *   - Cashback Transfer (category = cashback_transfer)  → user sweeps my_cashbacks to wallet
-     *   - Zêrcash Charging  (category = zercash_charging / top_up / topup / charge)
+     *   - YekBûn Welcome    (icon: welcome_bonus)
+     *   - Cashback Transfer (icon: cashback)        → user sweeps my_cashbacks to wallet
+     *   - Zêrcash Charging  (icon: recharge)        → user adds money to wallet
      *
-     * Mobile maps `icon` (a stable string) to its own asset. Per request from mobile dev:
-     * `welcome_bonus` stays as-is; `cashback_transfer` and `zercash_charging` are the unique
-     * names for the other two. Anything outside these three falls back to the stored category.
+     * Mobile maps `icon` (a stable string) to its own asset. Final agreed icon strings:
+     *   welcome_bonus / cashback / recharge — these are the ONLY three the mobile app
+     * understands. Any other category falls back to the stored category string.
      */
     private function mapDepositRow($tx, string $defaultCurrency): array
     {
         $category = strtolower((string) ($tx->category ?? 'deposit'));
 
         // Normalize category → {icon, title}. Aliases for "top up" rolled into
-        // zercash_charging so historic rows render the same way.
+        // recharge so historic rows render the same way. Old cashback_transfer /
+        // zercash_charging strings get mapped to the new icon names too.
         $iconMap = [
-            'welcome_bonus'     => ['icon' => 'welcome_bonus',     'title' => 'YekBûn Welcome'],
-            'cashback_transfer' => ['icon' => 'cashback_transfer', 'title' => 'Cashback Transfer'],
-            'zercash_charging'  => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
-            'top_up'            => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
-            'topup'             => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
-            'charge'            => ['icon' => 'zercash_charging',  'title' => 'Zêrcash Charging'],
+            'welcome_bonus'     => ['icon' => 'welcome_bonus', 'title' => 'YekBûn Welcome'],
+            'cashback_transfer' => ['icon' => 'cashback',      'title' => 'Cashback Transfer'],
+            'cashback'          => ['icon' => 'cashback',      'title' => 'Cashback Transfer'],
+            'recharge'          => ['icon' => 'recharge',      'title' => 'Zêrcash Charging'],
+            'zercash_charging'  => ['icon' => 'recharge',      'title' => 'Zêrcash Charging'],
+            'top_up'            => ['icon' => 'recharge',      'title' => 'Zêrcash Charging'],
+            'topup'             => ['icon' => 'recharge',      'title' => 'Zêrcash Charging'],
+            'charge'            => ['icon' => 'recharge',      'title' => 'Zêrcash Charging'],
         ];
 
         $mapped = $iconMap[$category] ?? ['icon' => $category, 'title' => 'Deposit'];
