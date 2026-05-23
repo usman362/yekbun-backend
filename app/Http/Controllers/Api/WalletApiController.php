@@ -129,9 +129,24 @@ class WalletApiController extends Controller
             return ResponseHelper::sendResponse(null, 'Invalid PIN.', false, 401);
         }
 
-        // Welcome bonus on first verify-pin
+        // Welcome bonus on first verify-pin.
+        //
+        // IMPORTANT: We can't rely on the wallet's `welcome_bonus_claimed` flag alone — if the
+        // wallet ever gets re-created (admin re-approve, manual fix, user_id type mismatch
+        // between ObjectId and string, etc.) the flag resets to false and the user would claim
+        // the bonus a SECOND time. Transaction history is the durable source of truth, so we
+        // check both: flag OR an existing welcome_bonus deposit row for this user.
         $bonusGiven = false;
-        if (empty($wallet->welcome_bonus_claimed)) {
+        $hasBonusTxn = Transaction::where('category', 'welcome_bonus')
+            ->where(function ($q) use ($user) {
+                // Match both ObjectId and string representations of the user id since legacy
+                // rows may have either form depending on how they were inserted.
+                $q->where('user_id', (string) $user->_id)
+                  ->orWhere('user_id', $user->_id);
+            })
+            ->exists();
+
+        if (empty($wallet->welcome_bonus_claimed) && !$hasBonusTxn) {
             $bonusAmount = 300;
             $wallet->balance = ($wallet->balance ?? 0) + $bonusAmount;
             $wallet->welcome_bonus_claimed = true;
@@ -141,7 +156,7 @@ class WalletApiController extends Controller
 
             // Create bonus transaction
             $transaction = new Transaction();
-            $transaction->user_id = $user->_id;
+            $transaction->user_id = (string) $user->_id;
             $transaction->transaction_type = 'deposit';
             $transaction->category = 'welcome_bonus';
             $transaction->amount = $bonusAmount;
@@ -153,6 +168,13 @@ class WalletApiController extends Controller
             $transaction->save();
 
             $bonusGiven = true;
+        } elseif (empty($wallet->welcome_bonus_claimed) && $hasBonusTxn) {
+            // Recovery path: bonus transaction exists in history but the wallet's flag is unset
+            // (e.g. wallet got re-created via admin approve). Sync the flag back so we never
+            // re-enter this branch again. We DON'T add to balance — that was credited the first
+            // time the bonus was claimed.
+            $wallet->welcome_bonus_claimed = true;
+            $wallet->save();
         }
 
         return ResponseHelper::sendResponse([
