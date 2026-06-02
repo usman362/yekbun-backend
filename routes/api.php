@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 // ─── Controller Imports ───
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\OtpLoginController;
 use App\Http\Controllers\Api\TwoFactorController;
 use App\Http\Controllers\Api\AccountSettingController;
 use App\Http\Controllers\Api\UsersController;
@@ -120,6 +121,11 @@ Route::get('/test', function () {
 // ─── Authentication ───
 Route::post('/signup', [AuthController::class, 'signup']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's
+// inbox; step 2 verifies the code and returns a JWT in the same shape as /api/login.
+Route::post('/otp-login/send', [OtpLoginController::class, 'send']);
+Route::post('/otp-login/verify', [OtpLoginController::class, 'verify']);
 Route::post('/register-verify-device', [AuthController::class, 'verifyDevice']);
 Route::post('/register-device', [AuthController::class, 'registerDevice']);
 Route::post('forgot-password', [AuthController::class, 'forgot_password']);
