@@ -70,12 +70,17 @@ class Helpers
         $uploadedFile->move(dirname($tempLocalPath), basename($tempLocalPath));
 
         $finalLocalFile = $tempLocalPath;
+        // Track whether the file was converted so we can rewrite the stored filename's
+        // extension to match the actual codec — otherwise mobile clients see a `.mp3`
+        // URL serving m4a/AAC content and refuse to trim it natively.
+        $convertedExt = null;
 
         if ($ext === 'mp3') {
             $convertedPath = str_replace('.mp3', '.m4a', $tempLocalPath);
             if (static::convertToM4A($tempLocalPath, $convertedPath)) {
                 unlink($tempLocalPath);
                 $finalLocalFile = $convertedPath;
+                $convertedExt = 'm4a';
             }
         } elseif ($ext === 'mp4') {
             $convertedPath = str_replace('.mp4', '_h265.mp4', $tempLocalPath);
@@ -86,6 +91,12 @@ class Helpers
         }
 
         $uniqueName = $uploadedFile->getClientOriginalName();
+        // Swap the extension on the stored filename when the content was transcoded.
+        // This keeps the CDN URL truthful (e.g. `song.mp3` → `song.m4a`) so mobile can
+        // pick the right native decoder/trimmer based on the filename alone.
+        if ($convertedExt !== null) {
+            $uniqueName = preg_replace('/\.[^.]+$/', '.' . $convertedExt, $uniqueName);
+        }
 
         $content = file_get_contents($finalLocalFile);
         $mime    = mime_content_type($finalLocalFile);
@@ -116,12 +127,14 @@ class Helpers
         $uploadedFile->move(dirname($tempLocalPath), basename($tempLocalPath));
 
         $finalLocalFile = $tempLocalPath;
+        $convertedExt = null;
 
         if ($ext === 'mp3') {
             $convertedPath = str_replace('.mp3', '.m4a', $tempLocalPath);
             if (static::convertToM4A($tempLocalPath, $convertedPath)) {
                 unlink($tempLocalPath);
                 $finalLocalFile = $convertedPath;
+                $convertedExt = 'm4a';
             }
         } elseif ($ext === 'mp4') {
             $convertedPath = str_replace('.mp4', '_h265.mp4', $tempLocalPath);
@@ -132,6 +145,11 @@ class Helpers
         }
 
         $uniqueName = basename($uploadedFile);
+        // Match the stored filename's extension to the transcoded codec so the CDN URL
+        // tells mobile clients the truth about the content (see fileCDNUpload above).
+        if ($convertedExt !== null) {
+            $uniqueName = preg_replace('/\.[^.]+$/', '.' . $convertedExt, $uniqueName);
+        }
 
         $content = file_get_contents($finalLocalFile);
         $mime    = mime_content_type($finalLocalFile);
