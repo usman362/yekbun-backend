@@ -5,7 +5,9 @@ use Illuminate\Support\Facades\Route;
 
 // ─── Controller Imports ───
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CmsApiController;
 use App\Http\Controllers\Api\OtpLoginController;
+use App\Http\Controllers\Api\Admin\CmsController as AdminCmsController;
 use App\Http\Controllers\Api\TwoFactorController;
 use App\Http\Controllers\Api\AccountSettingController;
 use App\Http\Controllers\Api\UsersController;
@@ -425,6 +427,14 @@ Route::get('zercash/settings', [ZercashApiController::class, 'settings']);
 // Mobile read endpoints for the admin-managed Cashback Manager + Country matrix.
 // Only enabled / active rows are returned. Admin writes via /admin/zercash/* (auth-gated).
 Route::get('zercash/cashback-rules', [ZercashApiController::class, 'cashbackRules']);
+
+// ── Public CMS reads — driven by the admin's WebApp CMS page ──
+// Pages: { landing: {key→value}, login: {…} } — for hardcoded copy on the public app.
+// Translations: per-key per-language overrides on top of the bundled i18n catalogue.
+// Media: { slot → CDN URL } for admin-replaceable banners, logos, etc.
+Route::get('cms/pages',        [CmsApiController::class, 'pages']);
+Route::get('cms/translations', [CmsApiController::class, 'translations']);
+Route::get('cms/media',        [CmsApiController::class, 'media']);
 Route::get('zercash/countries', [ZercashApiController::class, 'zercashCountries']);
 Route::get('zercash/shops', [ZercashApiController::class, 'shops']);
 Route::get('zercash/sale-managers', [ZercashApiController::class, 'saleManagers']);
@@ -865,6 +875,18 @@ Route::prefix('admin')->group(function () {
         // Zercash Countries (tab) — country availability matrix (Active / Restricted / Pending).
         Route::get('/zercash/countries', [ZercashAdminController::class, 'countries']);
         Route::put('/zercash/countries', [ZercashAdminController::class, 'updateCountries']);
+
+        // ── WebApp CMS (yekbun.app content) ──
+        // Pages / texts: page-id-scoped key→value editor rows.
+        Route::get('/cms/pages', [AdminCmsController::class, 'pages']);
+        Route::put('/cms/pages/{id}', [AdminCmsController::class, 'updatePage']);
+        // Translations: per-key per-language override map.
+        Route::get('/cms/translations', [AdminCmsController::class, 'translations']);
+        Route::put('/cms/translations', [AdminCmsController::class, 'updateTranslations']);
+        // Media slots: named asset URLs (banner, logo, promo, …) replaceable via upload.
+        Route::get('/cms/media', [AdminCmsController::class, 'media']);
+        Route::post('/cms/media/upload', [AdminCmsController::class, 'uploadMedia']);
+        Route::delete('/cms/media/{slot}', [AdminCmsController::class, 'deleteMedia']);
         // Aggregated list of pending KYC / wallet / transaction requests — feeds the navbar dropdown.
         Route::get('/zercash/pending-requests', [ZercashAdminController::class, 'pendingRequests']);
 
