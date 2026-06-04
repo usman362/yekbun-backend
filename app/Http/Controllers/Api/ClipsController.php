@@ -55,8 +55,107 @@ class ClipsController extends Controller
 
     public function store_clips(Request $request)
     {
-        $request->validate(['video' => 'required|file']);
+        // Tighter validation — `uploaded` catches the silent half-upload case that produced
+        // the cryptic "The video failed to upload" 422s for mobile. `max:204800` = 200MB cap
+        // (raise if your nginx/php-fpm limits are higher — must stay ≤ post_max_size).
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'video'        => 'required|file|mimetypes:video/mp4,video/quicktime,video/x-m4v|max:204800',
+            'audio'        => 'nullable|file|mimetypes:audio/mpeg,audio/mp4,audio/x-m4a,audio/aac|max:51200',
+            'thumbnail'    => 'nullable|file|image|max:10240',
+            'template_id'  => 'nullable|string',
+            'share_with'   => 'nullable|string',
+        ]);
 
+        if ($validator->fails()) {
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
+        }
+
+        // Locate ffmpeg up front — if it's missing we want to fail loudly NOW, not after a
+        // silent exec() that swallows the failure and saves a clip with no video URL.
+        $ffmpegBin = trim((string) @shell_exec('which ffmpeg'));
+        if ($ffmpegBin === '') {
+            return ResponseHelper::sendResponse(null, 'Server is missing ffmpeg — please contact support.', false, 500);
+        }
+
+        // Resolve the audio source. Three legal inputs:
+        //   1. Uploaded file under `audio` (preferred)
+        //   2. Path string under `audio` that lives in `storage/app/public/...`
+        //   3. Nothing → fall back to the silent placeholder
+        $audioPath = public_path('audios/empty.mp3');
+        if ($request->hasFile('audio')) {
+            $audioPath = $request->file('audio')->getPathname();
+        } elseif (!empty($request->audio) && is_string($request->audio) && Storage::exists('public/' . $request->audio)) {
+            $audioPath = storage_path('app/public/' . $request->audio);
+        }
+
+        $videoFile  = $request->file('video');
+        $videoLocal = $videoFile->getPathname();
+
+        // Unique output filename — without this, two users uploading clips named `video.mp4`
+        // race on the same path and one overwrites the other mid-encode → broken clips.
+        $tmpDir = storage_path('app/public/videos');
+        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
+        $outputPath = $tmpDir . '/clip_' . uniqid('', true) . '.mp4';
+
+        $videoVolume = max(0.0, min(2.0, (float) ($request->video_volume ?? 0.8)));
+        $audioVolume = max(0.0, min(2.0, (float) ($request->audio_volume ?? 0.5)));
+
+        // Escape every interpolated path/value so spaces, quotes, or shell metacharacters in
+        // uploaded filenames can't break the command (or worse, be exploited).
+        $command = sprintf(
+            '%s -y -i %s -i %s -filter_complex %s -map 0:v -map "[a]" -shortest %s 2>&1',
+            escapeshellcmd($ffmpegBin),
+            escapeshellarg($videoLocal),
+            escapeshellarg($audioPath),
+            escapeshellarg(sprintf(
+                '[1:a]volume=%.3f[a1];[0:a]volume=%.3f[a2];[a1][a2]amix=inputs=2:duration=first[a]',
+                $audioVolume,
+                $videoVolume
+            )),
+            escapeshellarg($outputPath)
+        );
+
+        exec($command, $output, $return_var);
+
+        // Hard fail if ffmpeg didn't produce a usable file. Previously the controller carried
+        // on, saved a clip row with empty `clip` URL, and pushed a "new clip!" notification —
+        // users got pings for clips that played nothing.
+        if ($return_var !== 0 || !file_exists($outputPath) || filesize($outputPath) === 0) {
+            if (file_exists($outputPath)) @unlink($outputPath);
+            \Illuminate\Support\Facades\Log::error('store_clips ffmpeg failure', [
+                'user_id'  => Auth::id(),
+                'return'   => $return_var,
+                'tail'     => array_slice($output, -10), // last 10 lines of ffmpeg stderr
+            ]);
+            return ResponseHelper::sendResponse(
+                null,
+                'Video processing failed. Please try again with a different clip.',
+                false,
+                500
+            );
+        }
+
+        // Now that we have a real output file, upload to CDN. Wrap so a transient CDN error
+        // doesn't leak the temp file or leave a half-saved Clips row.
+        try {
+            $clipUrl = Helpers::fileCDNUpload2(new \Illuminate\Http\File($outputPath), 'clips');
+        } catch (\Throwable $e) {
+            @unlink($outputPath);
+            \Illuminate\Support\Facades\Log::error('store_clips CDN upload failed', [
+                'user_id' => Auth::id(),
+                'error'   => $e->getMessage(),
+            ]);
+            return ResponseHelper::sendResponse(null, 'Could not upload the clip. Please try again.', false, 502);
+        } finally {
+            if (file_exists($outputPath)) @unlink($outputPath);
+        }
+
+        // All side-effects above succeeded — now create the DB row + post-create work.
         $clip = new Clips();
         $clip->template_id = $request->template_id;
         $clip->thumbnail = $request->hasFile('thumbnail') ? Helpers::fileCDNUpload($request->thumbnail, 'images/thumbnails/clips') : '';
@@ -65,31 +164,7 @@ class ClipsController extends Controller
         $clip->user_id = Auth::id();
         $clip->text = $request->text;
         $clip->text_properties = $request->text_properties;
-
-        $videoPath = $request->video;
-        $audioPath = public_path('audios/empty.mp3');
-        if ($request->hasFile('audio')) {
-            $audioPath = $request->audio;
-        } elseif (!empty($request->audio) && Storage::exists('public/' . $request->audio)) {
-            $audioPath = storage_path('app/public/' . $request->audio);
-        }
-
-        $outputPath = storage_path('app/public/videos/clip_' . $videoPath->getClientOriginalName());
-        $videoVolume = $request->video_volume ?? 0.8;
-        $audioVolume = $request->audio_volume ?? 0.5;
-
-        $command = "ffmpeg -i {$videoPath} -i {$audioPath} -filter_complex " .
-            "\"[1:a]volume={$audioVolume}[a1];[0:a]volume={$videoVolume}[a2];" .
-            "[a1][a2]amix=inputs=2:duration=first[a]\" " .
-            "-map 0:v -map \"[a]\" -shortest {$outputPath}";
-
-        exec($command, $output, $return_var);
-
-        if ($return_var === 0) {
-            $clip->clip = Helpers::fileCDNUpload2(new \Illuminate\Http\File($outputPath), 'clips');
-            if (file_exists($outputPath)) unlink($outputPath);
-        }
-
+        $clip->clip = $clipUrl;
         $clip->likes_count = 0;
         $clip->views_count = 0;
         $clip->comments_count = 0;
