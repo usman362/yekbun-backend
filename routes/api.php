@@ -882,6 +882,9 @@ Route::prefix('admin')->group(function () {
         Route::post('/products', [ProductsAdminController::class, 'storeProduct']);
         Route::put('/products/{id}', [ProductsAdminController::class, 'updateProduct']);
         Route::delete('/products/{id}', [ProductsAdminController::class, 'destroyProduct']);
+        // Image upload — used by the admin product modals to convert local cover/icon files
+        // to short CDN URLs before submitting the product create/update payload.
+        Route::post('/products/upload-image', [ProductsAdminController::class, 'uploadImage']);
         Route::post('/sale-managers', [ProductsAdminController::class, 'storeSaleManager']);
         Route::put('/sale-managers/{id}', [ProductsAdminController::class, 'updateSaleManager']);
         Route::delete('/sale-managers/{id}', [ProductsAdminController::class, 'destroySaleManager']);

@@ -196,6 +196,29 @@ class ProductsAdminController extends Controller
         return ResponseHelper::sendResponse(['id' => $id], 'Sale manager deleted');
     }
 
+    /**
+     * POST /admin/products/upload-image
+     *
+     * Accepts a single image file (multipart `image` field), pushes it to BunnyCDN under
+     * `images/products/`, and returns the resulting URL. The admin Products page calls this
+     * before submitting a create/update so that the product's `image` column stores just
+     * the CDN URL (a short string) — never a base64 data URL that would blow past the
+     * column's `max:500` validation.
+     *
+     * Response: { url: "https://cdn.../images/products/<file>.jpg" }
+     */
+    public function uploadImage(Request $request)
+    {
+        $request->validate([
+            // 5MB cap is plenty for product cover art / plan icons; raise here if needed.
+            'image' => 'required|file|image|max:5120',
+        ]);
+
+        $url = Helpers::fileCDNUpload($request->file('image'), 'images/products');
+
+        return ResponseHelper::sendResponse(['url' => $url], 'Image uploaded');
+    }
+
     // ── Seeders (mirror old admin_yekbun defaults so UI is populated on first load) ──
 
     private function seedDefaultProductsIfEmpty(): void
