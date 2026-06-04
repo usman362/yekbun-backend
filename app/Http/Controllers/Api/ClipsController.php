@@ -55,13 +55,18 @@ class ClipsController extends Controller
 
     public function store_clips(Request $request)
     {
-        // Tighter validation — `uploaded` catches the silent half-upload case that produced
-        // the cryptic "The video failed to upload" 422s for mobile. `max:204800` = 200MB cap
-        // (raise if your nginx/php-fpm limits are higher — must stay ≤ post_max_size).
+        // Loose validation by design — `mimetypes` is detected from file CONTENT, not the
+        // Content-Type header, and React Native's multipart uploads frequently mis-report
+        // (.m4a coming through as audio/mp4, .mp4 sometimes as application/octet-stream, etc.).
+        // We just check the field is a real uploaded file and within our size budget. Hard
+        // mime/extension restrictions live in the ffmpeg step — if the bytes aren't actually a
+        // playable container, ffmpeg will reject them with a clear error we surface as 500.
+        //
+        // Size cap: 200MB (must stay ≤ post_max_size on the server — see deploy notes).
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'video'        => 'required|file|mimetypes:video/mp4,video/quicktime,video/x-m4v|max:204800',
-            'audio'        => 'nullable|file|mimetypes:audio/mpeg,audio/mp4,audio/x-m4a,audio/aac|max:51200',
-            'thumbnail'    => 'nullable|file|image|max:10240',
+            'video'        => 'required|file|max:204800',
+            'audio'        => 'nullable|file|max:51200',
+            'thumbnail'    => 'nullable|file|max:10240',
             'template_id'  => 'nullable|string',
             'share_with'   => 'nullable|string',
         ]);
