@@ -146,11 +146,14 @@ class ClipsController extends Controller
             return ResponseHelper::sendResponse(null, 'Server is missing ffmpeg — please contact support.', false, 500);
         }
 
-        // Resolve the audio source. Three legal inputs:
-        //   1. Uploaded file under `audio` (preferred)
-        //   2. Path string under `audio` that lives in `storage/app/public/...`
-        //   3. Nothing → fall back to the silent placeholder
-        $audioPath = public_path('audios/empty.mp3');
+        // Detect whether the user actually picked a separate audio track. Without this check
+        // we were forcing every video through a 2-input ffmpeg `amix` even when there was no
+        // user audio, which (combined with `-shortest` + `duration=first`) silently truncated
+        // the output to ~2 seconds (the length of empty.mp3) AND replaced the original audio.
+        $hasUserAudio = $request->hasFile('audio')
+            || (!empty($request->audio) && is_string($request->audio) && Storage::exists('public/' . $request->audio));
+
+        $audioPath = null;
         if ($request->hasFile('audio')) {
             $audioPath = $request->file('audio')->getPathname();
         } elseif (!empty($request->audio) && is_string($request->audio) && Storage::exists('public/' . $request->audio)) {
@@ -169,20 +172,33 @@ class ClipsController extends Controller
         $videoVolume = max(0.0, min(2.0, (float) ($request->video_volume ?? 0.8)));
         $audioVolume = max(0.0, min(2.0, (float) ($request->audio_volume ?? 0.5)));
 
-        // Escape every interpolated path/value so spaces, quotes, or shell metacharacters in
-        // uploaded filenames can't break the command (or worse, be exploited).
-        $command = sprintf(
-            '%s -y -i %s -i %s -filter_complex %s -map 0:v -map "[a]" -shortest %s 2>&1',
-            escapeshellcmd($ffmpegBin),
-            escapeshellarg($videoLocal),
-            escapeshellarg($audioPath),
-            escapeshellarg(sprintf(
-                '[1:a]volume=%.3f[a1];[0:a]volume=%.3f[a2];[a1][a2]amix=inputs=2:duration=first[a]',
-                $audioVolume,
-                $videoVolume
-            )),
-            escapeshellarg($outputPath)
-        );
+        if ($hasUserAudio) {
+            // Mix the user's audio over the video's audio track.
+            // `duration=longest` (NOT `first`) + dropping `-shortest` so the output keeps the
+            // full length of whichever is longer — never truncates to the shorter input.
+            $command = sprintf(
+                '%s -y -i %s -i %s -filter_complex %s -map 0:v -map "[a]" %s 2>&1',
+                escapeshellcmd($ffmpegBin),
+                escapeshellarg($videoLocal),
+                escapeshellarg($audioPath),
+                escapeshellarg(sprintf(
+                    '[1:a]volume=%.3f[a1];[0:a]volume=%.3f[a2];[a1][a2]amix=inputs=2:duration=longest[a]',
+                    $audioVolume,
+                    $videoVolume
+                )),
+                escapeshellarg($outputPath)
+            );
+        } else {
+            // No user audio — just remux the video as-is. Stream copy means no re-encode
+            // (fast, lossless) and preserves the video's original audio track. If the video
+            // has no audio track at all, `-c copy` happily produces a silent-but-valid mp4.
+            $command = sprintf(
+                '%s -y -i %s -c copy %s 2>&1',
+                escapeshellcmd($ffmpegBin),
+                escapeshellarg($videoLocal),
+                escapeshellarg($outputPath)
+            );
+        }
 
         exec($command, $output, $return_var);
 
