@@ -55,12 +55,52 @@ class ClipsController extends Controller
 
     public function store_clips(Request $request)
     {
-        // Loose validation by design — `mimetypes` is detected from file CONTENT, not the
-        // Content-Type header, and React Native's multipart uploads frequently mis-report
-        // (.m4a coming through as audio/mp4, .mp4 sometimes as application/octet-stream, etc.).
-        // We just check the field is a real uploaded file and within our size budget. Hard
-        // mime/extension restrictions live in the ffmpeg step — if the bytes aren't actually a
-        // playable container, ffmpeg will reject them with a clear error we surface as 500.
+        // Pre-validation: check the raw PHP upload error first so we can give a precise
+        // message instead of the generic "The video failed to upload." that Laravel's
+        // `file` rule emits whenever UploadedFile::isValid() is false. Without this,
+        // a video that exceeded `upload_max_filesize` looks identical to a missing file
+        // or a half-transferred upload — undebuggable from the client side.
+        foreach (['video', 'audio', 'thumbnail'] as $field) {
+            if (!$request->hasFile($field)) continue;
+            $file = $request->file($field);
+            $err  = $file->getError();
+            if ($err === UPLOAD_ERR_OK) continue;
+
+            $reason = match ($err) {
+                UPLOAD_ERR_INI_SIZE   => "File too large for the server (exceeds upload_max_filesize). Raise PHP limits or use a smaller file.",
+                UPLOAD_ERR_FORM_SIZE  => "File too large (exceeds form MAX_FILE_SIZE).",
+                UPLOAD_ERR_PARTIAL    => "Upload was interrupted — only part of the file arrived. Retry on a stable connection.",
+                UPLOAD_ERR_NO_FILE    => "No file was uploaded for `{$field}`.",
+                UPLOAD_ERR_NO_TMP_DIR => "Server temp folder missing — contact backend.",
+                UPLOAD_ERR_CANT_WRITE => "Server couldn't write the uploaded file to disk.",
+                UPLOAD_ERR_EXTENSION  => "Upload blocked by a PHP extension.",
+                default               => "Unknown upload error (code {$err}).",
+            };
+
+            \Illuminate\Support\Facades\Log::warning('store_clips upload error', [
+                'user_id' => Auth::id(),
+                'field'   => $field,
+                'php_err' => $err,
+                'size'    => $file->getSize(),
+                'limits'  => [
+                    'upload_max_filesize' => ini_get('upload_max_filesize'),
+                    'post_max_size'       => ini_get('post_max_size'),
+                ],
+            ]);
+
+            return ResponseHelper::sendResponse(
+                ['field' => $field, 'php_error' => $err],
+                "Could not upload `{$field}`: {$reason}",
+                false,
+                422
+            );
+        }
+
+        // Loose validation — `mimetypes` is detected from file CONTENT, not the Content-Type
+        // header, and React Native multipart uploads frequently mis-report (.m4a coming as
+        // audio/mp4, .mp4 sometimes as application/octet-stream, etc.). We just check the
+        // field is a real uploaded file and within our size budget. Hard mime restrictions
+        // live in the ffmpeg step — bad bytes there get a clear 500 with stderr in the log.
         //
         // Size cap: 200MB (must stay ≤ post_max_size on the server — see deploy notes).
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
