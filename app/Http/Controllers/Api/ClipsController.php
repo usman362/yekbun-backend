@@ -72,9 +72,28 @@ class ClipsController extends Controller
         ]);
 
         if ($validator->fails()) {
+            $errors = $validator->errors();
+
+            // Log the failing payload so we can debug "why did the mobile get a 422" without
+            // asking the user to reproduce it. Only the FIRST error is included in `message`
+            // so any mobile UI that only renders `response.message` still shows something useful
+            // (e.g. "The video field is required." instead of a generic "Validation error.").
+            \Illuminate\Support\Facades\Log::warning('store_clips validation failed', [
+                'user_id'      => Auth::id(),
+                'errors'       => $errors->toArray(),
+                'has_video'    => $request->hasFile('video'),
+                'has_audio'    => $request->hasFile('audio'),
+                'has_thumb'    => $request->hasFile('thumbnail'),
+                'video_size'   => $request->hasFile('video') ? $request->file('video')->getSize() : null,
+                'video_err'    => $request->hasFile('video') ? $request->file('video')->getError() : null,
+                'audio_size'   => $request->hasFile('audio') ? $request->file('audio')->getSize() : null,
+                'all_keys'     => array_keys($request->all()),
+            ]);
+
+            $firstError = $errors->first() ?: 'Validation failed.';
             return ResponseHelper::sendResponse(
-                $validator->errors(),
-                'Validation error.',
+                ['errors' => $errors->toArray()],
+                $firstError,
                 false,
                 422
             );
