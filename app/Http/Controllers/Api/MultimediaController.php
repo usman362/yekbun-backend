@@ -568,6 +568,36 @@ class MultimediaController extends Controller
         }
 
         $media = $query->limit($perPage)->get();
+
+        // ── Thumbnail enrichment ───────────────────────────────────────────────
+        // Media rows historically never stored thumbnails — they live on the source row
+        // (Clips.thumbnail, VideoClip.thumbnail, Feed.thumbnail, etc.). For the mobile
+        // video grid we resolve those once per request: batch the source IDs by type,
+        // pluck thumbnails in one query per source table, then attach to each Media row.
+        // Doing this here means EVERY existing row gets a thumbnail without any data
+        // migration — and future writes only need to populate `Media.thumbnail` directly
+        // for it to take precedence.
+        $byType = $media->groupBy('type');
+
+        // Per-source lookup maps: media_id → thumbnail URL
+        $lookups = [
+            'clips'  => $byType->get('clips')  ? Clips::whereIn('_id', $byType->get('clips')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
+            'videos' => $byType->get('videos') ? VideoClip::whereIn('_id', $byType->get('videos')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
+            'feeds'  => $byType->get('feeds')  ? Feed::whereIn('_id', $byType->get('feeds')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
+        ];
+
+        $media->transform(function ($m) use ($lookups) {
+            // Honour an already-stored thumbnail first (future-proof: when we start writing
+            // thumbnails directly to the Media row this fast-path takes over with no code
+            // change here). Otherwise look it up by type + media_id and resolve to a full URL.
+            $raw = $m->thumbnail ?? null;
+            if (empty($raw)) {
+                $raw = $lookups[$m->type][$m->media_id] ?? null;
+            }
+            $m->thumbnail = $raw ? Helpers::mediaUrl($raw) : null;
+            return $m;
+        });
+
         $nextCursor = optional($media->last())->_id;
 
         return ResponseHelper::sendResponse([
