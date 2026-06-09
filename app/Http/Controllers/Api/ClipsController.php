@@ -12,6 +12,7 @@ use App\Models\ClipsLikes;
 use App\Models\ClipTemplates;
 use App\Models\Media;
 use App\Models\NotificationCenter;
+use MongoDB\BSON\ObjectId;
 use App\Models\User;
 use App\Models\UserVideo;
 use App\Services\BunnyCDNService;
@@ -305,15 +306,26 @@ class ClipsController extends Controller
 
     public function view_clips(Request $request)
     {
-        if (!$request->clip_id) return ResponseHelper::sendResponse([], 'Clip Id is Required', false, 401);
+        $requestId = $this->requestClipIdentifier($request);
+        if (!$requestId) {
+            return ResponseHelper::sendResponse([], 'Clip Id is Required', false, 401);
+        }
 
-        $clipId = (string) $request->clip_id;
-        $clip = Clips::find($clipId);
+        $clip = $this->resolveClipFromId($requestId);
         if (!$clip) {
             return ResponseHelper::sendResponse([], 'Clip Not Found', false, 404);
         }
 
-        $existingView = ClipsViews::where('user_id', Auth::id())->where('clip_id', $clipId)->first();
+        $clipId = (string) $clip->_id;
+
+        $existingView = ClipsViews::where('user_id', Auth::id())
+            ->where(function ($q) use ($clipId, $requestId) {
+                $q->where('clip_id', $clipId);
+                if ($requestId !== $clipId) {
+                    $q->orWhere('clip_id', $requestId);
+                }
+            })
+            ->first();
         if (!$existingView) {
             ClipsViews::create(['user_id' => Auth::id(), 'clip_id' => $clipId]);
         }
@@ -336,16 +348,31 @@ class ClipsController extends Controller
 
     public function like_clips(Request $request)
     {
-        if (!$request->clip_id) return ResponseHelper::sendResponse([], 'Clip Id is Required', false, 401);
+        $requestId = $this->requestClipIdentifier($request);
+        if (!$requestId) {
+            return ResponseHelper::sendResponse([], 'Clip Id is Required', false, 401);
+        }
 
-        $clipId = (string) $request->clip_id;
-        $clip = Clips::find($clipId);
+        $clip = $this->resolveClipFromId($requestId);
         if (!$clip) {
             return ResponseHelper::sendResponse([], 'Clip Not Found', false, 404);
         }
 
+        $clipId = (string) $clip->_id;
         $userId = Auth::id();
-        $existingLike = ClipsLikes::where('user_id', $userId)->where('clip_id', $clipId)->first();
+        $existingLike = ClipsLikes::where('user_id', $userId)
+            ->where(function ($q) use ($clipId, $requestId) {
+                $q->where('clip_id', $clipId);
+                if ($requestId !== $clipId) {
+                    $q->orWhere('clip_id', $requestId);
+                }
+            })
+            ->first();
+
+        if ($existingLike && (string) $existingLike->clip_id !== $clipId) {
+            $existingLike->clip_id = $clipId;
+            $existingLike->save();
+        }
 
         if (!$existingLike) {
             ClipsLikes::create(['user_id' => $userId, 'clip_id' => $clipId, 'emoji' => $request->emoji ?? null]);
@@ -393,5 +420,65 @@ class ClipsController extends Controller
         $clip->save();
 
         return $count;
+    }
+
+    /** Accept clip_id (legacy) or id (mobile clipLike). */
+    private function requestClipIdentifier(Request $request): ?string
+    {
+        $id = $request->input('clip_id') ?? $request->input('id') ?? $request->input('media_id');
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        return (string) $id;
+    }
+
+    /**
+     * Resolve clips._id from what the client sent.
+     * Mobile video grid often sends Media._id (allMediaRecord) instead of clips._id.
+     */
+    private function resolveClipFromId(string $id): ?Clips
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return null;
+        }
+
+        $clip = Clips::find($id);
+        if ($clip) {
+            return $clip;
+        }
+
+        $media = Media::find($id);
+        if (!$media && strlen($id) === 24 && ctype_xdigit($id)) {
+            try {
+                $media = Media::where('_id', new ObjectId($id))->first();
+            } catch (\Throwable) {
+                $media = null;
+            }
+        }
+        if ($media && ($media->type ?? '') === 'clips' && !empty($media->media_id)) {
+            $clip = Clips::find((string) $media->media_id);
+            if (!$clip && strlen((string) $media->media_id) === 24) {
+                try {
+                    $clip = Clips::where('_id', new ObjectId((string) $media->media_id))->first();
+                } catch (\Throwable) {
+                    $clip = null;
+                }
+            }
+            if ($clip) {
+                return $clip;
+            }
+        }
+
+        if (strlen($id) === 24 && ctype_xdigit($id)) {
+            try {
+                return Clips::where('_id', new ObjectId($id))->first();
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return null;
     }
 }
