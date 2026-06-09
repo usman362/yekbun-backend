@@ -17,6 +17,8 @@ use App\Models\UserImage;
 use App\Models\UserVideo;
 use App\Models\FeedComments;
 use App\Models\FeedLikes;
+use App\Models\FeedViews;
+use App\Models\FeedShare;
 use App\Models\UserFriends;
 use App\Models\History;
 use App\Models\Media;
@@ -728,32 +730,25 @@ class FeedsController extends Controller
 
         $likeCount = FeedLikes::where('feed_id', $id)->where('feed_type', $request->feed_type)->count();
 
-        $feed = Feed::find($id) ?? History::find($id) ?? AIVideo::find($id);
-        if ($feed) {
-            $feed->comments_count = $feed->comments->count();
-            $feed->voice_comments_count = $feed->voice_comments->count();
-            $feed->likes_count = $feed->likes->count();
-            $feed->views_count = $feed->views->count();
-            $feed->shares_count = $feed->shares->count();
-            $feed->save();
-        }
+        $feed = $this->resolveFeedByType($id, $request->feed_type);
+        $counts = $this->syncFeedEngagementCounts($feed, (string) $id, $request->feed_type);
 
         if ($feed && $request->feed_type !== 'admin_feeds') {
             Helpers::userMedia(
                 $feed->_id,
                 'exists',
-                $feed->comments_count,
-                $feed->voice_comments_count,
-                $feed->likes_count,
-                $feed->views_count,
-                $feed->user_id,
-                $feed->description,
+                $counts['comments_count'],
+                $counts['voice_comments_count'],
+                $counts['likes_count'],
+                $counts['views_count'],
+                $feed->user_id ?? null,
+                $feed->description ?? $feed->title ?? null,
                 null,
                 $request->feed_type
             );
         }
 
-        return ResponseHelper::sendResponse(['liked' => $liked, 'like_count' => $likeCount], 'Like has been successfully Saved');
+        return ResponseHelper::sendResponse(array_merge(['liked' => $liked, 'like_count' => $likeCount], $counts), 'Like has been successfully Saved');
     }
 
     public function getfeedLike(Request $request, $id)
@@ -775,41 +770,109 @@ class FeedsController extends Controller
         $like = FeedLikes::where('user_id', $user->id)->where('feed_id', $id)->where('feed_type', $request->feed_type)->first();
         if ($like) {
             $like->delete();
+            $liked = false;
         } else {
             FeedLikes::create(['user_id' => $user->id, 'feed_id' => $id, 'feed_type' => $request->feed_type]);
+            $liked = true;
         }
 
-        $feed = Feed::find($id) ?? History::find($id) ?? AIVideo::find($id);
-        if ($feed) {
-            $feed->comments_count = $feed->comments->count();
-            $feed->voice_comments_count = $feed->voice_comments->count();
-            $feed->likes_count = $feed->likes->count();
-            $feed->views_count = $feed->views->count();
-            $feed->shares_count = $feed->shares->count();
-            $feed->save();
-        }
+        $likeCount = FeedLikes::where('feed_id', $id)->where('feed_type', $request->feed_type)->count();
+
+        $feed = $this->resolveFeedByType($id, $request->feed_type);
+        $counts = $this->syncFeedEngagementCounts($feed, $id, $request->feed_type);
 
         if ($feed && $request->feed_type !== 'admin_feeds') {
             Helpers::userMedia(
                 $feed->_id,
                 'exists',
-                $feed->comments_count,
-                $feed->voice_comments_count,
-                $feed->likes_count,
-                $feed->views_count,
-                $feed->user_id,
-                $feed->description,
+                $counts['comments_count'],
+                $counts['voice_comments_count'],
+                $counts['likes_count'],
+                $counts['views_count'],
+                $feed->user_id ?? null,
+                $feed->description ?? $feed->title ?? null,
                 null,
                 $request->feed_type
             );
         }
 
-        return ResponseHelper::sendResponse([
-            'comments_count' => $feed->comments->count(),
-            'voice_comments_count' => $feed->voice_comments->count(),
-            'likes_count' => $feed->likes->count(),
-            'views_count' => $feed->views->count(),
-            'shares_count' => $feed->shares->count(),
-        ], 'Like has been successfully Saved');
+        return ResponseHelper::sendResponse(array_merge($counts, [
+            'liked' => $liked,
+            'like_count' => $likeCount,
+        ]), 'Like has been successfully Saved');
+    }
+
+    /**
+     * Resolve the backing document for a feed id (same rules as getComments / storeComments).
+     */
+    private function resolveFeedByType(string $id, string $feedType)
+    {
+        if ($feedType === 'admin_feeds') {
+            return PopFeeds::find($id);
+        }
+        if ($feedType === 'history') {
+            return History::find($id);
+        }
+        if ($feedType === 'ai_videos') {
+            return AIVideo::find($id);
+        }
+
+        return Feed::find($id);
+    }
+
+    /**
+     * Refresh cached counters on the feed document when present; otherwise derive from engagement tables.
+     *
+     * @return array{comments_count:int,voice_comments_count:int,likes_count:int,views_count:int,shares_count:int}
+     */
+    private function syncFeedEngagementCounts($feed, string $feedId, string $feedType): array
+    {
+        if (!$feed) {
+            return $this->engagementCountsFromQueries($feedId, $feedType);
+        }
+
+        $feed->comments_count = method_exists($feed, 'comments')
+            ? $feed->comments()->count()
+            : FeedComments::where('feed_id', $feedId)->where('feed_type', $feedType)->count();
+
+        $feed->voice_comments_count = method_exists($feed, 'voice_comments')
+            ? $feed->voice_comments()->count()
+            : FeedComments::where('feed_id', $feedId)->where('feed_type', $feedType)->where('comment_type', 'audio')->count();
+
+        $feed->likes_count = method_exists($feed, 'likes')
+            ? $feed->likes()->count()
+            : FeedLikes::where('feed_id', $feedId)->where('feed_type', $feedType)->count();
+
+        $feed->views_count = method_exists($feed, 'views')
+            ? $feed->views()->count()
+            : FeedViews::where('feed_id', $feedId)->count();
+
+        $feed->shares_count = method_exists($feed, 'shares')
+            ? $feed->shares()->count()
+            : FeedShare::where('feed_id', $feedId)->count();
+
+        $feed->save();
+
+        return [
+            'comments_count' => (int) $feed->comments_count,
+            'voice_comments_count' => (int) $feed->voice_comments_count,
+            'likes_count' => (int) $feed->likes_count,
+            'views_count' => (int) $feed->views_count,
+            'shares_count' => (int) $feed->shares_count,
+        ];
+    }
+
+    /**
+     * @return array{comments_count:int,voice_comments_count:int,likes_count:int,views_count:int,shares_count:int}
+     */
+    private function engagementCountsFromQueries(string $feedId, string $feedType): array
+    {
+        return [
+            'comments_count' => FeedComments::where('feed_id', $feedId)->where('feed_type', $feedType)->count(),
+            'voice_comments_count' => FeedComments::where('feed_id', $feedId)->where('feed_type', $feedType)->where('comment_type', 'audio')->count(),
+            'likes_count' => FeedLikes::where('feed_id', $feedId)->where('feed_type', $feedType)->count(),
+            'views_count' => FeedViews::where('feed_id', $feedId)->count(),
+            'shares_count' => FeedShare::where('feed_id', $feedId)->count(),
+        ];
     }
 }

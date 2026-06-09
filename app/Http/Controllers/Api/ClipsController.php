@@ -307,23 +307,28 @@ class ClipsController extends Controller
     {
         if (!$request->clip_id) return ResponseHelper::sendResponse([], 'Clip Id is Required', false, 401);
 
-        $existingView = ClipsViews::where('user_id', Auth::id())->where('clip_id', $request->clip_id)->first();
-        if (!$existingView) {
-            ClipsViews::create(['user_id' => Auth::id(), 'clip_id' => $request->clip_id]);
+        $clipId = (string) $request->clip_id;
+        $clip = Clips::find($clipId);
+        if (!$clip) {
+            return ResponseHelper::sendResponse([], 'Clip Not Found', false, 404);
         }
-        $clip = Clips::find($request->clip_id);
-        $clip->views_count = $clip->views->count();
-        $clip->save();
+
+        $existingView = ClipsViews::where('user_id', Auth::id())->where('clip_id', $clipId)->first();
+        if (!$existingView) {
+            ClipsViews::create(['user_id' => Auth::id(), 'clip_id' => $clipId]);
+        }
+
+        $viewsCount = $this->syncClipViewsCount($clip, $clipId);
         Helpers::userMedia(
             $clip->_id,
-            $clip->clip,
-            $clip->comments_count,
-            $clip->voice_comments_count,
-            $clip->likes_count,
-            $clip->views_count,
-            $clip->user_id,
-            $clip->text,
-            $clip->text_properties,
+            $clip->clip ?? null,
+            $clip->comments_count ?? 0,
+            $clip->voice_comments_count ?? 0,
+            $clip->likes_count ?? 0,
+            $viewsCount,
+            $clip->user_id ?? null,
+            $clip->text ?? null,
+            $clip->text_properties ?? null,
             'clips'
         );
         return ResponseHelper::sendResponse([], 'Clip Viewed Successfully');
@@ -333,41 +338,60 @@ class ClipsController extends Controller
     {
         if (!$request->clip_id) return ResponseHelper::sendResponse([], 'Clip Id is Required', false, 401);
 
-        $existingLike = ClipsLikes::where('user_id', Auth::id())->where('clip_id', $request->clip_id)->first();
+        $clipId = (string) $request->clip_id;
+        $clip = Clips::find($clipId);
+        if (!$clip) {
+            return ResponseHelper::sendResponse([], 'Clip Not Found', false, 404);
+        }
+
+        $userId = Auth::id();
+        $existingLike = ClipsLikes::where('user_id', $userId)->where('clip_id', $clipId)->first();
 
         if (!$existingLike) {
-            ClipsLikes::create(['user_id' => Auth::id(), 'clip_id' => $request->clip_id, 'emoji' => $request->emoji ?? null]);
-            $clip = Clips::find($request->clip_id);
-            $clip->likes_count = $clip->likes->count();
-            $clip->save();
-            return ResponseHelper::sendResponse($clip, 'Clip Liked Successfully');
+            ClipsLikes::create(['user_id' => $userId, 'clip_id' => $clipId, 'emoji' => $request->emoji ?? null]);
+            $this->syncClipLikesCount($clip, $clipId);
+            return ResponseHelper::sendResponse($clip->fresh(), 'Clip Liked Successfully');
         }
 
         if ($request->filled('emoji')) {
             $existingLike->emoji = $request->emoji;
             $existingLike->save();
-            $clip = Clips::find($request->clip_id);
-            $clip->likes_count = $clip->likes->count();
-            $clip->save();
-            return ResponseHelper::sendResponse($clip, 'Like Updated Successfully');
+            $this->syncClipLikesCount($clip, $clipId);
+            return ResponseHelper::sendResponse($clip->fresh(), 'Like Updated Successfully');
         }
 
         $existingLike->delete();
-        $clip = Clips::find($request->clip_id);
-        $clip->likes_count = $clip->likes->count();
-        $clip->save();
+        $likesCount = $this->syncClipLikesCount($clip, $clipId);
         Helpers::userMedia(
             $clip->_id,
-            $clip->clip,
-            $clip->comments_count,
-            $clip->voice_comments_count,
-            $clip->likes_count,
-            $clip->views_count,
-            $clip->user_id,
-            $clip->text,
-            $clip->text_properties,
+            $clip->clip ?? null,
+            $clip->comments_count ?? 0,
+            $clip->voice_comments_count ?? 0,
+            $likesCount,
+            $clip->views_count ?? 0,
+            $clip->user_id ?? null,
+            $clip->text ?? null,
+            $clip->text_properties ?? null,
             'clips'
         );
         return ResponseHelper::sendResponse([], 'Clip Unliked Successfully');
+    }
+
+    private function syncClipLikesCount(Clips $clip, string $clipId): int
+    {
+        $count = ClipsLikes::where('clip_id', $clipId)->count();
+        $clip->likes_count = $count;
+        $clip->save();
+
+        return $count;
+    }
+
+    private function syncClipViewsCount(Clips $clip, string $clipId): int
+    {
+        $count = ClipsViews::where('clip_id', $clipId)->count();
+        $clip->views_count = $count;
+        $clip->save();
+
+        return $count;
     }
 }
