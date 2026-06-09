@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 // ─── Controller Imports ───
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\CmsApiController;
 use App\Http\Controllers\Api\OtpLoginController;
 use App\Http\Controllers\Api\Admin\CmsController as AdminCmsController;
@@ -638,6 +639,13 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('wallet/payouts', [WalletApiController::class, 'payouts']);
     Route::get('wallet/transactions', [WalletApiController::class, 'transactions']);
     Route::post('wallet/deposit', [WalletApiController::class, 'deposit']);
+
+    // ── Cart checkout / orders ──
+    // Single entry point that re-prices the cart, applies the chosen payment method
+    // (wallet balance debit, or PENDING for store / bank / paypal) and records per-line
+    // transactions. Mobile + web use the same endpoint.
+    Route::post('checkout',  [CheckoutController::class, 'checkout']);
+    Route::get('orders',     [CheckoutController::class, 'myOrders']);
     Route::post('wallet/activate', [WalletApiController::class, 'activateWallet']);
     Route::post('wallet/update-status', [WalletApiController::class, 'updateWalletStatus']);
 
