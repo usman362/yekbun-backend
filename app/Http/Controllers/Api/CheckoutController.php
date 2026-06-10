@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
+use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
-use App\Models\ZercashProduct;
+use App\Traits\BuildsZercashCartLines;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,20 +40,14 @@ use Illuminate\Support\Facades\Validator;
  */
 class CheckoutController extends Controller
 {
-    /** Categories whose products are paid in ZER (wallet balance debit). */
-    private const ZER_PRICED_CATEGORIES = ['upgrade_music_playlist', 'streaming_minutes'];
-
-    /** Categories whose products are paid in fiat and CREDIT zer to the wallet on completion. */
-    private const ZER_PACKAGE_CATEGORIES = ['standard_zer_package', 'business_zer_package'];
-
-    /** Categories whose products grant a subscription tier (paid in fiat). */
-    private const PLAN_CATEGORIES = ['choose_your_plan'];
+    use BuildsZercashCartLines;
 
     public function checkout(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'items'               => 'required|array|min:1',
-            'items.*.product_id'  => 'required|string',
+            // `items` is optional: omit it to check out the user's saved server cart.
+            'items'               => 'nullable|array|min:1',
+            'items.*.product_id'  => 'required_with:items|string',
             'items.*.qty'         => 'nullable|integer|min:1|max:99',
             'payment_method'      => 'required|in:balance,store,bank,paypal',
         ]);
@@ -71,61 +66,35 @@ class CheckoutController extends Controller
             return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
         }
 
-        // ── 1. Re-price every line from the DB ───────────────────────────────
-        $lines = [];
-        $totalZer  = 0.0;
-        $totalFiat = 0.0;
-        $cashback  = 0.0;
-
-        foreach ($request->input('items') as $row) {
-            $product = ZercashProduct::find($row['product_id']);
-            if (!$product || ($product->status ?? 'active') !== 'active') {
-                return ResponseHelper::sendResponse(
-                    null,
-                    "Product {$row['product_id']} is unavailable.",
-                    false,
-                    410
-                );
+        // ── 1. Resolve the line source: explicit `items`, else the saved server cart ──
+        $fromCart = !$request->filled('items');
+        if ($fromCart) {
+            $items = Cart::where('user_id', (string) $user->_id)
+                ->get()
+                ->map(fn ($c) => ['product_id' => $c->product_id, 'qty' => $c->qty])
+                ->all();
+            if (empty($items)) {
+                return ResponseHelper::sendResponse(null, 'Your cart is empty.', false, 422);
             }
-            $qty = max(1, (int) ($row['qty'] ?? 1));
-
-            $zerCost  = ((float) ($product->zer_amount  ?? 0));
-            $fiatCost = ((float) ($product->fiat_amount ?? 0));
-            $cashPct  = ((float) ($product->cashback_percent ?? 0));
-
-            // Categorise so the post-payment side effects (upgrade plan, credit zer, etc.)
-            // know how to react. The category string lives on the product row, set by admin.
-            $category = $product->category ?? '';
-            $kind = in_array($category, self::PLAN_CATEGORIES,         true) ? 'plan'
-                  : (in_array($category, self::ZER_PACKAGE_CATEGORIES, true) ? 'zer_package'
-                  : (in_array($category, self::ZER_PRICED_CATEGORIES,  true) ? 'zer_priced'
-                  : 'other'));
-
-            $lineZerTotal  = $zerCost  * $qty;
-            $lineFiatTotal = $fiatCost * $qty;
-            // Cashback is computed off the ZER amount for zer-priced items and off the
-            // fiat amount for fiat-priced items, normalised to ZER.
-            $lineCashback = round(($kind === 'zer_priced' ? $lineZerTotal : $lineFiatTotal) * $cashPct / 100, 2);
-
-            $totalZer  += $lineZerTotal;
-            $totalFiat += $lineFiatTotal;
-            $cashback  += $lineCashback;
-
-            $lines[] = [
-                'product_id'   => (string) $product->_id,
-                'name'         => $product->name,
-                'category'     => $category,
-                'kind'         => $kind,
-                'qty'          => $qty,
-                'zer_amount'   => $zerCost,
-                'fiat_amount'  => $fiatCost,
-                'currency'     => $product->fiat_currency ?? 'EUR',
-                'cashback_pct' => $cashPct,
-                'cashback_zer' => $lineCashback,
-                'line_zer'     => $lineZerTotal,
-                'line_fiat'    => $lineFiatTotal,
-            ];
+        } else {
+            $items = $request->input('items');
         }
+
+        // ── 2. Re-price every line from the live product table (shared with the cart) ──
+        $priced = $this->buildCartLines($items);
+        if ($priced['unavailable'] !== null) {
+            return ResponseHelper::sendResponse(
+                null,
+                "Product {$priced['unavailable']} is unavailable.",
+                false,
+                410
+            );
+        }
+
+        $lines     = $priced['lines'];
+        $totalZer  = $priced['total_zer'];
+        $totalFiat = $priced['total_fiat'];
+        $cashback  = $priced['cashback'];
 
         // ── 2. Validate payment method against totals ────────────────────────
         $method = $request->input('payment_method');
@@ -211,6 +180,11 @@ class CheckoutController extends Controller
             }
         }
 
+        // The order now owns a snapshot of these lines, so empty the saved cart it came from.
+        if ($fromCart) {
+            Cart::where('user_id', (string) $user->_id)->delete();
+        }
+
         // Refresh the wallet snapshot we return to the client so the mobile UI can update
         // balance + cashback without re-fetching /wallet/dashboard.
         $wallet = $wallet ? $wallet->refresh() : null;
@@ -254,6 +228,22 @@ class CheckoutController extends Controller
             'last_page'   => $orders->lastPage(),
             'total'       => $orders->total(),
         ], 'Orders fetched.');
+    }
+
+    /**
+     * GET /api/orders/{id} — a single order belonging to the caller.
+     */
+    public function orderDetail($id)
+    {
+        $order = Order::where('_id', $id)
+            ->where('user_id', (string) Auth::id())
+            ->first();
+
+        if (!$order) {
+            return ResponseHelper::sendResponse(null, 'Order not found.', false, 404);
+        }
+
+        return ResponseHelper::sendResponse($order, 'Order fetched.');
     }
 
     /* ─────────────────────────────────────────────────────────────────────

@@ -39,7 +39,6 @@ use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AnimationEmojiController;
 use App\Http\Controllers\Api\ZercashApiController;
 use App\Http\Controllers\Api\CartApiController;
-use App\Http\Controllers\Api\CheckoutApiController;
 use App\Http\Controllers\Api\WalletApiController;
 use App\Http\Controllers\Api\KycApiController;
 use App\Http\Controllers\Api\PurchaseVerificationController;
@@ -599,12 +598,6 @@ Route::middleware('jwt.custom')->group(function () {
     Route::post('post-transaction', [PaymentController::class, 'storeTransaction']);
     Route::get('get-invoice/{tId}', [PaymentController::class, 'getInvoice']);
 
-    // Cart (Old)
-    Route::get('add-to-cart', [PaymentController::class, 'addtoCart']);
-    Route::post('add-to-cart', [PaymentController::class, 'storeaddtoCart']);
-    Route::delete('delete-cart/{id}', [PaymentController::class, 'deleteCart']);
-    Route::post('cart-payment', [PaymentController::class, 'cartPayment']);
-
     // ─── Zercash (Authenticated) ───
     Route::get('zercash/wallet', [ZercashApiController::class, 'wallet']);
     Route::get('zercash/wallet/transactions', [ZercashApiController::class, 'walletTransactions']);
@@ -617,11 +610,8 @@ Route::middleware('jwt.custom')->group(function () {
     Route::delete('cart/items/{id}', [CartApiController::class, 'destroy']);
     Route::post('cart/clear', [CartApiController::class, 'clear']);
 
-    // ─── Checkout & Orders ───
-    Route::post('checkout/prepare', [CheckoutApiController::class, 'prepare']);
-    Route::post('checkout/pay', [CheckoutApiController::class, 'pay']);
-    Route::get('orders', [CheckoutApiController::class, 'orders']);
-    Route::get('orders/{id}', [CheckoutApiController::class, 'orderDetail']);
+    // ─── Order detail ── (orders list + checkout live in the Cart-checkout block below) ──
+    Route::get('orders/{id}', [CheckoutController::class, 'orderDetail']);
 
     // ─── Wallet Management ───
     Route::post('wallet/create-pin', [WalletApiController::class, 'createWallet']);
