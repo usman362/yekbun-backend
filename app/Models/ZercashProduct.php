@@ -17,7 +17,6 @@ class ZercashProduct extends Model
     protected $casts = [
         'zer_amount'        => 'float',
         'fiat_amount'       => 'float',
-        'usd_amount'        => 'float',
         'cashback_percent'  => 'float',
         'songs_count'       => 'integer',
         'features'          => 'array',

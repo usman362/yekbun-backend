@@ -38,11 +38,11 @@ class ZercashApiController extends Controller
      * Normalise a product to a STABLE shape for the mobile/public client.
      *
      * MongoDB is schemaless, so a raw model only serialises the fields that physically
-     * exist on that document. Older seeded rows were saved without `fiat_amount` /
-     * `usd_amount`, so those keys silently vanished from the response for some products
-     * and not others — the mobile app then saw "missing price". This forces every product
-     * to carry the full set of price/meta fields (defaulting to 0 / null), so the client
-     * can rely on a consistent contract regardless of how each row was created.
+     * exist on that document. Older seeded rows were saved without `fiat_amount`, so that
+     * key silently vanished from the response for some products and not others — the mobile
+     * app then saw "missing price". This forces every product to carry the full set of
+     * price/meta fields (defaulting to 0 / null), so the client can rely on a consistent
+     * contract regardless of how each row was created.
      */
     private function transformProduct(ZercashProduct $p): array
     {
@@ -55,7 +55,6 @@ class ZercashApiController extends Controller
             'badge'            => $p->badge ?? '',
             'zer_amount'       => (float) ($p->zer_amount ?? 0),
             'fiat_amount'      => (float) ($p->fiat_amount ?? 0),
-            'usd_amount'       => (float) ($p->usd_amount ?? 0),
             'fiat_currency'    => $p->fiat_currency ?? 'EUR',
             'cashback_percent' => (float) ($p->cashback_percent ?? 0),
             'songs_count'      => (int) ($p->songs_count ?? 0),
