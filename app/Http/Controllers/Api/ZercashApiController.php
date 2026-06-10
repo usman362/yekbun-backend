@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\Helpers;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
@@ -33,13 +34,48 @@ class ZercashApiController extends Controller
      *  Products + plans + categories
      * ──────────────────────────────────────────────────────────────────── */
 
+    /**
+     * Normalise a product to a STABLE shape for the mobile/public client.
+     *
+     * MongoDB is schemaless, so a raw model only serialises the fields that physically
+     * exist on that document. Older seeded rows were saved without `fiat_amount` /
+     * `usd_amount`, so those keys silently vanished from the response for some products
+     * and not others — the mobile app then saw "missing price". This forces every product
+     * to carry the full set of price/meta fields (defaulting to 0 / null), so the client
+     * can rely on a consistent contract regardless of how each row was created.
+     */
+    private function transformProduct(ZercashProduct $p): array
+    {
+        return [
+            '_id'              => (string) $p->_id,
+            'category'         => $p->category ?? '',
+            'name'             => $p->name ?? '',
+            'description'      => $p->description ?? null,
+            'image'            => Helpers::mediaUrl($p->image),
+            'badge'            => $p->badge ?? '',
+            'zer_amount'       => (float) ($p->zer_amount ?? 0),
+            'fiat_amount'      => (float) ($p->fiat_amount ?? 0),
+            'usd_amount'       => (float) ($p->usd_amount ?? 0),
+            'fiat_currency'    => $p->fiat_currency ?? 'EUR',
+            'cashback_percent' => (float) ($p->cashback_percent ?? 0),
+            'songs_count'      => (int) ($p->songs_count ?? 0),
+            'features'         => is_array($p->features) ? $p->features : [],
+            'status'           => $p->status ?? 'active',
+            'sort_order'       => (int) ($p->sort_order ?? 0),
+            'created_at'       => $p->created_at,
+            'updated_at'       => $p->updated_at,
+        ];
+    }
+
     public function products(Request $request)
     {
         $query = ZercashProduct::where('status', 'active');
         if ($request->has('category')) {
             $query->where('category', $request->category);
         }
-        $products = $query->orderBy('sort_order')->orderBy('name')->get();
+        $products = $query->orderBy('sort_order')->orderBy('name')->get()
+            ->map(fn ($p) => $this->transformProduct($p))
+            ->values();
 
         return ResponseHelper::sendResponse($products, 'Products fetched successfully.');
     }
@@ -50,7 +86,7 @@ class ZercashApiController extends Controller
         if (!$product) {
             return ResponseHelper::sendResponse([], 'Product not found.', false, 404);
         }
-        return ResponseHelper::sendResponse($product, 'Product fetched successfully.');
+        return ResponseHelper::sendResponse($this->transformProduct($product), 'Product fetched successfully.');
     }
 
     public function categories()
@@ -71,7 +107,9 @@ class ZercashApiController extends Controller
         $plans = ZercashProduct::where('category', 'choose_your_plan')
             ->where('status', 'active')
             ->orderBy('sort_order')
-            ->get();
+            ->get()
+            ->map(fn ($p) => $this->transformProduct($p))
+            ->values();
 
         return ResponseHelper::sendResponse($plans, 'Plans fetched successfully.');
     }
