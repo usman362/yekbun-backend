@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\StripeController;
 use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AnimationEmojiController;
 use App\Http\Controllers\Api\ZercashApiController;
+use App\Http\Controllers\Api\OfficialsApiController;
 use App\Http\Controllers\Api\CartApiController;
 use App\Http\Controllers\Api\WalletApiController;
 use App\Http\Controllers\Api\KycApiController;
@@ -427,6 +428,15 @@ Route::get('zercash/settings', [ZercashApiController::class, 'settings']);
 // Mobile read endpoints for the admin-managed Cashback Manager + Country matrix.
 // Only enabled / active rows are returned. Admin writes via /admin/zercash/* (auth-gated).
 Route::get('zercash/cashback-rules', [ZercashApiController::class, 'cashbackRules']);
+
+// ─── Officials / Kurdistan (Public read for the mobile app) ───
+// Admin manages these under /admin/officials/* ; the mobile app reads them here.
+Route::get('officials', [OfficialsApiController::class, 'index']);
+Route::get('officials/constitutions', [OfficialsApiController::class, 'constitutions']);
+Route::get('officials/people', [OfficialsApiController::class, 'people']);
+Route::get('officials/ministries', [OfficialsApiController::class, 'ministries']);
+Route::get('officials/civil-laws', [OfficialsApiController::class, 'civilLaws']);
+Route::get('officials/holidays', [OfficialsApiController::class, 'holidays']);
 
 // ── Public CMS reads — driven by the admin's WebApp CMS page ──
 // Pages: { landing: {key→value}, login: {…} } — for hardcoded copy on the public app.
