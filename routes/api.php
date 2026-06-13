@@ -39,6 +39,8 @@ use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AnimationEmojiController;
 use App\Http\Controllers\Api\ZercashApiController;
 use App\Http\Controllers\Api\OfficialsApiController;
+use App\Http\Controllers\Api\ComplaintApiController;
+use App\Http\Controllers\Api\Admin\ComplaintsAdminController;
 use App\Http\Controllers\Api\CartApiController;
 use App\Http\Controllers\Api\WalletApiController;
 use App\Http\Controllers\Api\KycApiController;
@@ -438,6 +440,11 @@ Route::get('officials/ministries', [OfficialsApiController::class, 'ministries']
 Route::get('officials/civil-laws', [OfficialsApiController::class, 'civilLaws']);
 Route::get('officials/holidays', [OfficialsApiController::class, 'holidays']);
 
+// ─── Kurdistan Complaints — categories (public) ───
+// The feed of approved complaints, submit, and like/comment all need auth (see the
+// authenticated group). Like/comment reuse /feeds/{id}/{likes|comments} (feed_type=complaint).
+Route::get('complaint-categories', [ComplaintApiController::class, 'categories']);
+
 // ── Public CMS reads — driven by the admin's WebApp CMS page ──
 // Pages: { landing: {key→value}, login: {…} } — for hardcoded copy on the public app.
 // Translations: per-key per-language overrides on top of the bundled i18n catalogue.
@@ -524,6 +531,15 @@ Route::middleware('jwt.custom')->group(function () {
     Route::post('feed/{id}/report', [ReportCommentsController::class, 'reportfeedstore']);
     Route::get('/reported-comments', [ReportCommentsController::class, 'getUserReportedComments']);
     Route::post('/resolve-report-violation', [ReportCommentsController::class, 'resolveReportViolation']);
+
+    // ─── Kurdistan Complaints (feed + submit + own list) ───
+    // Like/comment use the existing /feeds/{id}/likes & /feeds/{id}/comments with
+    // feed_type=complaint — no new endpoints needed for engagement.
+    Route::get('complaints', [ComplaintApiController::class, 'index']);
+    Route::post('complaints', [ComplaintApiController::class, 'store']);
+    Route::get('my-complaints', [ComplaintApiController::class, 'mine']);
+    Route::post('complaints/upload-image', [ComplaintApiController::class, 'uploadImage']);
+    Route::get('complaints/{id}', [ComplaintApiController::class, 'show']);
 
     // ─── Voting ───
     Route::resource('voting', VotingController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
@@ -844,6 +860,14 @@ Route::prefix('admin')->group(function () {
         Route::post('/officials/holidays', [OfficialsAdminController::class, 'holidaysStore']);
         Route::put('/officials/holidays/{id}', [OfficialsAdminController::class, 'holidaysUpdate']);
         Route::delete('/officials/holidays/{id}', [OfficialsAdminController::class, 'holidaysDestroy']);
+
+        // ─── Complaints (categories + moderation) ───
+        Route::get('/complaint-categories', [ComplaintsAdminController::class, 'categoriesIndex']);
+        Route::post('/complaint-categories', [ComplaintsAdminController::class, 'categoriesStore']);
+        Route::put('/complaint-categories/{id}', [ComplaintsAdminController::class, 'categoriesUpdate']);
+        Route::delete('/complaint-categories/{id}', [ComplaintsAdminController::class, 'categoriesDestroy']);
+        Route::get('/complaints', [ComplaintsAdminController::class, 'index']);
+        Route::post('/complaints/{id}/status', [ComplaintsAdminController::class, 'updateStatus']);
 
         // ─── Feeds settings (backgrounds / emojis) ───
         Route::get('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'backgrounds']);
