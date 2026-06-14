@@ -879,6 +879,8 @@ class WalletApiController extends Controller
             'cashback_amount'  => round($cashbackAmount, 2),
             'icon'             => $tx->icon ?? $tx->category ?? ($tx->transaction_type ?? 'transaction'),
             'category'         => $tx->category ?? 'shopping',
+            'status'           => strtolower($tx->status ?? 'completed'),
+            'status_color'     => $this->statusColor($tx->status ?? 'COMPLETED'),
         ];
     }
 
