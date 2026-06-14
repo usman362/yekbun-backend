@@ -814,6 +814,7 @@ class WalletApiController extends Controller
             'type'         => 'income',
             'currency'     => $tx->currency ?? $defaultCurrency,
             'icon'         => $mapped['icon'],
+            'status'       => strtolower($tx->status ?? 'completed'),
             'status_color' => $this->statusColor($tx->status ?? 'COMPLETED'),
         ];
     }
@@ -978,7 +979,7 @@ class WalletApiController extends Controller
         $perPage = $request->query('per_page', 10);
         $deposits = Transaction::where('user_id', Auth::id())->where('transaction_type', 'deposit')->orderBy('created_at', 'desc')->paginate($perPage);
         $items = $deposits->map(function ($tx) {
-            return ['id' => $tx->_id, 'tId' => $tx->tId ?? '', 'description' => $tx->description ?? 'Deposit', 'category' => $tx->category ?? 'deposit', 'amount' => round($tx->amount ?? 0, 2), 'currency' => $tx->currency ?? 'ZER', 'status' => $tx->status ?? 'COMPLETED', 'type' => $tx->status, 'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),];
+            return ['id' => $tx->_id, 'tId' => $tx->tId ?? '', 'description' => $tx->description ?? 'Deposit', 'category' => $tx->category ?? 'deposit', 'amount' => round($tx->amount ?? 0, 2), 'currency' => $tx->currency ?? 'ZER', 'status' => $tx->status ?? 'COMPLETED', 'type' => 'INCOME', 'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),];
         });
         return ResponseHelper::sendResponse(['items' => $items, 'current_page' => $deposits->currentPage(), 'last_page' => $deposits->lastPage(), 'total' => $deposits->total(),], 'Deposits fetched.');
     }
