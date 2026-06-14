@@ -354,6 +354,96 @@ class WalletApiController extends Controller
         ], 'Deposit successful.');
     }
 
+    /**
+     * GET /api/wallet/cashback-balance
+     *
+     * Total claimable cashback = the sum of the user's PENDING `category=cashback` rows.
+     * This is exactly the number the mobile "My Cashback" / transfer screen shows before the
+     * user taps "Transfer to my wallet".
+     */
+    public function cashbackBalance(Request $request)
+    {
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+
+        $base = Transaction::where('user_id', Auth::id())
+            ->where('category', 'cashback')
+            ->where('status', 'PENDING');
+
+        return ResponseHelper::sendResponse([
+            'cashback_balance' => round((float) (clone $base)->sum('amount'), 2),
+            'count'            => (clone $base)->count(),
+            'currency'         => 'ZER',
+        ], 'Cashback balance fetched.');
+    }
+
+    /**
+     * POST /api/wallet/cashback/transfer
+     *
+     * Sweep ALL pending cashback into the wallet balance:
+     *   1. sum every PENDING `category=cashback` row,
+     *   2. add it to wallet.balance,
+     *   3. flip those rows to COMPLETED (claimed) — they leave the claimable balance and now
+     *      count as realised cashback. mapDepositRow renders them as "Cashback Transfer".
+     *
+     * Idempotent in practice: once rows are COMPLETED a second call finds nothing to transfer.
+     */
+    public function transferCashback(Request $request)
+    {
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+
+        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        if (!$wallet || !in_array($wallet->status ?? '', ['activated', 'active', 'approved'], true)) {
+            return ResponseHelper::sendResponse(
+                ['has_wallet' => (bool) $wallet, 'wallet_status' => $wallet->status ?? null],
+                'Your wallet is not active yet.',
+                false,
+                403
+            );
+        }
+
+        $pending = Transaction::where('user_id', Auth::id())
+            ->where('category', 'cashback')
+            ->where('status', 'PENDING')
+            ->get();
+
+        $total = round((float) $pending->sum('amount'), 2);
+        if ($total <= 0) {
+            return ResponseHelper::sendResponse(
+                ['transferred' => 0, 'balance' => round((float) ($wallet->balance ?? 0), 2)],
+                'No cashback available to transfer.',
+                false,
+                400
+            );
+        }
+
+        $now = Carbon::now();
+
+        // Credit the wallet.
+        $wallet->balance = round((float) ($wallet->balance ?? 0) + $total, 2);
+        $wallet->save();
+
+        // Mark each pending cashback row as claimed.
+        foreach ($pending as $tx) {
+            $tx->status     = 'COMPLETED';
+            $tx->claimed_at = $now;
+            $tx->save();
+        }
+
+        return ResponseHelper::sendResponse([
+            'transferred'      => $total,
+            'count'            => $pending->count(),
+            'balance'          => round((float) $wallet->balance, 2),
+            'cashback_balance' => 0,
+            'currency'         => 'ZER',
+        ], 'Cashback transferred to your wallet.');
+    }
+
     private function getUserDetails($user)
     {
         $user = $user->fresh();
@@ -888,7 +978,7 @@ class WalletApiController extends Controller
         $perPage = $request->query('per_page', 10);
         $deposits = Transaction::where('user_id', Auth::id())->where('transaction_type', 'deposit')->orderBy('created_at', 'desc')->paginate($perPage);
         $items = $deposits->map(function ($tx) {
-            return ['id' => $tx->_id, 'tId' => $tx->tId ?? '', 'description' => $tx->description ?? 'Deposit', 'category' => $tx->category ?? 'deposit', 'amount' => round($tx->amount ?? 0, 2), 'currency' => $tx->currency ?? 'ZER', 'status' => $tx->status ?? 'COMPLETED', 'type' => 'INCOME', 'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),];
+            return ['id' => $tx->_id, 'tId' => $tx->tId ?? '', 'description' => $tx->description ?? 'Deposit', 'category' => $tx->category ?? 'deposit', 'amount' => round($tx->amount ?? 0, 2), 'currency' => $tx->currency ?? 'ZER', 'status' => $tx->status ?? 'COMPLETED', 'type' => $tx->status, 'date' => $tx->date ?? ($tx->created_at ? Carbon::parse($tx->created_at)->format('d M Y') : ''),];
         });
         return ResponseHelper::sendResponse(['items' => $items, 'current_page' => $deposits->currentPage(), 'last_page' => $deposits->lastPage(), 'total' => $deposits->total(),], 'Deposits fetched.');
     }
