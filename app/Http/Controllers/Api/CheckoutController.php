@@ -8,6 +8,7 @@ use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserPlaylistGroup;
 use App\Models\Wallet;
 use App\Traits\BuildsZercashCartLines;
 use Carbon\Carbon;
@@ -150,6 +151,7 @@ class CheckoutController extends Controller
                 $this->writePurchaseTxn($user, $order, $line, $now);
                 $this->applyTierUpgrade($user, $line);
                 $this->applyZerPackageCredit($wallet, $line);
+                $this->applyPlaylistUnlock($user, $line);
             }
 
             // Cashback as a single PENDING `category=cashback` row → user can claim it later
@@ -296,5 +298,42 @@ class CheckoutController extends Controller
         $credit = (float) ($line['zer_amount'] * $line['qty']);
         $wallet->balance = round(($wallet->balance ?? 0) + $credit, 2);
         $wallet->save();
+    }
+
+    /**
+     * Unlock a music playlist the user just bought from /zercash/products.
+     *
+     * The user's playlist groups (served by /get-songs-playlist) seed Bronze/Silver/Gold as
+     * `type=paid`. When the matching Zercash product is purchased we flip that group to
+     * `type=free` so the songs become usable. Matching is by title — the Zercash product name
+     * ("Bronze Playlist") equals the playlist group title.
+     */
+    private function applyPlaylistUnlock(User $user, array $line): void
+    {
+        if (($line['category'] ?? '') !== 'upgrade_music_playlist') return;
+
+        $name = trim((string) ($line['name'] ?? ''));
+        if ($name === '') return;
+
+        $uid = (string) $user->_id;
+
+        // If the user has never opened the playlist screen, seed the same defaults
+        // MultimediaController::getSongsPlaylist uses, so the purchase still reflects.
+        if (UserPlaylistGroup::where('user_id', $uid)->count() === 0) {
+            foreach ([
+                ['title' => 'Free Playlist',   'bg_image' => 'assets/img/playlistCover1.png', 'type' => 'free', 'limit' => 25],
+                ['title' => 'Bronze Playlist', 'bg_image' => 'assets/img/playlistCover2.png', 'type' => 'paid', 'limit' => 50],
+                ['title' => 'Silver Playlist', 'bg_image' => 'assets/img/playlistCover3.png', 'type' => 'paid', 'limit' => 75],
+                ['title' => 'Gold Playlist',   'bg_image' => 'assets/img/playlistCover4.png', 'type' => 'paid', 'limit' => 100],
+            ] as $d) {
+                UserPlaylistGroup::create(array_merge($d, ['user_id' => $uid]));
+            }
+        }
+
+        $group = UserPlaylistGroup::where('user_id', $uid)->where('title', $name)->first();
+        if ($group && ($group->type ?? '') !== 'free') {
+            $group->type = 'free';
+            $group->save();
+        }
     }
 }
