@@ -444,6 +444,110 @@ class WalletApiController extends Controller
         ], 'Cashback transferred to your wallet.');
     }
 
+    /**
+     * GET /api/wallet/statistics?period=week|month|year   (default: month)
+     *
+     * Everything the "My Activity / Wallet Statistics" screen needs in one call:
+     *   - summary  : Deposit / Cashbacks / Expense totals for the selected period
+     *   - chart    : weekly + monthly + yearly activity series (same shape as the dashboard)
+     *   - overview : "My Overview" — the user's spending grouped by category, each with its
+     *                share (percent) of period spend and the trend vs the previous period.
+     */
+    public function statistics(Request $request)
+    {
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+
+        $wallet = Wallet::where('user_id', (string) $user->_id)->first();
+        if (!$wallet || !in_array($wallet->status ?? '', ['activated', 'active', 'approved'], true)) {
+            return ResponseHelper::sendResponse(
+                ['has_wallet' => (bool) $wallet, 'wallet_status' => $wallet->status ?? null],
+                'Wallet not active.',
+                false,
+                403
+            );
+        }
+
+        $userId = Auth::id();
+        $setting = ZercashSetting::where('key', 'general')->where('is_active', true)->first();
+        $currency = $setting->default_currency ?? 'EUR';
+
+        $period = in_array($request->query('period'), ['week', 'month', 'year'], true)
+            ? $request->query('period')
+            : 'month';
+
+        // Current period + the immediately preceding one (for the trend %).
+        $now = Carbon::now();
+        if ($period === 'week') {
+            $curStart  = $now->copy()->subDays(6)->startOfDay();   $curEnd  = $now->copy()->endOfDay();
+            $prevStart = $now->copy()->subDays(13)->startOfDay();  $prevEnd = $now->copy()->subDays(7)->endOfDay();
+        } elseif ($period === 'year') {
+            $curStart  = $now->copy()->startOfYear();              $curEnd  = $now->copy()->endOfYear();
+            $prevStart = $now->copy()->subYear()->startOfYear();   $prevEnd = $now->copy()->subYear()->endOfYear();
+        } else {
+            $curStart  = $now->copy()->startOfMonth();             $curEnd  = $now->copy()->endOfMonth();
+            $prevStart = $now->copy()->subMonth()->startOfMonth(); $prevEnd = $now->copy()->subMonth()->endOfMonth();
+        }
+        $cur  = [$curStart->format('Y-m-d'),  $curEnd->format('Y-m-d')];
+        $prev = [$prevStart->format('Y-m-d'), $prevEnd->format('Y-m-d')];
+
+        $expenseTypes = ['purchase', 'payment', 'expense', 'payout'];
+
+        // Period KPIs.
+        $deposits = Transaction::where('user_id', $userId)->where('transaction_type', 'deposit')
+            ->where('status', 'COMPLETED')->whereBetween('date', $cur)->sum('amount');
+        $cashbacks = Transaction::where('user_id', $userId)->where('category', 'cashback')
+            ->where('status', 'COMPLETED')->whereBetween('date', $cur)->sum('amount');
+        $expenses = Transaction::where('user_id', $userId)->whereIn('transaction_type', $expenseTypes)
+            ->where('status', 'COMPLETED')->whereBetween('date', $cur)->sum('amount');
+
+        // Activity chart (weekly/monthly/yearly) — reuse the dashboard builder.
+        $chart = $this->buildChartFor($this->defaultChartQuery($userId));
+
+        // "My Overview" — spend grouped by category, with share + trend vs previous period.
+        $curRows = Transaction::where('user_id', $userId)->whereIn('transaction_type', $expenseTypes)
+            ->where('status', 'COMPLETED')->whereBetween('date', $cur)->get();
+        $prevRows = Transaction::where('user_id', $userId)->whereIn('transaction_type', $expenseTypes)
+            ->where('status', 'COMPLETED')->whereBetween('date', $prev)->get();
+
+        $totalExpense = (float) $curRows->sum('amount');
+        $prevByCat = $prevRows->groupBy(fn ($t) => strtolower((string) ($t->category ?: 'else')));
+
+        $overview = $curRows
+            ->groupBy(fn ($t) => strtolower((string) ($t->category ?: 'else')))
+            ->map(function ($rows, $cat) use ($totalExpense, $prevByCat) {
+                $amount   = (float) $rows->sum('amount');
+                $prevAmt  = (float) (($prevByCat[$cat] ?? collect())->sum('amount'));
+                $percent  = $totalExpense > 0 ? round($amount / $totalExpense * 100, 1) : 0.0;
+                $trend    = $prevAmt > 0
+                    ? round((($amount - $prevAmt) / $prevAmt) * 100, 1)
+                    : ($amount > 0 ? 100.0 : 0.0);
+                return [
+                    'category' => $cat,
+                    'label'    => ucwords(str_replace(['_', '-'], ' ', $cat)),
+                    'amount'   => round($amount, 2),
+                    'percent'  => $percent,   // share of total spend this period
+                    'trend'    => $trend,     // % change vs previous period (+/-)
+                ];
+            })
+            ->sortByDesc('amount')
+            ->values();
+
+        return ResponseHelper::sendResponse([
+            'period'   => $period,
+            'currency' => $currency,
+            'summary'  => [
+                'deposits'  => round($deposits, 2),
+                'cashbacks' => round($cashbacks, 2),
+                'expenses'  => round($expenses, 2),
+            ],
+            'chart'    => $chart,
+            'overview' => $overview,
+        ], 'Wallet statistics fetched.');
+    }
+
     private function getUserDetails($user)
     {
         $user = $user->fresh();

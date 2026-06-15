@@ -650,6 +650,8 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('wallet/payments', [WalletApiController::class, 'payments']);
     Route::get('wallet/quick-access', [WalletApiController::class, 'quickAccess']);
     Route::get('wallet/chart', [WalletApiController::class, 'chartData']);
+    // "My Activity / Wallet Statistics" screen — summary + chart + spend-by-category overview.
+    Route::get('wallet/statistics', [WalletApiController::class, 'statistics']);
     Route::get('wallet/deposits', [WalletApiController::class, 'deposits']);
     Route::get('wallet/cashbacks', [WalletApiController::class, 'cashbacks']);
     // Total claimable (pending) cashback + sweep it into the wallet balance.
