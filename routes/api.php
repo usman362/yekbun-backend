@@ -619,6 +619,11 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('notifications-center', [NotificationsController::class, 'index']);
     Route::post('notifications-center', [NotificationsController::class, 'store']);
 
+    // Wallet (Zercash) app notification screen — scoped to wallet events only (System Info /
+    // Wallet News tabs). Per-item read/delete reuse the shared notifications-center/{id} routes.
+    Route::get('wallet/notifications', [NotificationsController::class, 'walletIndex']);
+    Route::post('wallet/notifications/read-all', [NotificationsController::class, 'walletReadAll']);
+
     // ─── Payments & Transactions ───
     Route::get('get-transaction-list', [PaymentController::class, 'getTransactionList']);
     Route::post('post-transaction', [PaymentController::class, 'storeTransaction']);
