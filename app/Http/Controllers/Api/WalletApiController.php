@@ -928,8 +928,9 @@ class WalletApiController extends Controller
     {
         return [
             'id'           => (string) $tx->_id,
-            'title'        => $tx->description ?? 'YekBûn Cashback',
-            'cb_id'        => $tx->tId ?? 'CB-ID',
+            'title'        => 'Cashback',
+            // Show the source order number here (falls back to txn id if not linked to an order).
+            'cb_id'        => $tx->order_number ?? $tx->tId ?? '',
             'date'         => $this->formatTxDate($tx),
             'amount'       => round($tx->amount ?? 0, 2),
             'currency'     => $tx->currency ?? $defaultCurrency,

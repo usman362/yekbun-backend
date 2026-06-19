@@ -166,6 +166,7 @@ class CheckoutController extends Controller
                 $cb->status           = 'PENDING';
                 $cb->description      = "Cashback from order {$order->order_number}";
                 $cb->order_id         = (string) $order->_id;
+                $cb->order_number     = $order->order_number;
                 $cb->date             = $now->format('Y-m-d');
                 $cb->created_at       = $now;
                 $cb->save();
