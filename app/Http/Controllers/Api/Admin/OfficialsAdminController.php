@@ -9,6 +9,7 @@ use App\Models\Constitution;
 use App\Models\Holiday;
 use App\Models\Ministry;
 use App\Models\PeopleTerritory;
+use App\Models\Setting;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -252,6 +253,38 @@ class OfficialsAdminController extends Controller
     public function holidaysDestroy($id)
     {
         return $this->destroyWithFiles(Holiday::class, $id, ['icon', 'banner_image', 'banner_video'], 'Holiday');
+    }
+
+    /* ======================== Officials CMS content (JSON blobs) ========================
+     * The redesigned Officials page manages deeply-nested, admin-authored content
+     * (org-structure tree, institutions, government areas, constitution / civil-law chapters).
+     * Rather than dozens of granular tables we persist each section's full state as one JSON
+     * blob in the settings collection — the same pattern used for zercash countries / cashback
+     * / CMS pages. The mobile app reads the same blobs via OfficialsApiController.
+     */
+
+    /** Allowed section keys → settings group. Keeps arbitrary groups out. */
+    private const CONTENT_SECTIONS = ['structure', 'constitution', 'civil', 'holidays', 'people'];
+
+    public function getContent(string $section)
+    {
+        if (!in_array($section, self::CONTENT_SECTIONS, true)) {
+            return ResponseHelper::sendResponse(null, 'Unknown section.', false, 404);
+        }
+        $row = Setting::where('group', "officials_$section")->first();
+        return ResponseHelper::sendResponse($row->data ?? null, 'Officials content fetched.');
+    }
+
+    public function saveContent(Request $request, string $section)
+    {
+        if (!in_array($section, self::CONTENT_SECTIONS, true)) {
+            return ResponseHelper::sendResponse(null, 'Unknown section.', false, 404);
+        }
+        Setting::updateOrCreate(
+            ['group' => "officials_$section"],
+            ['data' => $request->input('data')]
+        );
+        return ResponseHelper::sendResponse(null, 'Officials content saved.');
     }
 
     /* ======================== Counts (for KPI cards) ======================== */

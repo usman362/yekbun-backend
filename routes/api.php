@@ -439,6 +439,7 @@ Route::get('officials/people', [OfficialsApiController::class, 'people']);
 Route::get('officials/ministries', [OfficialsApiController::class, 'ministries']);
 Route::get('officials/civil-laws', [OfficialsApiController::class, 'civilLaws']);
 Route::get('officials/holidays', [OfficialsApiController::class, 'holidays']);
+Route::get('officials/content/{section}', [OfficialsApiController::class, 'content']);
 
 // ─── Kurdistan Complaints — categories (public) ───
 // The feed of approved complaints, submit, and like/comment all need auth (see the
@@ -870,6 +871,10 @@ Route::prefix('admin')->group(function () {
         Route::post('/officials/holidays', [OfficialsAdminController::class, 'holidaysStore']);
         Route::put('/officials/holidays/{id}', [OfficialsAdminController::class, 'holidaysUpdate']);
         Route::delete('/officials/holidays/{id}', [OfficialsAdminController::class, 'holidaysDestroy']);
+
+        // Officials CMS content blobs (structure / constitution / civil / holidays / people)
+        Route::get('/officials/content/{section}', [OfficialsAdminController::class, 'getContent']);
+        Route::put('/officials/content/{section}', [OfficialsAdminController::class, 'saveContent']);
 
         // ─── Complaints (categories + moderation) ───
         Route::get('/complaint-categories', [ComplaintsAdminController::class, 'categoriesIndex']);

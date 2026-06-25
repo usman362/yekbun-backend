@@ -78,6 +78,20 @@ class OfficialsApiController extends Controller
         return ResponseHelper::sendResponse($this->holidayList(), 'Holidays fetched successfully.');
     }
 
+    /**
+     * GET /api/officials/content/{section} — public read of an admin-authored CMS blob
+     * (structure / constitution / civil / holidays / people). Returns null if not set yet.
+     */
+    public function content(string $section)
+    {
+        $allowed = ['structure', 'constitution', 'civil', 'holidays', 'people'];
+        if (!in_array($section, $allowed, true)) {
+            return ResponseHelper::sendResponse(null, 'Unknown section.', false, 404);
+        }
+        $row = \App\Models\Setting::where('group', "officials_$section")->first();
+        return ResponseHelper::sendResponse($row->data ?? null, 'Officials content fetched.');
+    }
+
     /* ───────────────────────── normalisers ───────────────────────── */
 
     private function constitutionList(): array
