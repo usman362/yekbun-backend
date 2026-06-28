@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\ZercashApiController;
 use App\Http\Controllers\Api\OfficialsApiController;
 use App\Http\Controllers\Api\ComplaintApiController;
 use App\Http\Controllers\Api\Admin\ComplaintsAdminController;
+use App\Http\Controllers\Api\InvoiceApiController;
 use App\Http\Controllers\Api\CartApiController;
 use App\Http\Controllers\Api\WalletApiController;
 use App\Http\Controllers\Api\KycApiController;
@@ -673,6 +674,11 @@ Route::middleware('jwt.custom')->group(function () {
     // transactions. Mobile + web use the same endpoint.
     Route::post('checkout',  [CheckoutController::class, 'checkout']);
     Route::get('orders',     [CheckoutController::class, 'myOrders']);
+
+    // Invoices for Zercash purchases (auto-generated on checkout; shown in profile).
+    Route::get('invoices',               [InvoiceApiController::class, 'index']);
+    Route::get('invoices/{id}',          [InvoiceApiController::class, 'show']);
+    Route::get('invoices/{id}/download', [InvoiceApiController::class, 'download']);
     Route::post('wallet/activate', [WalletApiController::class, 'activateWallet']);
     Route::post('wallet/update-status', [WalletApiController::class, 'updateWalletStatus']);
 

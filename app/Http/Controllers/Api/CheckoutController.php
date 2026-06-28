@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\User;
@@ -183,6 +184,9 @@ class CheckoutController extends Controller
             }
         }
 
+        // Generate the invoice for this purchase (shown in the user's profile / downloadable).
+        $invoice = $this->createInvoice($user, $order, $lines);
+
         // The order now owns a snapshot of these lines, so empty the saved cart it came from.
         if ($fromCart) {
             Cart::where('user_id', (string) $user->_id)->delete();
@@ -196,6 +200,7 @@ class CheckoutController extends Controller
             'order'           => [
                 'id'              => (string) $order->_id,
                 'order_number'    => $order->order_number,
+                'invoice_id'      => $invoice->invoice_id,
                 'status'          => $order->status,
                 'payment_method'  => $order->payment_method,
                 'total_zer'       => $order->total_zer,
@@ -336,5 +341,36 @@ class CheckoutController extends Controller
             $group->type = 'free';
             $group->save();
         }
+    }
+
+    /** Create the invoice record for a completed/placed order. */
+    private function createInvoice(User $user, Order $order, array $lines): Invoice
+    {
+        $invoice = new Invoice();
+        $invoice->invoice_id       = Invoice::generateInvoiceId();
+        $invoice->user_id          = (string) $user->_id;
+        $invoice->order_id         = (string) $order->_id;
+        $invoice->order_number     = $order->order_number;
+        $invoice->first_name       = $user->name ?? '';
+        $invoice->last_name        = $user->last_name ?? '';
+        $invoice->email            = $user->email ?? '';
+        $invoice->phone            = $user->phone ?? '';
+        $invoice->items            = $lines;
+        $invoice->total_zer        = $order->total_zer;
+        $invoice->total_fiat       = $order->total_fiat;
+        $invoice->subtotal         = $order->total_fiat ?: $order->total_zer;
+        $invoice->cashback_earned  = $order->cashback_earned;
+        $invoice->payment_method   = $order->payment_method;
+        $invoice->status           = $order->status;
+        $invoice->transaction_type = 'purchase';
+        $invoice->date             = Carbon::now();
+        $invoice->created_at       = Carbon::now();
+        $invoice->save();
+
+        // Link the invoice number back onto the order so /orders can surface it too.
+        $order->invoice_id = $invoice->invoice_id;
+        $order->save();
+
+        return $invoice;
     }
 }
