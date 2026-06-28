@@ -447,6 +447,10 @@ Route::get('officials/content/{section}', [OfficialsApiController::class, 'conte
 // authenticated group). Like/comment reuse /feeds/{id}/{likes|comments} (feed_type=complaint).
 Route::get('complaint-categories', [ComplaintApiController::class, 'categories']);
 
+// Invoice PDF download — PUBLIC route so a browser/native downloader can open it directly.
+// Auth is enforced inside the controller via a `?token=<jwt>` query param (see download()).
+Route::get('invoices/{id}/download', [InvoiceApiController::class, 'download']);
+
 // ── Public CMS reads — driven by the admin's WebApp CMS page ──
 // Pages: { landing: {key→value}, login: {…} } — for hardcoded copy on the public app.
 // Translations: per-key per-language overrides on top of the bundled i18n catalogue.
@@ -676,9 +680,8 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('orders',     [CheckoutController::class, 'myOrders']);
 
     // Invoices for Zercash purchases (auto-generated on checkout; shown in profile).
-    Route::get('invoices',               [InvoiceApiController::class, 'index']);
-    Route::get('invoices/{id}',          [InvoiceApiController::class, 'show']);
-    Route::get('invoices/{id}/download', [InvoiceApiController::class, 'download']);
+    Route::get('invoices',      [InvoiceApiController::class, 'index']);
+    Route::get('invoices/{id}', [InvoiceApiController::class, 'show']);
     Route::post('wallet/activate', [WalletApiController::class, 'activateWallet']);
     Route::post('wallet/update-status', [WalletApiController::class, 'updateWalletStatus']);
 

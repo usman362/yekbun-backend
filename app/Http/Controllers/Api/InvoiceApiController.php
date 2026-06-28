@@ -9,6 +9,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 /**
  * Invoices for Zercash purchases. An invoice is generated automatically on every checkout
@@ -53,12 +54,31 @@ class InvoiceApiController extends Controller
     }
 
     /**
-     * GET /api/invoices/{id}/download — server-rendered PDF of the invoice (binary download).
-     * Matches the same id forms as show().
+     * GET /api/invoices/{id}/download?token=<jwt> — server-rendered PDF (binary download).
+     *
+     * This route is PUBLIC (no jwt middleware) so it can be opened directly in a browser /
+     * native downloader where the Authorization header isn't sent. Security is preserved by
+     * requiring the JWT as a `token` query param (or Bearer header) — we authenticate it here
+     * and only serve invoices that belong to that user. Invoice ids are guessable, so an
+     * unauthenticated download is NOT allowed.
      */
-    public function download($id)
+    public function download(Request $request, $id)
     {
-        $uid = (string) Auth::id();
+        $token = $request->query('token') ?: $request->bearerToken();
+        if (!$token) {
+            return ResponseHelper::sendResponse(null, 'Authentication token required.', false, 401);
+        }
+
+        try {
+            $user = JWTAuth::setToken($token)->authenticate();
+        } catch (\Throwable $e) {
+            $user = null;
+        }
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'Invalid or expired token.', false, 401);
+        }
+
+        $uid = (string) $user->_id;
         $invoice = Invoice::where('user_id', $uid)
             ->where(function ($q) use ($id) {
                 $q->where('_id', $id)
