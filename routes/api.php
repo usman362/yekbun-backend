@@ -447,8 +447,8 @@ Route::get('officials/content/{section}', [OfficialsApiController::class, 'conte
 // authenticated group). Like/comment reuse /feeds/{id}/{likes|comments} (feed_type=complaint).
 Route::get('complaint-categories', [ComplaintApiController::class, 'categories']);
 
-// Invoice PDF download — PUBLIC route so a browser/native downloader can open it directly.
-// Auth is enforced inside the controller via a `?token=<jwt>` query param (see download()).
+// Invoice PDF download — PUBLIC route (no token) so it opens directly in a browser / native
+// downloader. Looks up by _id / invoice_id / order_id.
 Route::get('invoices/{id}/download', [InvoiceApiController::class, 'download']);
 
 // ── Public CMS reads — driven by the admin's WebApp CMS page ──
