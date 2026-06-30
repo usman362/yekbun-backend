@@ -920,6 +920,7 @@ Route::prefix('admin')->group(function () {
         // ─── Transactions ───
         Route::get('/transactions', [TransactionsAdminController::class, 'index']);
         Route::get('/transactions/stats', [TransactionsAdminController::class, 'stats']);
+        Route::get('/transactions/details', [TransactionsAdminController::class, 'details']);
 
         // ─── Zercash ───
         Route::get('/zercash/overview', [ZercashAdminController::class, 'overview']);

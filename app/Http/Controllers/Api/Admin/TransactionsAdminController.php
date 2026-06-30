@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
 use App\Models\Transaction;
 use App\Models\Payment;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -149,6 +150,81 @@ class TransactionsAdminController extends Controller
             'page'      => $page,
             'last_page' => max(1, ceil($totalItems / $limit)),
         ], 'Transactions fetched');
+    }
+
+    /**
+     * GET /admin/transactions/details?mode=daily|monthly|yearly&date=<bucket-key>
+     * Individual transactions inside one table row's period bucket (for the details popup).
+     * `date` is the same group key the table row carries: 2026-06-25 / 2026-06 / 2026.
+     */
+    public function details(Request $request)
+    {
+        $mode = $request->get('mode', 'daily');
+        $date = (string) $request->get('date', '');
+
+        [$start, $end] = $this->bucketRange($mode, $date);
+        if (!$start) {
+            return ResponseHelper::sendResponse(['items' => []], 'Invalid date.', false, 422);
+        }
+
+        $items = Transaction::whereBetween('created_at', [$start, $end])
+            ->orderBy('created_at', 'desc')
+            ->limit(300)
+            ->get()
+            ->map(fn ($t) => $this->mapDetail($t))
+            ->values();
+
+        return ResponseHelper::sendResponse(['items' => $items], 'Transaction details fetched.');
+    }
+
+    /** Resolve a bucket key + mode into a [start, end] Carbon range. */
+    private function bucketRange(string $mode, string $date): array
+    {
+        try {
+            if ($mode === 'yearly') {
+                $s = Carbon::createFromFormat('Y', $date)->startOfYear();
+                return [$s, $s->copy()->endOfYear()];
+            }
+            if ($mode === 'monthly') {
+                $s = Carbon::createFromFormat('Y-m', $date)->startOfMonth();
+                return [$s, $s->copy()->endOfMonth()];
+            }
+            $s = Carbon::parse($date)->startOfDay();
+            return [$s, $s->copy()->endOfDay()];
+        } catch (\Throwable $e) {
+            return [null, null];
+        }
+    }
+
+    /** Map a transaction row into the popup's TxDetail shape. */
+    private function mapDetail($t): array
+    {
+        $u = $t->user_id ? User::find($t->user_id) : null;
+
+        $statusMap = ['COMPLETED' => 'Completed', 'PENDING' => 'Pending', 'FAILED' => 'Refunded', 'REFUNDED' => 'Refunded'];
+        $catMap = [
+            'upgrade_music_playlist' => 'Playlist',
+            'streaming_minutes'      => 'Streaming',
+            'choose_your_plan'       => 'Upgrade',
+            'standard_zer_package'   => 'Market',
+            'business_zer_package'   => 'Market',
+        ];
+
+        return [
+            'id'          => $t->tId ?: ('TX-' . substr((string) $t->_id, -6)),
+            'username'    => $u->name ?? ($u->username ?? 'User'),
+            'userId'      => $u ? ('U-' . substr((string) $u->_id, -4)) : '',
+            'walletId'    => '',
+            'dateTime'    => $t->created_at,
+            'amount'      => (float) ($t->amount ?? 0),
+            'cashback'    => (float) ($t->cashback_amount ?? $t->cashback ?? 0),
+            'paymentType' => ($t->type ?? 'external') === 'internal' ? 'Internal' : 'External',
+            'category'    => $catMap[$t->category ?? ''] ?? 'Shop',
+            'shopName'    => $t->shop_name ?? '',
+            'productName' => $t->description ?? '',
+            'status'      => $statusMap[strtoupper((string) ($t->status ?? 'COMPLETED'))] ?? 'Completed',
+            'invoice'     => $t->order_number ?? $t->invoice_id ?? '',
+        ];
     }
 
     public function stats()

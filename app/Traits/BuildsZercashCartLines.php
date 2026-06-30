@@ -2,6 +2,7 @@
 
 namespace App\Traits;
 
+use App\Models\Setting;
 use App\Models\ZercashProduct;
 
 /**
@@ -32,6 +33,38 @@ trait BuildsZercashCartLines
         return 'other';
     }
 
+    /** Map a product category to its Cashback Manager rule id (null = no rule). */
+    protected function cashbackRuleIdFor(string $category): ?string
+    {
+        return [
+            'upgrade_music_playlist' => 'playlist',
+            'streaming_minutes'      => 'streaming',
+            'choose_your_plan'       => 'upgrade',
+            'standard_zer_package'   => 'zer_package',
+            'business_zer_package'   => 'zer_package',
+        ][$category] ?? null;
+    }
+
+    /**
+     * Load the admin's Cashback Manager rules keyed by id (only enabled ones).
+     * Each: ['kind' => 'percent'|'fixed', 'value' => float, 'min' => float].
+     */
+    protected function loadCashbackRules(): array
+    {
+        $row = Setting::where('group', 'zercash_cashback')->first();
+        $items = is_array($row?->data ?? null) ? $row->data : [];
+        $map = [];
+        foreach ($items as $it) {
+            if (empty($it['enabled']) || empty($it['id'])) continue;
+            $map[$it['id']] = [
+                'kind'  => $it['kind'] ?? 'percent',
+                'value' => (float) ($it['value'] ?? 0),
+                'min'   => (float) ($it['minPurchase'] ?? 0),
+            ];
+        }
+        return $map;
+    }
+
     /**
      * Re-price a list of {product_id, qty} rows against the live product table.
      *
@@ -49,6 +82,7 @@ trait BuildsZercashCartLines
         $totalFiat = 0.0;
         $cashback = 0.0;
         $itemCount = 0;
+        $cashbackRules = $this->loadCashbackRules();
 
         foreach ($items as $row) {
             $productId = is_array($row) ? ($row['product_id'] ?? null) : null;
@@ -65,7 +99,6 @@ trait BuildsZercashCartLines
             $qty = max(1, (int) ($row['qty'] ?? 1));
             $zerCost  = (float) ($product->zer_amount  ?? 0);
             $fiatCost = (float) ($product->fiat_amount ?? 0);
-            $cashPct  = (float) ($product->cashback_percent ?? 0);
 
             $category = $product->category ?? '';
             $kind = $this->classifyKind($category);
@@ -73,7 +106,28 @@ trait BuildsZercashCartLines
             $lineZerTotal  = $zerCost  * $qty;
             $lineFiatTotal = $fiatCost * $qty;
             // Cashback off the ZER amount for zer-priced items, off the fiat amount otherwise.
-            $lineCashback = round(($kind === 'zer_priced' ? $lineZerTotal : $lineFiatTotal) * $cashPct / 100, 2);
+            $amountBasis = $kind === 'zer_priced' ? $lineZerTotal : $lineFiatTotal;
+
+            // Cashback is driven by the admin's Cashback Manager rule for this category:
+            //   - fixed   → flat `value` (e.g. always 10 Zer), once the min purchase is met
+            //   - percent → amountBasis × value%
+            // If there is no rule for the category, fall back to the product's own percent.
+            $rule = $cashbackRules[$this->cashbackRuleIdFor($category) ?? ''] ?? null;
+            if ($rule) {
+                if ($amountBasis < $rule['min']) {
+                    $lineCashback = 0.0;
+                    $cashPct = 0.0;
+                } elseif ($rule['kind'] === 'fixed') {
+                    $lineCashback = round((float) $rule['value'], 2);
+                    $cashPct = 0.0;
+                } else {
+                    $cashPct = (float) $rule['value'];
+                    $lineCashback = round($amountBasis * $cashPct / 100, 2);
+                }
+            } else {
+                $cashPct = (float) ($product->cashback_percent ?? 0);
+                $lineCashback = round($amountBasis * $cashPct / 100, 2);
+            }
 
             $totalZer  += $lineZerTotal;
             $totalFiat += $lineFiatTotal;
