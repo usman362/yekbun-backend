@@ -146,6 +146,7 @@ class ClipsController extends Controller
         if ($ffmpegBin === '') {
             return ResponseHelper::sendResponse(null, 'Server is missing ffmpeg — please contact support.', false, 500);
         }
+        $ffprobeBin = trim((string) @shell_exec('which ffprobe'));
 
         // Detect whether the user actually picked a separate audio track. Without this check
         // we were forcing every video through a 2-input ffmpeg `amix` even when there was no
@@ -163,6 +164,30 @@ class ClipsController extends Controller
 
         $videoFile  = $request->file('video');
         $videoLocal = $videoFile->getPathname();
+
+        // Diagnostic + guard: probe the SOURCE for a real video stream. Broken/empty
+        // recordings (a known issue with some emulators) arrive with an audio track but no
+        // usable video — ffmpeg then turns them into a video-less stub that plays nothing.
+        if ($ffprobeBin !== '') {
+            $srcVideo = trim((string) @shell_exec(sprintf(
+                '%s -v error -select_streams v:0 -show_entries stream=codec_name,duration -of csv=p=0 %s 2>&1',
+                escapeshellcmd($ffprobeBin),
+                escapeshellarg($videoLocal)
+            )));
+            \Illuminate\Support\Facades\Log::info('store_clips source probe', [
+                'user_id'    => Auth::id(),
+                'input_size' => @filesize($videoLocal),
+                'video'      => $srcVideo !== '' ? $srcVideo : 'NO VIDEO STREAM',
+            ]);
+            if ($srcVideo === '') {
+                return ResponseHelper::sendResponse(
+                    null,
+                    'The uploaded file has no video track. Please record or pick a real video and try again.',
+                    false,
+                    422
+                );
+            }
+        }
 
         // Unique output filename — without this, two users uploading clips named `video.mp4`
         // race on the same path and one overwrites the other mid-encode → broken clips.
@@ -219,6 +244,32 @@ class ClipsController extends Controller
                 false,
                 500
             );
+        }
+
+        // A non-zero, non-empty file can STILL be a video-less stub (audio-only) if the
+        // source's video track was unusable. Verify a real video stream survived — otherwise
+        // we'd publish a clip that plays nothing (871-byte, 0-frame files seen in the wild).
+        if ($ffprobeBin !== '') {
+            $outVideo = trim((string) @shell_exec(sprintf(
+                '%s -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 %s 2>&1',
+                escapeshellcmd($ffprobeBin),
+                escapeshellarg($outputPath)
+            )));
+            if ($outVideo === '') {
+                \Illuminate\Support\Facades\Log::error('store_clips output has no video stream', [
+                    'user_id'    => Auth::id(),
+                    'input_size' => @filesize($videoLocal),
+                    'out_size'   => @filesize($outputPath),
+                    'ffmpeg_tail' => array_slice($output, -12),
+                ]);
+                @unlink($outputPath);
+                return ResponseHelper::sendResponse(
+                    null,
+                    'Clip processing produced no video (the source recording may be broken). Please try a different video.',
+                    false,
+                    422
+                );
+            }
         }
 
         // Now that we have a real output file, upload to CDN. Wrap so a transient CDN error
