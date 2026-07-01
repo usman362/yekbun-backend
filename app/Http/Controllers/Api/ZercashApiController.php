@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserPlaylistGroup;
 use App\Models\ZercashProduct;
 use App\Models\ZercashSetting;
 use Illuminate\Http\Request;
@@ -44,12 +45,18 @@ class ZercashApiController extends Controller
      * price/meta fields (defaulting to 0 / null), so the client can rely on a consistent
      * contract regardless of how each row was created.
      */
-    private function transformProduct(ZercashProduct $p): array
+    private function transformProduct(ZercashProduct $p, array $ownedTitles = []): array
     {
+        // A music-playlist product is "owned" once its matching playlist group has been
+        // unlocked (flipped to type=free) by a previous purchase.
+        $owned = ($p->category ?? '') === 'upgrade_music_playlist'
+            && in_array(trim((string) ($p->name ?? '')), $ownedTitles, true);
+
         return [
             '_id'              => (string) $p->_id,
             'category'         => $p->category ?? '',
             'name'             => $p->name ?? '',
+            'owned'            => $owned,
             'description'      => $p->description ?? null,
             'image'            => Helpers::mediaUrl($p->image),
             'badge'            => $p->badge ?? '',
@@ -68,15 +75,42 @@ class ZercashApiController extends Controller
 
     public function products(Request $request)
     {
+        $ownedTitles = $this->ownedPlaylistTitles();
+
         $query = ZercashProduct::where('status', 'active');
         if ($request->has('category')) {
             $query->where('category', $request->category);
         }
         $products = $query->orderBy('sort_order')->orderBy('name')->get()
-            ->map(fn ($p) => $this->transformProduct($p))
+            ->map(fn ($p) => $this->transformProduct($p, $ownedTitles))
             ->values();
 
         return ResponseHelper::sendResponse($products, 'Products fetched successfully.');
+    }
+
+    /**
+     * Titles of the playlist groups the current user already owns (type=free).
+     * The products route is public, so the token is parsed optionally — a guest
+     * (or an invalid/expired token) simply gets an empty list (nothing owned).
+     */
+    private function ownedPlaylistTitles(): array
+    {
+        try {
+            $user = auth('api')->user();
+        } catch (\Throwable $e) {
+            $user = null;
+        }
+        if (!$user) {
+            return [];
+        }
+
+        return UserPlaylistGroup::where('user_id', (string) $user->_id)
+            ->where('type', 'free')
+            ->get()
+            ->map(fn ($g) => trim((string) ($g->title ?? '')))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     public function productDetail($id)
@@ -85,7 +119,7 @@ class ZercashApiController extends Controller
         if (!$product) {
             return ResponseHelper::sendResponse([], 'Product not found.', false, 404);
         }
-        return ResponseHelper::sendResponse($this->transformProduct($product), 'Product fetched successfully.');
+        return ResponseHelper::sendResponse($this->transformProduct($product, $this->ownedPlaylistTitles()), 'Product fetched successfully.');
     }
 
     public function categories()
