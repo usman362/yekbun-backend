@@ -200,6 +200,7 @@ class LanguagesAdminController extends Controller
             return ResponseHelper::sendResponse([], 'Language not found.', false, 404);
         }
         $rows = LanguageDetail::where('language_id', (string) $language->_id)
+            ->orderBy('main_section')
             ->orderBy('section_name')
             ->get()
             ->map(function ($t) {
@@ -207,7 +208,9 @@ class LanguagesAdminController extends Controller
                     'id'         => (string) $t->_id,
                     'keyword'    => $t->keyword ?? '',
                     'translated' => $t->translated ?? '',
-                    'section'    => $t->section_name ?? '',
+                    // main_section = top-level SECTION (sidebar); section_name = MODULE (tabs).
+                    'section'    => $t->main_section ?? '',
+                    'module'     => $t->section_name ?? '',
                 ];
             });
 
