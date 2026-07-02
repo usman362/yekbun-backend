@@ -21,7 +21,10 @@ class NotificationHelper
         // token, network blip) would otherwise break the whole parent operation.
         try {
             $projectId = env('FCM_PROJECT_ID');
-            $credentialsFilePath = Storage::path('json/services.json');
+            // Explicit path (not Storage::path) — Laravel 11+ points the default disk at
+            // storage/app/private, but the service account lives at storage/app/json to match
+            // the legacy backend + where it's deployed.
+            $credentialsFilePath = storage_path('app/json/services.json');
 
             if (!$projectId || !file_exists($credentialsFilePath)) {
                 \Illuminate\Support\Facades\Log::warning('FCM not configured — push skipped.', [
