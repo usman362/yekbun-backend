@@ -261,7 +261,8 @@ class WalletApiController extends Controller
 
         return ResponseHelper::sendResponse([
             'has_wallet'      => true,
-            'wallet_id'       => $this->maskWalletId($wallet->_id),
+            'wallet_id'       => $wallet->formattedWalletNumber(),
+            'wallet_number'   => $wallet->formattedWalletNumber(),
             'wallet_status'   => $status,
             // Prefer the message the admin saved on the wallet row (if any); fall back to the
             // static map for legacy/mobile-initiated rows that don't carry a status_message.
@@ -574,7 +575,8 @@ class WalletApiController extends Controller
                 'has_valid'             => in_array($wStatus, ['activated', 'active', 'approved'], true),
                 'has_pin'               => !empty($wallet->pin),
                 'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
-                'wallet_id'             => $this->maskWalletId($wallet->_id),
+                'wallet_id'             => $wallet->formattedWalletNumber(),
+                'wallet_number'         => $wallet->formattedWalletNumber(),
                 'wallet_status'         => $wStatus,
                 // Stored admin message wins; falls back to the static map.
                 'status_message'        => $wallet->status_message ?? ($walletStatusMessages[$wStatus] ?? 'Unknown status.'),
@@ -736,8 +738,16 @@ class WalletApiController extends Controller
             ->where('status', 'PENDING')
             ->sum('amount');
 
+        // Card-style 12-digit account number shown on the mobile home ("KU-RA XXXX XXXX XXXX").
+        // ensureWalletNumber() backfills legacy wallets that predate this field.
+        $walletNumber = $wallet->ensureWalletNumber();
+        $walletNumberFormatted = trim(implode(' ', str_split($walletNumber, 4)));
+
         return ResponseHelper::sendResponse([
-            'wallet_id'           => $this->maskWalletId((string) $wallet->_id),
+            'wallet_id'           => $walletNumberFormatted,
+            'wallet_number'       => $walletNumberFormatted,
+            'wallet_number_raw'   => $walletNumber,
+            'wallet_id_masked'    => $this->maskWalletId((string) $wallet->_id),
             'wallet_type'         => $walletType,
             'currency'            => $currency,
             'balance'             => round($wallet->balance ?? 0, 2),
@@ -1167,7 +1177,8 @@ class WalletApiController extends Controller
         $wallet = Wallet::where('user_id', (string) $user->_id)->first();
         $walletInfo = [
             'has_wallet'    => (bool) $wallet,
-            'wallet_id'     => $wallet ? $this->maskWalletId((string) $wallet->_id) : null,
+            'wallet_id'     => $wallet ? $wallet->formattedWalletNumber() : null,
+            'wallet_number' => $wallet ? $wallet->formattedWalletNumber() : null,
             'wallet_status' => $wallet->status ?? null,
             'balance'       => round($wallet->balance ?? 0, 2),
             'zer_balance'   => round($wallet->zer_balance ?? $wallet->balance ?? 0, 2),

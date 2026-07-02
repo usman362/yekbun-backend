@@ -136,17 +136,15 @@ class AuthController extends Controller
 
             if ($wallet) {
                 $wStatus = $wallet->status ?? 'under_review';
-                $walletId = $wallet->_id;
-                $maskedWalletId = strlen($walletId) >= 10
-                    ? strtoupper(substr($walletId, 0, 4)) . ' **** **** ' . strtoupper(substr($walletId, -4))
-                    : $walletId;
+                $walletNumber = $wallet->formattedWalletNumber();
 
                 $walletData = [
                     'has_wallet'            => true,
                     'has_valid'             => ($wStatus === 'activated'),
                     'has_pin'               => !empty($wallet->pin),
                     'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
-                    'wallet_id'             => $maskedWalletId,
+                    'wallet_id'             => $walletNumber,
+                    'wallet_number'         => $walletNumber,
                     'wallet_status'         => $wStatus,
                     'status_message'        => $walletStatusMessages[$wStatus] ?? 'Unknown status.',
                     'hold_reason'           => $wallet->status_reason ?? null,

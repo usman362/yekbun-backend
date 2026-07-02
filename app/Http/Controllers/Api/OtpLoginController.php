@@ -199,7 +199,8 @@ class OtpLoginController extends Controller
             'has_valid'             => in_array($status, ['activated', 'active', 'approved'], true),
             'has_pin'               => !empty($wallet->pin),
             'welcome_bonus_claimed' => !empty($wallet->welcome_bonus_claimed),
-            'wallet_id'             => (string) $wallet->_id,
+            'wallet_id'             => $wallet->formattedWalletNumber(),
+            'wallet_number'         => $wallet->formattedWalletNumber(),
             'wallet_status'         => $status,
             'balance'               => round((float) ($wallet->balance ?? 0), 2),
         ];
