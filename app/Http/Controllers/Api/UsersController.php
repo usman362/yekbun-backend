@@ -122,7 +122,9 @@ class UsersController extends Controller
                 NotificationCenter::create([
                     'title' => $current_user->name . ' ' . $current_user->last_name,
                     'description' => 'You have a New Friend Request!',
-                    'user_id' => $user->id,
+                    // Recipient of the request — use the request id directly (the selected
+                    // $user above may not include the primary key, making $user->id null).
+                    'user_id' => $request->user_id,
                     'user_image' => $user->image ?? null,
                     'type' => 'friend_request',
                     'is_read' => 0,
@@ -161,14 +163,17 @@ class UsersController extends Controller
         if ($allowRequest !== true) {
             return ResponseHelper::sendResponse([], 'You are not allowed to accept friend requests.', false, 409);
         }
+        // Only enforce a limit when one is actually configured as a number. `checkPermission`
+        // returns true (unlimited), a number (the cap), or false (unset). Comparing against a
+        // `false` cap coerces to `>= 0`, which would block EVERY accept — so guard with is_numeric.
         if ($request->user_type == 'family') {
-            if ($familyLimit !== true && ($totalFamily >= $familyLimit)) {
+            if (is_numeric($familyLimit) && $totalFamily >= (int) $familyLimit) {
                 return ResponseHelper::sendResponse([], 'Your limit for family requests has been exceeded.', false, 409);
             }
         }
 
         if ($request->user_type == 'friends') {
-            if ($friendLimit !== true && ($totalFriends >= $friendLimit)) {
+            if (is_numeric($friendLimit) && $totalFriends >= (int) $friendLimit) {
                 return ResponseHelper::sendResponse([], 'Your limit for friend requests has been exceeded.', false, 409);
             }
         }

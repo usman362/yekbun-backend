@@ -71,6 +71,10 @@ class NotificationsController extends Controller
         if (!$notification) {
             return ResponseHelper::sendResponse(null, 'Notification not found.', false, 404);
         }
+        // Defense-in-depth: an authenticated caller may only touch their own notifications.
+        if (Auth::check() && (string) $notification->user_id !== (string) Auth::id()) {
+            return ResponseHelper::sendResponse(null, 'Not allowed.', false, 403);
+        }
         $notification->is_read = 1;
         $notification->read_at = Carbon::now();
         $notification->save();
@@ -82,6 +86,9 @@ class NotificationsController extends Controller
         $notification = NotificationCenter::find($id);
         if (!$notification) {
             return ResponseHelper::sendResponse(null, 'Notification not found.', false, 404);
+        }
+        if (Auth::check() && (string) $notification->user_id !== (string) Auth::id()) {
+            return ResponseHelper::sendResponse(null, 'Not allowed.', false, 403);
         }
         $notification->delete();
         return ResponseHelper::sendResponse([], 'Notification has been Deleted Successfully!');
