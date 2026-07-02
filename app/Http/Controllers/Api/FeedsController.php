@@ -512,6 +512,11 @@ class FeedsController extends Controller
         }
 
         $audio = null;
+        // A comment carrying a voice note is ALWAYS an "audio" comment — the Feed model's
+        // voice_comments relation filters on comment_type='audio', so we can't rely on the
+        // client to send the right type. If audio is present, force it; otherwise keep what
+        // the client sent (defaulting to 'normal').
+        $commentType = $request->comment_type ?? 'normal';
         if ($request->file('audio')) {
             $allowVoice = PermissionHelper::checkPermission(Auth::user()->level, 'feed_voice_comments');
             $allowHistoryVoice = PermissionHelper::checkPermission(Auth::user()->level, 'history_voice_comments');
@@ -523,6 +528,7 @@ class FeedsController extends Controller
                 return ResponseHelper::sendResponse([], 'You are not Allowed to Voice Comments.', false, 409);
             }
             $audio = Helpers::fileCDNUpload($request->audio, 'audios/comments/' . $request->feed_type);
+            $commentType = 'audio';
         }
 
         if ($image == null && $audio == null && empty($request->comment) && empty($request->emoji)) {
@@ -534,7 +540,7 @@ class FeedsController extends Controller
             'feed_id' => $id,
             'feed_type' => $request->feed_type,
             'comment' => $request->comment,
-            'comment_type' => $request->comment_type ?? 'normal',
+            'comment_type' => $commentType,
             'parent_id' => (empty($request->parent_id) || $request->parent_id === 'null') ? null : $request->parent_id,
             'audio' => $audio,
             'emoji' => $request->emoji,
@@ -634,7 +640,7 @@ class FeedsController extends Controller
         }
 
         $comment->comment = $request->comment;
-        if ($request->file('audio')) $comment->audio = $audio;
+        if ($request->file('audio')) { $comment->audio = $audio; $comment->comment_type = 'audio'; }
         if ($request->emoji) $comment->emoji = $request->emoji;
         if ($request->file('image')) $comment->image = $image;
         $comment->save();
