@@ -126,11 +126,17 @@ class UsersController extends Controller
             ->map(function ($f) {
                 $images = is_array($f->images) ? $f->images : [];
                 $firstImage = $images[0]['path'] ?? $f->image ?? null;
+                $video = $f->video ?? null;
+                // Classify the feed so the card shows a video player / image / text
+                // instead of a generic gradient with no hint of the content type.
+                $type = $video ? 'video' : ($firstImage ? 'image' : 'text');
                 return [
                     'id'       => $f->_id,
-                    'title'    => $f->text ? Str::limit((string) $f->text, 40) : 'Post',
+                    'title'    => $f->text ? Str::limit((string) $f->text, 40) : ucfirst($type) . ' Post',
                     'text'     => $f->text ?? '',
                     'image'    => $firstImage ? Helpers::mediaUrl($firstImage) : null,
+                    'video'    => $video ? Helpers::mediaUrl($video) : null,
+                    'type'     => $type,
                     'views'    => (int) ($f->views_count ?? 0),
                     'comments' => (int) ($f->comments_count ?? 0),
                     'time'     => $f->created_at ? Carbon::parse($f->created_at)->format('Y-m-d') : '',
