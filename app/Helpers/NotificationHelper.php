@@ -120,8 +120,13 @@ class NotificationHelper
                 (string) ($config->{$key . '_description'} ?? '')
             );
 
+            // Reach every push-enabled user (info_banner banner/alert) EXCEPT those who
+            // explicitly disabled this specific type. Using `!= 'false'` (Mongo $ne) means
+            // users whose per-type field was never set — e.g. new_ai_videos, which registration
+            // never seeds — still receive it, instead of the old `== 'true'` which matched
+            // nobody for any type other than new_history.
             $users = \App\Models\User::whereNotNull('fcm_token')
-                ->where($key, 'true')
+                ->where($key, '!=', 'false')
                 ->whereIn('info_banner', ['banner', 'alert'])
                 ->get();
 

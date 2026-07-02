@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
+use App\Helpers\NotificationHelper;
 use App\Models\AIVideo;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
@@ -11,6 +12,20 @@ use Illuminate\Support\Str;
 
 class ContentAiVideoAdminController extends Controller
 {
+    /**
+     * Notify opted-in users that a new AI video is live. Config-driven: uses the admin's
+     * Portal Notifications settings (new_ai_videos toggle + title/description). Failure-safe
+     * so a bad token never aborts the upload.
+     */
+    private function broadcastNewAiVideo(AIVideo $row): void
+    {
+        NotificationHelper::sendConfiguredBroadcast(
+            'new_ai_videos',
+            ['[name]' => (string) $row->title],
+            'ai_videos'
+        );
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -42,6 +57,12 @@ class ContentAiVideoAdminController extends Controller
         ]];
 
         $row->save();
+
+        // Only push when the video is actually published (status 1), not saved as draft.
+        if ((string) $row->status === '1') {
+            $this->broadcastNewAiVideo($row);
+        }
+
         return ResponseHelper::sendResponse($row, 'AI Video created', true, 201);
     }
 
@@ -56,6 +77,9 @@ class ContentAiVideoAdminController extends Controller
         if (!$row) {
             return ResponseHelper::sendResponse(null, 'AI Video not found', false, 404);
         }
+
+        // Remember prior state so we only push when a draft first becomes published.
+        $wasPublished = (string) $row->status === '1';
 
         $row->title             = $request->title;
         $row->source            = $request->source;
@@ -77,6 +101,12 @@ class ContentAiVideoAdminController extends Controller
         }
 
         $row->save();
+
+        // Fire the push when a draft is published for the first time (0 → 1 transition).
+        if (!$wasPublished && (string) $row->status === '1') {
+            $this->broadcastNewAiVideo($row);
+        }
+
         return ResponseHelper::sendResponse($row, 'AI Video updated');
     }
 
