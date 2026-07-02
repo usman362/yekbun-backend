@@ -125,8 +125,11 @@ class UsersController extends Controller
             ->get()
             ->map(function ($f) {
                 $images = is_array($f->images) ? $f->images : [];
+                $videos = is_array($f->videos) ? $f->videos : [];
                 $firstImage = $images[0]['path'] ?? $f->image ?? null;
-                $video = $f->video ?? null;
+                // Feed videos are stored in the `videos` array ([{path,...}]) — NOT a `video`
+                // field — so a video post was being mis-classified as "text".
+                $video = $videos[0]['path'] ?? ($f->video ?? null);
                 // Classify the feed so the card shows a video player / image / text
                 // instead of a generic gradient with no hint of the content type.
                 $type = $video ? 'video' : ($firstImage ? 'image' : 'text');
