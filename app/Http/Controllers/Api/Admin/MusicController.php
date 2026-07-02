@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
 use App\Helpers\Helpers;
+use App\Helpers\NotificationHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Artist;
 use App\Models\ArtistFavorite;
+use App\Models\MusicCategory;
 use App\Models\Region;
 use App\Models\Song;
 use App\Models\SongViews;
@@ -138,6 +140,62 @@ class MusicController extends Controller
         return ResponseHelper::sendResponse($result, 'Video clips fetched.');
     }
 
+    /** GET /admin/music/categories — music types for the Create Song dropdown. */
+    public function musicCategories()
+    {
+        $cats = MusicCategory::orderBy('name')->get();
+        $result = $cats->map(fn($c) => [
+            'id'   => (string) $c->getKey(),
+            'name' => $c->name ?? '',
+        ])->values();
+
+        return ResponseHelper::sendResponse($result, 'Music categories fetched.');
+    }
+
+    /** POST /admin/music/songs — create a song (artist + audio + optional cover). */
+    public function storeSong(Request $request)
+    {
+        $request->validate([
+            'artist_id' => 'required|string',
+            'audio'     => 'required|file',
+        ]);
+
+        $song = new Song();
+        $song->artist_id = $request->input('artist_id');
+        if ($request->filled('category_id')) $song->category_id = $request->input('category_id');
+        $song->status = $request->input('status', '1');
+
+        $audioFile = $request->file('audio');
+        // No title field in the form → name comes from the request, else the audio filename.
+        $song->name = $request->input('name')
+            ?: pathinfo($audioFile->getClientOriginalName(), PATHINFO_FILENAME);
+        $song->file_size = round($audioFile->getSize() / 1024 / 1024, 2);
+        // Read duration BEFORE fileCDNUpload (it moves the file off the temp path).
+        $length = $this->extractDuration($audioFile->getRealPath());
+        if ($length) $song->length = $length;
+        // fileCDNUpload transcodes mp3 → m4a and returns the CDN-relative path.
+        $song->audio = Helpers::fileCDNUpload($audioFile, 'audios/songs');
+
+        if ($request->hasFile('cover')) {
+            $song->image = Helpers::fileCDNUpload($request->file('cover'), 'images/songs');
+        }
+
+        $song->save();
+
+        // Config-driven push (new_music toggle + title/description). Published only.
+        if ((string) $song->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_music', ['[name]' => (string) $song->name], 'music');
+        }
+
+        return ResponseHelper::sendResponse([
+            'id'     => (string) $song->getKey(),
+            'title'  => $song->name,
+            'audio'  => Helpers::mediaUrl($song->audio) ?? '',
+            'cover'  => Helpers::mediaUrl($song->image) ?? '',
+            'length' => $song->length ?? '0:00',
+        ], 'Song created.');
+    }
+
     public function storeArtist(Request $request)
     {
         $request->validate([
@@ -153,6 +211,12 @@ class MusicController extends Controller
             $artist->image = Helpers::fileCDNUpload($request->file('image'), 'images/artist');
         }
         $artist->save();
+
+        // Config-driven push (new_artist toggle + title/description in Portal Notifications).
+        // Only when the artist is published, not saved as a draft.
+        if ((string) $artist->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_artist', ['[name]' => (string) $artist->name], 'artist');
+        }
 
         return ResponseHelper::sendResponse([
             'id'     => (string) $artist->getKey(),
@@ -221,6 +285,11 @@ class MusicController extends Controller
             if ($length) $clip->length = $length;
         }
         $clip->save();
+
+        // Config-driven push (new_video_clips toggle + title/description). Published only.
+        if ((string) $clip->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_video_clips', ['[name]' => (string) $clip->name], 'video_clips');
+        }
 
         return ResponseHelper::sendResponse([
             'id'        => (string) $clip->getKey(),
