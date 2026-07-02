@@ -84,4 +84,57 @@ class NotificationHelper
             return response()->json(['message' => 'Notification push failed (logged)', 'error' => $e->getMessage()], 200);
         }
     }
+
+    /**
+     * Config-driven broadcast for admin/content notifications (Portal Notifications).
+     *
+     * Reads the admin's `Notifications` config row and fires a push + in-app notification
+     * for a given type key (e.g. 'new_history', 'new_music'). Mirrors the legacy portal
+     * notification behaviour:
+     *   - Skips entirely unless the admin enabled that type (`{key} == 'true'`).
+     *   - Uses the admin-configured title + description ([name] etc. placeholders replaced).
+     *   - Sends only to users who have a device token, opted into that type at the user
+     *     level (same `{key}` field = 'true'), and enabled banner/alert notifications.
+     *
+     * Never throws — a broken config or token can't break the content upload that called it.
+     *
+     * @param string $key      config field, e.g. 'new_history'
+     * @param array  $replace  placeholder => value map for the description (e.g. ['[name]' => $title])
+     * @param string $type     NotificationCenter row type (e.g. 'history')
+     */
+    public static function sendConfiguredBroadcast(string $key, array $replace = [], string $type = 'general'): void
+    {
+        try {
+            $config = \App\Models\Notifications::first();
+            if (!$config || (string) ($config->{$key} ?? 'false') !== 'true') {
+                return; // admin has this notification type switched off
+            }
+
+            $title = (string) ($config->{$key . '_title'} ?? '');
+            $description = str_replace(
+                array_keys($replace),
+                array_values($replace),
+                (string) ($config->{$key . '_description'} ?? '')
+            );
+
+            $users = \App\Models\User::whereNotNull('fcm_token')
+                ->where($key, 'true')
+                ->whereIn('info_banner', ['banner', 'alert'])
+                ->get();
+
+            foreach ($users as $user) {
+                self::sendNotification($user->id, $title, $description);
+                \App\Models\NotificationCenter::create([
+                    'title'       => $title,
+                    'description' => $description,
+                    'user_id'     => $user->id,
+                    'user_image'  => $user->image ?? null,
+                    'type'        => $type,
+                    'is_read'     => 0,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('sendConfiguredBroadcast failed: ' . $e->getMessage(), ['key' => $key]);
+        }
+    }
 }

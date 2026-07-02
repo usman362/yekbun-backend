@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\Helpers;
+use App\Helpers\NotificationHelper;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -75,6 +76,11 @@ class ContentVotingsAdminController extends Controller
         $v = new Voting();
         $this->fillVoting($v, $request);
         $v->save();
+
+        // Notify opted-in users about a newly published survey (config-driven Portal Notification).
+        if ((string) $request->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_votes', ['[name]' => (string) $request->name], 'votes');
+        }
 
         return ResponseHelper::sendResponse(['id' => $v->_id], 'Survey created.', true, 201);
     }

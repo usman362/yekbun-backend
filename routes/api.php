@@ -814,6 +814,9 @@ Route::prefix('admin')->group(function () {
 
         // ─── Portal: notifications & app info ───
         Route::get('/portal/notifications', [PortalMiscAdminController::class, 'notifications']);
+        // Portal Notification templates (per-type title/description/toggle) — config editor.
+        Route::get('/portal/notification-config', [PortalMiscAdminController::class, 'notificationConfig']);
+        Route::put('/portal/notification-config', [PortalMiscAdminController::class, 'updateNotificationConfig']);
         Route::get('/app-info', [PortalMiscAdminController::class, 'appInfo']);
         Route::put('/app-info', [PortalMiscAdminController::class, 'updateAppInfo']);
 

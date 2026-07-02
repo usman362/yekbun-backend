@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
+use App\Helpers\NotificationHelper;
 use App\Models\History;
+use App\Models\NotificationCenter;
+use App\Models\User;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -42,7 +45,31 @@ class ContentHistoryAdminController extends Controller
         ]];
 
         $history->save();
+
+        // Push a notification to opted-in users when the history is PUBLISHED (status=1) —
+        // same audience/pattern the app already uses for new clips.
+        if ((string) $request->status === '1') {
+            $this->broadcastNewHistory($history);
+        }
+
         return ResponseHelper::sendResponse($history, 'History created', true, 201);
+    }
+
+    /**
+     * Notify users (with a device token who opted into banner/alert notifications) that a
+     * new history is live — creates an in-app notification-center row + fires an FCM push.
+     * NotificationHelper::sendNotification is failure-safe, so one bad token never aborts
+     * the loop or the upload.
+     */
+    private function broadcastNewHistory(History $history): void
+    {
+        // Config-driven: uses the admin's Portal Notifications settings (new_history toggle +
+        // title/description) and only reaches users who opted into history notifications.
+        NotificationHelper::sendConfiguredBroadcast(
+            'new_history',
+            ['[name]' => (string) $history->title],
+            'history'
+        );
     }
 
     public function update(Request $request, $id)
@@ -56,6 +83,10 @@ class ContentHistoryAdminController extends Controller
         if (!$history) {
             return ResponseHelper::sendResponse(null, 'History not found', false, 404);
         }
+
+        // Remember whether it was already published, so publishing a draft (0 → 1) via edit
+        // also fires the notification — without re-notifying on every save of a live history.
+        $wasPublished = (string) $history->status === '1';
 
         $history->title             = $request->title;
         $history->source            = $request->source;
@@ -77,6 +108,11 @@ class ContentHistoryAdminController extends Controller
         }
 
         $history->save();
+
+        if ((string) $request->status === '1' && !$wasPublished) {
+            $this->broadcastNewHistory($history);
+        }
+
         return ResponseHelper::sendResponse($history, 'History updated');
     }
 
