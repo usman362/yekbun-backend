@@ -90,7 +90,10 @@ class Helpers
             }
         }
 
-        $uniqueName = $uploadedFile->getClientOriginalName();
+        // Prefix a unique token so uploads NEVER collide on the CDN. Mobile clients often send
+        // every recording/image with the same client filename (e.g. "audio.m4a"), which would
+        // otherwise overwrite each other — so all voice comments ended up pointing at one file.
+        $uniqueName = uniqid() . '_' . $uploadedFile->getClientOriginalName();
         // Swap the extension on the stored filename when the content was transcoded.
         // This keeps the CDN URL truthful (e.g. `song.mp3` → `song.m4a`) so mobile can
         // pick the right native decoder/trimmer based on the filename alone.
