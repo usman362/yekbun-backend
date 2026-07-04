@@ -42,8 +42,21 @@ class FeedsController extends Controller
 
         $userId = Auth::id();
         $user = User::with(['friends', 'family'])->find($userId);
+        // People who added me as friend / family — I may see the feeds THEY shared with that
+        // circle. `friends()`/`family()` key on friend_id = me, so pluck('user_id') = the owners.
+        $friendIds = $user->friends->pluck('user_id')->toArray();
+        $familyIds = $user->family->pluck('user_id')->toArray();
 
+        // Privacy: a feed is only visible to its author + the circle it was shared with.
+        // Previously index() returned EVERY feed to EVERY user (no filter) — non-friends/
+        // non-family could see private feeds. `user_type` on a feed holds the share audience
+        // ('friends' | 'family' | 'friends & family'), same values the clip feed uses.
         $feedsQuery = Feed::with(['user', 'shareUser', 'parentFeed'])
+            ->where(function ($q) use ($userId, $friendIds, $familyIds) {
+                $q->where('user_id', $userId)
+                    ->orWhere(fn($sq) => $sq->whereIn('user_id', $friendIds)->whereIn('user_type', ['friends', 'friends & family']))
+                    ->orWhere(fn($sq) => $sq->whereIn('user_id', $familyIds)->whereIn('user_type', ['family', 'friends & family']));
+            })
             ->orderBy('_id', 'desc');
 
         if ($cursor) {
@@ -250,10 +263,28 @@ class FeedsController extends Controller
             $notify = AdminNotification::first();
             $description = Auth::user()->name . ' ' . Auth::user()->last_name . ' has posted new Feed.';
 
-            $users = UserFriends::where('friend_id', Auth::id())->where('user_type', $request->user_type)->get();
-            if ($users && $notify && $notify->feeds == 1) {
+            // Notify ONLY the circle the feed was shared with — the exact set that can now see
+            // it (feed index visibility). Recipients = friend_id rows where user_id = poster.
+            // (Old code keyed on friend_id = poster — the wrong direction — and couldn't match
+            // the 'friends & family' value at all.)
+            $types = match ((string) $request->user_type) {
+                'friends'          => ['friends'],
+                'family'           => ['family'],
+                'friends & family' => ['friends', 'family'],
+                default            => [],
+            };
+            if (!empty($types) && $notify && $notify->feeds == 1) {
+                $recipientIds = UserFriends::where('user_id', Auth::id())
+                    ->whereIn('user_type', $types)
+                    ->pluck('friend_id')
+                    ->unique()
+                    ->toArray();
+                $users = User::whereIn('_id', $recipientIds)
+                    ->whereNotNull('fcm_token')
+                    ->whereIn('info_banner', ['banner', 'alert'])
+                    ->get();
                 foreach ($users as $user) {
-                    NotificationHelper::sendNotification($user->user_id, 'Feeds Notification', $description);
+                    NotificationHelper::sendNotification($user->id, 'Feeds Notification', $description);
                     NotificationCenter::create([
                         'title' => 'Feeds Notification',
                         'description' => $description,

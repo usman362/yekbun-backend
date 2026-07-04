@@ -14,6 +14,7 @@ use App\Models\Media;
 use App\Models\NotificationCenter;
 use MongoDB\BSON\ObjectId;
 use App\Models\User;
+use App\Models\UserFriends;
 use App\Models\UserVideo;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
@@ -343,13 +344,33 @@ class ClipsController extends Controller
         );
 
         $description = Auth::user()->name . ' ' . Auth::user()->last_name . ' has posted new Clip.';
-        $users = User::where('_id', '!=', Auth::id())->whereNotNull('fcm_token')->whereIn('info_banner', ['banner', 'alert'])->get();
-        foreach ($users as $user) {
-            NotificationHelper::sendNotification($user->id, 'Clips Notification', $description);
-            NotificationCenter::create([
-                'title' => 'Clips Notification', 'description' => $description,
-                'user_id' => $user->id, 'user_image' => $user->image ?? null, 'type' => 'clips', 'is_read' => 0,
-            ]);
+        // Privacy: notify ONLY the circle this clip was shared with — never every user.
+        // Previously this pushed "new Clip" to ALL users with a token, so non-friends/
+        // non-family got pinged about (and were led to) private clips. Recipients are the
+        // people who can actually see it: friend_id rows where user_id = poster.
+        $types = match ((string) $clip->share_with) {
+            'friends'          => ['friends'],
+            'family'           => ['family'],
+            'friends & family' => ['friends', 'family'],
+            default            => [],
+        };
+        if (!empty($types)) {
+            $recipientIds = UserFriends::where('user_id', Auth::id())
+                ->whereIn('user_type', $types)
+                ->pluck('friend_id')
+                ->unique()
+                ->toArray();
+            $users = User::whereIn('_id', $recipientIds)
+                ->whereNotNull('fcm_token')
+                ->whereIn('info_banner', ['banner', 'alert'])
+                ->get();
+            foreach ($users as $user) {
+                NotificationHelper::sendNotification($user->id, 'Clips Notification', $description);
+                NotificationCenter::create([
+                    'title' => 'Clips Notification', 'description' => $description,
+                    'user_id' => $user->id, 'user_image' => $user->image ?? null, 'type' => 'clips', 'is_read' => 0,
+                ]);
+            }
         }
         return ResponseHelper::sendResponse($clip, 'Clip has been Created Successfully!');
     }
