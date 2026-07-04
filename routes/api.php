@@ -719,6 +719,7 @@ Route::prefix('admin')->group(function () {
         Route::get('/users/{id}/details', [AdminUsersController::class, 'details']);
         Route::post('/users/{id}/wallet/accept', [AdminUsersController::class, 'walletAccept']);
         Route::post('/users/{id}/wallet/reject', [AdminUsersController::class, 'walletReject']);
+        Route::delete('/users/{id}', [AdminUsersController::class, 'destroy']);
 
         // ─── Team & Role ───
         Route::get('/team/roles', [TeamRoleAdminController::class, 'roles']);

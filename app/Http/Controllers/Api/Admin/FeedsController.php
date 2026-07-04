@@ -89,42 +89,60 @@ class FeedsController extends Controller
 
     public function reportedComments()
     {
-        $reports = ReportComments::orderBy('created_at', 'desc')->get();
+        try {
+            $reports = ReportComments::orderBy('created_at', 'desc')->get();
 
-        $commentIds = $reports->pluck('comment_id')->unique()->filter()->toArray();
-        $comments = FeedComments::whereIn('_id', $commentIds)->get()->keyBy('_id');
+            // Only query `_id` with strings that are real 24-char hex ObjectIds. A single bad
+            // value (empty, legacy numeric id, malformed) makes the Mongo driver throw while
+            // casting → the whole endpoint 500s. Filtering keeps it resilient to dirty data.
+            $commentIds = $this->onlyObjectIds($reports->pluck('comment_id'));
+            $comments = FeedComments::whereIn('_id', $commentIds)->get()->keyBy('_id');
 
-        $userIds = $reports->pluck('user_id')
-            ->merge($comments->pluck('user_id'))
-            ->unique()->filter()->toArray();
-        $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
+            $userIds = $this->onlyObjectIds(
+                $reports->pluck('user_id')->merge($comments->pluck('user_id'))
+            );
+            $users = User::whereIn('_id', $userIds)->get()->keyBy('_id');
 
-        $rows = $reports->map(function ($r) use ($comments, $users) {
-            $c = $comments->get($r->comment_id);
-            $commentUser = $c ? $users->get($c->user_id) : null;
-            $reporter = $users->get($r->user_id);
-            return [
-                'id'               => $r->_id,
-                'comment_id'       => $r->comment_id,
-                'feed_id'          => $c->feed_id ?? null,
-                'comment_text'     => $c->comment ?? '',
-                'comment_type'     => $c->comment_type ?? 'normal',
-                'comment_user'     => $commentUser ? [
-                    'id'       => $commentUser->_id,
-                    'username' => $commentUser->username ?? $commentUser->name ?? 'User',
-                    'avatar'   => Helpers::mediaUrl($commentUser->image) ?? '',
-                ] : null,
-                'reporter'         => $reporter ? [
-                    'id'       => $reporter->_id,
-                    'username' => $reporter->username ?? $reporter->name ?? 'User',
-                    'avatar'   => Helpers::mediaUrl($reporter->image) ?? '',
-                ] : null,
-                'reason'           => $r->reason ?? '',
-                'reported_at'      => Carbon::parse($r->created_at)->diffForHumans(),
-            ];
-        })->values()->toArray();
+            $rows = $reports->map(function ($r) use ($comments, $users) {
+                $c = $comments->get($r->comment_id);
+                $commentUser = $c ? $users->get($c->user_id) : null;
+                $reporter = $users->get($r->user_id);
+                return [
+                    'id'               => $r->_id,
+                    'comment_id'       => $r->comment_id,
+                    'feed_id'          => $c->feed_id ?? null,
+                    'comment_text'     => $c->comment ?? '',
+                    'comment_type'     => $c->comment_type ?? 'normal',
+                    'comment_user'     => $commentUser ? [
+                        'id'       => $commentUser->_id,
+                        'username' => $commentUser->username ?? $commentUser->name ?? 'User',
+                        'avatar'   => Helpers::mediaUrl($commentUser->image) ?? '',
+                    ] : null,
+                    'reporter'         => $reporter ? [
+                        'id'       => $reporter->_id,
+                        'username' => $reporter->username ?? $reporter->name ?? 'User',
+                        'avatar'   => Helpers::mediaUrl($reporter->image) ?? '',
+                    ] : null,
+                    'reason'           => $r->reason ?? '',
+                    'reported_at'      => $r->created_at ? Carbon::parse($r->created_at)->diffForHumans() : '',
+                ];
+            })->values()->toArray();
 
-        return ResponseHelper::sendResponse($rows, 'Reported comments fetched.');
+            return ResponseHelper::sendResponse($rows, 'Reported comments fetched.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('reportedComments failed: ' . $e->getMessage());
+            return ResponseHelper::sendResponse([], 'Could not load reported comments.', false, 500);
+        }
+    }
+
+    /** Keep only values that are valid 24-char hex ObjectId strings (safe for `_id` queries). */
+    private function onlyObjectIds($collection): array
+    {
+        return collect($collection)
+            ->filter(fn($id) => is_string($id) && preg_match('/^[0-9a-fA-F]{24}$/', $id))
+            ->unique()
+            ->values()
+            ->toArray();
     }
 
     public function feedComments(Request $request, $id)

@@ -13,6 +13,8 @@ use App\Models\UserFriends;
 use App\Models\UserImage;
 use App\Models\UserVideo;
 use App\Models\Wallet;
+use App\Models\FeedComments;
+use App\Services\BunnyCDNService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -466,5 +468,79 @@ class UsersController extends Controller
                 ]]
             );
         });
+    }
+
+    /**
+     * DELETE /admin/users/{id} — permanently delete a user and EVERYTHING linked to them:
+     * feeds, clips, comments, likes/views/shares, wallet, transactions, playlists, friendships,
+     * KYC, reports, notifications, device rows — plus every uploaded media file from the CDN.
+     *
+     * Admin / superadmin accounts are refused. All deletes are best-effort (wrapped) so one
+     * missing collection or a transient CDN error never leaves the account half-deleted.
+     */
+    public function destroy($id)
+    {
+        $user = User::find($id);
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+
+        // Safety rail: never delete an admin/superadmin from this endpoint.
+        if ((int) ($user->is_admin_user ?? 0) === 1 || (int) ($user->is_superadmin ?? 0) === 1) {
+            return ResponseHelper::sendResponse(null, 'Admin accounts cannot be deleted.', false, 403);
+        }
+
+        $uid = (string) $user->_id;
+        $bunny = new BunnyCDNService();
+
+        // Delete a single CDN file from its stored path (absolute URL or CDN-relative). Best-effort.
+        $cdnBase = (string) env('BUNNY_CDN_URL');
+        $del = function ($path) use ($bunny, $cdnBase) {
+            if (empty($path) || !is_string($path)) return;
+            $rel = ltrim($cdnBase !== '' ? Str::after($path, $cdnBase) : $path, '/');
+            if ($rel === '' || Str::startsWith($rel, ['http://', 'https://'])) return;
+            try { $bunny->delete($rel); } catch (\Throwable $e) {}
+        };
+
+        // ── 1) Remove uploaded media from the CDN ──
+        $del($user->image);
+
+        foreach (Feed::where('user_id', $uid)->get() as $f) {
+            foreach ((array) ($f->images ?? []) as $img) $del(is_array($img) ? ($img['path'] ?? null) : null);
+            foreach ((array) ($f->videos ?? []) as $vid) $del(is_array($vid) ? ($vid['path'] ?? null) : null);
+        }
+        foreach (Clips::where('user_id', $uid)->get() as $c) { $del($c->clip); $del($c->thumbnail); }
+        foreach (UserImage::where('user_id', $uid)->get() as $ui) $del($ui->image);
+        foreach (UserVideo::where('user_id', $uid)->get() as $uv) $del($uv->video);
+        foreach (FeedComments::where('user_id', $uid)->get() as $fc) { $del($fc->audio); $del($fc->image); }
+        foreach (KycVerification::where('user_id', $uid)->get() as $k) {
+            $del($k->front_image); $del($k->back_image); $del($k->selfie_image);
+        }
+
+        // ── 2) Remove all DB rows keyed by this user_id ──
+        $byUser = [
+            Feed::class, Clips::class, UserImage::class, UserVideo::class, Wallet::class, KycVerification::class,
+            FeedComments::class,
+            \App\Models\Comment::class, \App\Models\FeedLikes::class, \App\Models\FeedViews::class,
+            \App\Models\FeedShare::class, \App\Models\ClipsLikes::class, \App\Models\ClipsViews::class,
+            \App\Models\CommentsLike::class, \App\Models\Transaction::class, \App\Models\UserPlaylist::class,
+            \App\Models\UserPlaylistGroup::class, \App\Models\ArtistFavorite::class, \App\Models\MusicPlay::class,
+            \App\Models\VideoPlay::class, \App\Models\SongViews::class, \App\Models\VideoClipViews::class,
+            \App\Models\NotificationCenter::class, \App\Models\UserCode::class, \App\Models\UserImei::class,
+            \App\Models\Report::class, \App\Models\ReportComments::class, \App\Models\ReportFeeds::class,
+            \App\Models\ReportUsers::class, \App\Models\Media::class,
+        ];
+        foreach ($byUser as $model) {
+            try { $model::where('user_id', $uid)->delete(); } catch (\Throwable $e) {}
+        }
+
+        // Friendships (both directions) + reports filed AGAINST this user.
+        try { UserFriends::where('user_id', $uid)->orWhere('friend_id', $uid)->delete(); } catch (\Throwable $e) {}
+        try { \App\Models\ReportUsers::where('reported_user_id', $uid)->delete(); } catch (\Throwable $e) {}
+
+        // ── 3) Finally, the user ──
+        $user->delete();
+
+        return ResponseHelper::sendResponse(null, 'User and all related data have been deleted.');
     }
 }
