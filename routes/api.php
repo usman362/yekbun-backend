@@ -848,12 +848,14 @@ Route::prefix('admin')->group(function () {
         Route::post('/content/history', [ContentHistoryAdminController::class, 'store']);
         Route::put('/content/history/{id}', [ContentHistoryAdminController::class, 'update']);
         Route::delete('/content/history/{id}', [ContentHistoryAdminController::class, 'destroy']);
+        Route::get('/content/history/{id}/comments', [ContentHistoryAdminController::class, 'comments']);
 
         // ─── Content: AI Videos (create/edit/delete + thumbnail generation) ───
         Route::post('/content/ai-videos/generate-thumbnails', [ContentAiVideoAdminController::class, 'generateThumbnails']);
         Route::post('/content/ai-videos', [ContentAiVideoAdminController::class, 'store']);
         Route::put('/content/ai-videos/{id}', [ContentAiVideoAdminController::class, 'update']);
         Route::delete('/content/ai-videos/{id}', [ContentAiVideoAdminController::class, 'destroy']);
+        Route::get('/content/ai-videos/{id}/comments', [ContentAiVideoAdminController::class, 'comments']);
 
         // ─── Generic file upload to BunnyCDN ───
         Route::post('/files/upload', [AdminFileController::class, 'upload']);

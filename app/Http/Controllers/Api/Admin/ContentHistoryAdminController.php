@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
 use App\Helpers\NotificationHelper;
+use App\Helpers\CommentPresenter;
 use App\Models\History;
 use App\Models\NotificationCenter;
 use App\Models\User;
@@ -14,6 +15,15 @@ use Illuminate\Support\Str;
 
 class ContentHistoryAdminController extends Controller
 {
+    /** GET /admin/content/history/{id}/comments — real comments for the detail modal. */
+    public function comments($id)
+    {
+        return ResponseHelper::sendResponse(
+            CommentPresenter::forFeed($id, 'history'),
+            'History comments fetched.'
+        );
+    }
+
     public function store(Request $request)
     {
         $request->validate([

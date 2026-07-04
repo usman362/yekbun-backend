@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
 use App\Helpers\NotificationHelper;
+use App\Helpers\CommentPresenter;
 use App\Models\AIVideo;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
@@ -12,6 +13,15 @@ use Illuminate\Support\Str;
 
 class ContentAiVideoAdminController extends Controller
 {
+    /** GET /admin/content/ai-videos/{id}/comments — real comments for the detail modal. */
+    public function comments($id)
+    {
+        return ResponseHelper::sendResponse(
+            CommentPresenter::forFeed($id, 'ai_videos'),
+            'AI video comments fetched.'
+        );
+    }
+
     /**
      * Notify opted-in users that a new AI video is live. Config-driven: uses the admin's
      * Portal Notifications settings (new_ai_videos toggle + title/description). Failure-safe

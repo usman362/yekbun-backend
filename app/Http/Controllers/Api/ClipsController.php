@@ -198,12 +198,26 @@ class ClipsController extends Controller
         $videoVolume = max(0.0, min(2.0, (float) ($request->video_volume ?? 0.8)));
         $audioVolume = max(0.0, min(2.0, (float) ($request->audio_volume ?? 0.5)));
 
-        if ($hasUserAudio) {
-            // Mix the user's audio over the video's audio track.
-            // `duration=longest` (NOT `first`) + dropping `-shortest` so the output keeps the
-            // full length of whichever is longer — never truncates to the shorter input.
+        // Does the SOURCE video carry an audio track? Many recordings (AI-generated clips,
+        // muted screen captures) have video only. If we amix against a non-existent `[0:a]`,
+        // ffmpeg aborts with "Stream specifier '0:a' matches no streams" → the generic
+        // "Video processing failed" the user sees. So we branch on this.
+        $srcHasAudio = false;
+        if ($ffprobeBin !== '') {
+            $srcAudio = trim((string) @shell_exec(sprintf(
+                '%s -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 %s 2>&1',
+                escapeshellcmd($ffprobeBin),
+                escapeshellarg($videoLocal)
+            )));
+            $srcHasAudio = $srcAudio !== '';
+        }
+
+        if ($hasUserAudio && $srcHasAudio) {
+            // Mix the user's audio over the video's own audio track.
+            // `duration=longest` (NOT `first`) keeps the full length of whichever is longer.
+            // `-c:v copy` avoids re-encoding the video (fast, lossless — we only touch audio).
             $command = sprintf(
-                '%s -y -i %s -i %s -filter_complex %s -map 0:v -map "[a]" %s 2>&1',
+                '%s -y -i %s -i %s -filter_complex %s -map 0:v -map "[a]" -c:v copy -c:a aac -movflags +faststart %s 2>&1',
                 escapeshellcmd($ffmpegBin),
                 escapeshellarg($videoLocal),
                 escapeshellarg($audioPath),
@@ -214,12 +228,24 @@ class ClipsController extends Controller
                 )),
                 escapeshellarg($outputPath)
             );
+        } elseif ($hasUserAudio) {
+            // User picked audio but the video is silent — use the user's audio as the ONLY
+            // track. (The old code referenced `[0:a]` here and crashed on silent videos.)
+            // No `-shortest`: keep the full video length even if the audio is shorter.
+            $command = sprintf(
+                '%s -y -i %s -i %s -filter_complex %s -map 0:v -map "[a]" -c:v copy -c:a aac -movflags +faststart %s 2>&1',
+                escapeshellcmd($ffmpegBin),
+                escapeshellarg($videoLocal),
+                escapeshellarg($audioPath),
+                escapeshellarg(sprintf('[1:a]volume=%.3f[a]', $audioVolume)),
+                escapeshellarg($outputPath)
+            );
         } else {
             // No user audio — just remux the video as-is. Stream copy means no re-encode
             // (fast, lossless) and preserves the video's original audio track. If the video
             // has no audio track at all, `-c copy` happily produces a silent-but-valid mp4.
             $command = sprintf(
-                '%s -y -i %s -c copy %s 2>&1',
+                '%s -y -i %s -c copy -movflags +faststart %s 2>&1',
                 escapeshellcmd($ffmpegBin),
                 escapeshellarg($videoLocal),
                 escapeshellarg($outputPath)

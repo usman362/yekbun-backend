@@ -34,9 +34,16 @@ class MultimediaController extends Controller
 {
     public function getAllSongs()
     {
+        // Only surface songs that actually have an audio file. A song with a null/empty
+        // `audio` can't play and — when picked in the clip creator — breaks the ffmpeg step
+        // ("Video processing failed"). Filtering here keeps such half-created/seed rows out
+        // of every music + clip-editor list instead of erroring on the client.
         $songs = Song::with(['artist', 'playlists'])->whereHas('artist', function ($q) {
             $q->where('status', '1');
-        })->orderBy('created_at', 'desc')->get();
+        })
+            ->where('audio', '!=', null)
+            ->where('audio', '!=', '')
+            ->orderBy('created_at', 'desc')->get();
         return ResponseHelper::sendResponse($songs, 'All Songs Fetch Successfully!');
     }
 
@@ -48,7 +55,10 @@ class MultimediaController extends Controller
 
     public function getAllSongsPublic()
     {
-        $songs = Song::with('artist')->orderBy('created_at', 'desc')->get();
+        $songs = Song::with('artist')
+            ->where('audio', '!=', null)
+            ->where('audio', '!=', '')
+            ->orderBy('created_at', 'desc')->get();
         return ResponseHelper::sendResponse($songs, 'All Songs Fetch Successfully!');
     }
 
@@ -64,7 +74,10 @@ class MultimediaController extends Controller
         if (!$artist) {
             return ResponseHelper::sendResponse([], 'Artist not found!', false, 404);
         }
-        $songs = Song::with('playlists')->where('artist_id', $id)->get();
+        $songs = Song::with('playlists')->where('artist_id', $id)
+            ->where('audio', '!=', null)
+            ->where('audio', '!=', '')
+            ->get();
         return ResponseHelper::sendResponse(['artist' => $artist, 'songs' => $songs], 'Songs Fetch Successfully!');
     }
 
