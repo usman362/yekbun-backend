@@ -206,7 +206,10 @@ class UsersController extends Controller
                     'id'        => $c->_id,
                     'title'     => $c->title ?? 'Clip',
                     'thumbnail' => Helpers::mediaUrl($c->thumbnail) ?? '',
-                    'video'     => Helpers::mediaUrl($c->video ?? $c->video_path) ?? '',
+                    // Clips store their processed video in the `clip` field (see ClipsController
+                    // store_clips). The old `$c->video`/`video_path` were always empty → the reel
+                    // opened with no source and wouldn't play in the User Content modal.
+                    'video'     => Helpers::mediaUrl($c->clip ?? $c->video ?? $c->video_path) ?? '',
                     'views'     => 0,
                     'duration'  => '',
                 ];
