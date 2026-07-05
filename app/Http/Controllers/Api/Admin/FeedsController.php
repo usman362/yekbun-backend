@@ -458,7 +458,11 @@ class FeedsController extends Controller
                 'avatar'          => Helpers::mediaUrl($user->image) ?? '',
                 'timestamp'       => Carbon::parse($feed->created_at)->diffForHumans(),
                 'image'           => $firstImage,
-                'media'           => count($media) > 1 ? $media : [],
+                // Always send the media array (even for a single item) so the card knows the
+                // type. Previously single-media feeds sent [] and the frontend fell back to
+                // treating `image` as an <img> — a single VIDEO feed then rendered its video
+                // URL inside an <img> → broken image icon.
+                'media'           => $media,
                 'views'           => (int) ($feed->views_count ?? 0),
                 'shares'          => (int) ($feed->shares_count ?? 0),
                 'edits'           => 0,
