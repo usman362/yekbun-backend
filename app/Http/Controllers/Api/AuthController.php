@@ -378,6 +378,39 @@ class AuthController extends Controller
         }
     }
 
+    /**
+     * GET|POST /check-username — Instagram-style live availability check.
+     *
+     * Returns { available: bool, message } so the signup screen can validate as the user types.
+     * Username match is case-insensitive so "Ali" and "ali" can't both be taken.
+     *
+     *   /check-username?username=ali_khan
+     */
+    public function checkUsername(Request $request)
+    {
+        $username = trim((string) $request->input('username', ''));
+
+        if ($username === '') {
+            return response()->json(['success' => false, 'available' => false, 'message' => 'Username is required.'], 422);
+        }
+        if (mb_strlen($username) < 3 || mb_strlen($username) > 30) {
+            return response()->json(['success' => true, 'available' => false, 'message' => 'Username must be 3–30 characters.']);
+        }
+        if (!preg_match('/^[a-zA-Z0-9._]+$/', $username)) {
+            return response()->json(['success' => true, 'available' => false, 'message' => 'Only letters, numbers, dots and underscores are allowed.']);
+        }
+
+        // Case-insensitive exact match on the whole value (anchored regex).
+        $taken = User::where('username', 'regexp', '/^' . preg_quote($username, '/') . '$/i')->exists();
+
+        return response()->json([
+            'success'   => true,
+            'available' => !$taken,
+            'username'  => $username,
+            'message'   => $taken ? 'Username is already taken.' : 'Username is available.',
+        ]);
+    }
+
     public function reactivateAccount(Request $request)
     {
         try {
