@@ -102,6 +102,8 @@ use App\Http\Controllers\Api\Admin\ContentVotingsAdminController;
 use App\Http\Controllers\Api\Admin\OfficialsAdminController;
 use App\Http\Controllers\Api\Admin\FileController as AdminFileController;
 use App\Http\Controllers\Api\Admin\FeedsSettingsAdminController;
+use App\Http\Controllers\Api\Admin\AppUpdatesAdminController;
+use App\Http\Controllers\Api\Admin\MaintenanceAdminController;
 use App\Http\Controllers\Api\Admin\SystemAdminController;
 use App\Http\Controllers\Api\Admin\SettingsAdminController;
 use App\Http\Controllers\Api\Admin\TransactionsAdminController;
@@ -127,6 +129,10 @@ Route::get('/test', function () {
 // ─── Authentication ───
 Route::post('/signup', [AuthController::class, 'signup']);
 Route::get('/check-username', [AuthController::class, 'checkUsername']);
+// Public: mobile app polls this for the live release (force-update check).
+Route::get('/app/update', [AppUpdatesAdminController::class, 'current']);
+// Public: mobile app checks what's under maintenance.
+Route::get('/maintenance', [MaintenanceAdminController::class, 'status']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's
@@ -905,6 +911,18 @@ Route::prefix('admin')->group(function () {
         Route::post('/complaints/{id}/status', [ComplaintsAdminController::class, 'updateStatus']);
 
         // ─── Feeds settings (backgrounds / emojis) ───
+        // ─── App Updates (mobile release manager) ───
+        Route::get('/app-updates', [AppUpdatesAdminController::class, 'index']);
+        Route::post('/app-updates', [AppUpdatesAdminController::class, 'store']);
+        Route::put('/app-updates/{id}', [AppUpdatesAdminController::class, 'update']);
+        Route::delete('/app-updates/{id}', [AppUpdatesAdminController::class, 'destroy']);
+        Route::post('/app-updates/{id}/set-current', [AppUpdatesAdminController::class, 'setCurrent']);
+        Route::post('/app-updates/{id}/toggle-force', [AppUpdatesAdminController::class, 'toggleForce']);
+
+        // ─── Maintenance Mode ───
+        Route::get('/maintenance', [MaintenanceAdminController::class, 'index']);
+        Route::put('/maintenance', [MaintenanceAdminController::class, 'save']);
+
         Route::get('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'backgrounds']);
         Route::post('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'storeBackground']);
         Route::put('/feeds-settings/backgrounds/{id}', [FeedsSettingsAdminController::class, 'updateBackground']);
