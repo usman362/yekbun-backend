@@ -126,7 +126,7 @@ Route::get('/test', function () {
 
 // ─── Authentication ───
 Route::post('/signup', [AuthController::class, 'signup']);
-Route::match(['get', 'post'], '/check-username', [AuthController::class, 'checkUsername']);
+Route::get('/check-username', [AuthController::class, 'checkUsername']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's
