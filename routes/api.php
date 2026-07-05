@@ -769,6 +769,9 @@ Route::prefix('admin')->group(function () {
         // ─── Ringtones ───
         Route::get('/ringtones', [AdminRingtoneController::class, 'index']);
         Route::get('/ringtones/stats', [AdminRingtoneController::class, 'stats']);
+        Route::post('/ringtones', [AdminRingtoneController::class, 'store']);
+        Route::post('/ringtones/{id}/toggle', [AdminRingtoneController::class, 'toggle']);
+        Route::delete('/ringtones/{id}', [AdminRingtoneController::class, 'destroy']);
 
         // ─── User Clips ───
         Route::get('/clips/templates', [AdminUserClipsController::class, 'templates']);

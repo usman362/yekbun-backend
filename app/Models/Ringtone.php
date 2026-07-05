@@ -11,5 +11,10 @@ class Ringtone extends Model
     protected $connection = 'mongodb';
     protected $table = 'ringtones';
 
-    protected $fillable = ['fileName', 'filePath', 'fileSize', 'ringType'];
+    protected $fillable = ['fileName', 'filePath', 'fileSize', 'ringType', 'is_active', 'downloads', 'duration'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'downloads' => 'integer',
+    ];
 }
