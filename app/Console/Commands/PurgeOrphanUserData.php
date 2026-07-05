@@ -26,7 +26,7 @@ use Illuminate\Support\Str;
  */
 class PurgeOrphanUserData extends Command
 {
-    protected $signature = 'users:purge-orphans {--dry-run : Report what would be deleted, change nothing} {--yes : Skip the confirmation prompt}';
+    protected $signature = 'users:purge-orphans {--dry-run : Report what would be deleted, change nothing} {--yes : Skip the confirmation prompt} {--force : Override the empty-users safety guard (dangerous)}';
 
     protected $description = 'Delete data (DB rows + CDN media) belonging to users that no longer exist.';
 
@@ -38,6 +38,18 @@ class PurgeOrphanUserData extends Command
         // that references a user is orphaned.
         $existing = User::pluck('_id')->map(fn($id) => (string) $id)->flip();
         $this->info(($dry ? '[DRY RUN] ' : '') . "Existing users: {$existing->count()}");
+
+        // SAFETY: refuse to run for real when the users collection is empty (or nearly so).
+        // In that state EVERY row is "orphaned" and the purge would wipe all content + CDN
+        // media — almost always a mistake (e.g. the users collection was accidentally dropped).
+        if (!$dry && $existing->count() < 5) {
+            $this->error('Users collection is empty or nearly empty (' . $existing->count() . ' users).');
+            $this->error('Refusing to purge — this would delete ALL content + media. Restore users first,');
+            $this->error('or use --dry-run to inspect. Override intentionally with --force if you are sure.');
+            if (!$this->option('force')) {
+                return self::FAILURE;
+            }
+        }
 
         $isOrphan = fn($uid) => $uid !== null && $uid !== '' && !$existing->has((string) $uid);
 
