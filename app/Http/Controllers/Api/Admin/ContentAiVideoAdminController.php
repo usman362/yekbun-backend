@@ -22,6 +22,15 @@ class ContentAiVideoAdminController extends Controller
         );
     }
 
+    /** POST /admin/content/ai-videos/{id}/comments — admin adds a comment. */
+    public function addComment(Request $request, $id)
+    {
+        $request->validate(['comment' => 'required|string|max:2000']);
+        $row = CommentPresenter::addComment($id, 'ai_videos', trim($request->comment));
+        AIVideo::where('_id', $id)->increment('comments_count');
+        return ResponseHelper::sendResponse($row, 'Comment added.', true, 201);
+    }
+
     /**
      * Notify opted-in users that a new AI video is live. Config-driven: uses the admin's
      * Portal Notifications settings (new_ai_videos toggle + title/description). Failure-safe

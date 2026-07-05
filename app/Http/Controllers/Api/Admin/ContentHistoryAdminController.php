@@ -24,6 +24,15 @@ class ContentHistoryAdminController extends Controller
         );
     }
 
+    /** POST /admin/content/history/{id}/comments — admin adds a comment. */
+    public function addComment(Request $request, $id)
+    {
+        $request->validate(['comment' => 'required|string|max:2000']);
+        $row = CommentPresenter::addComment($id, 'history', trim($request->comment));
+        History::where('_id', $id)->increment('comments_count');
+        return ResponseHelper::sendResponse($row, 'Comment added.', true, 201);
+    }
+
     public function store(Request $request)
     {
         $request->validate([
