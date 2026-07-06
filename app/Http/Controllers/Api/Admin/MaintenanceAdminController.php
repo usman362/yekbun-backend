@@ -66,10 +66,15 @@ class MaintenanceAdminController extends Controller
             }
         }
 
+        // HTTP 410 (Gone) whenever ANY maintenance is active — full platform OR any offline
+        // section — so the mobile app detects it straight from the status code. Only fully
+        // online returns 200. The body still says exactly what's offline.
+        $status = ($config->full_platform || count($offline) > 0) ? 410 : 200;
+
         return response()->json([
             'full_platform' => (bool) $config->full_platform,
             'offline'       => $offline,
-        ]);
+        ], $status);
     }
 
     // ── helpers ──
