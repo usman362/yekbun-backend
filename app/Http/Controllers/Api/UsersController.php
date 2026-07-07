@@ -336,13 +336,18 @@ class UsersController extends Controller
     public function request_list(Request $request, $id)
     {
         try {
-            $user = User::select('id', 'name')->with(['user_requests' => function ($q) {
+            $user = User::with(['user_requests' => function ($q) {
                 $q->with('user');
             }])->find($id);
+
+            if (!$user) {
+                return ResponseHelper::sendResponse([], 'User Not Found!', false, 404);
+            }
+
             $friends_list = $user->user_requests;
             return ResponseHelper::sendResponse($friends_list, 'Requests List Fetch Successfully');
         } catch (Exception $e) {
-            return ResponseHelper::sendResponse([], 'Error to Fetch Requests List', false, 403);
+            return ResponseHelper::sendResponse([], 'Error to Fetch Requests List: ' . $e->getMessage(), false, 403);
         }
     }
 
