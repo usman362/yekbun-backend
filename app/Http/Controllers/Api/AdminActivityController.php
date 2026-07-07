@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\NotificationHelper;
 use App\Http\Controllers\Controller;
 use App\Models\PopFeeds;
 use App\Models\SosPopup;
@@ -103,7 +104,9 @@ class AdminActivityController extends Controller
             return response()->json(['message' => 'Popup Feed not found.'], 404);
         }
         $data['user_id'] = 0; $data['status'] = 1;
-        return response()->json(['message' => 'Popup Feed added successfully.', 'data' => PopFeeds::create($data)], 201);
+        $feed = PopFeeds::create($data);
+        $this->notifyAdminActivity($request, 'admin_system_info', $request->title, 'system');
+        return response()->json(['message' => 'Popup Feed added successfully.', 'data' => $feed], 201);
     }
 
     public function store_donation(Request $request)
@@ -134,7 +137,9 @@ class AdminActivityController extends Controller
             return response()->json(['message' => 'Donation not found.'], 404);
         }
         $data['user_id'] = 0; $data['status'] = 1;
-        return response()->json(['message' => 'Donation added successfully.', 'data' => PopFeeds::create($data)], 201);
+        $feed = PopFeeds::create($data);
+        $this->notifyAdminActivity($request, 'admin_donation', $request->title, 'donation');
+        return response()->json(['message' => 'Donation added successfully.', 'data' => $feed], 201);
     }
 
     public function store_surveys(Request $request)
@@ -165,7 +170,9 @@ class AdminActivityController extends Controller
             return response()->json(['message' => 'Survey not found.'], 404);
         }
         $data['user_id'] = 0; $data['status'] = 1;
-        return response()->json(['message' => 'Survey added successfully.', 'data' => PopFeeds::create($data)], 201);
+        $feed = PopFeeds::create($data);
+        $this->notifyAdminActivity($request, 'admin_surveys', $request->title, 'surveys');
+        return response()->json(['message' => 'Survey added successfully.', 'data' => $feed], 201);
     }
 
     public function store_greetings(Request $request)
@@ -196,7 +203,9 @@ class AdminActivityController extends Controller
             return response()->json(['message' => 'Greeting not found.'], 404);
         }
         $data['user_id'] = 0; $data['status'] = 1;
-        return response()->json(['message' => 'Greeting added successfully.', 'data' => PopFeeds::create($data)], 201);
+        $feed = PopFeeds::create($data);
+        $this->notifyAdminActivity($request, 'admin_greetings', $request->title, 'greetings');
+        return response()->json(['message' => 'Greeting added successfully.', 'data' => $feed], 201);
     }
 
     public function store_userSos(Request $request)
@@ -225,7 +234,9 @@ class AdminActivityController extends Controller
             return response()->json(['message' => 'SOS not found.'], 404);
         }
         $data['user_id'] = 0; $data['status'] = 1;
-        return response()->json(['message' => 'SOS added successfully.', 'data' => PopFeeds::create($data)], 201);
+        $feed = PopFeeds::create($data);
+        $this->notifyAdminActivity($request, 'admin_sos', $request->title, 'sos');
+        return response()->json(['message' => 'SOS added successfully.', 'data' => $feed], 201);
     }
 
     public function store_goLive(Request $request)
@@ -258,7 +269,9 @@ class AdminActivityController extends Controller
             return response()->json(['message' => 'Event not found.'], 404);
         }
         $data['user_id'] = 0; $data['status'] = 1;
-        return response()->json(['message' => 'Event added successfully.', 'data' => PopFeeds::create($data)], 201);
+        $feed = PopFeeds::create($data);
+        $this->notifyAdminActivity($request, 'admin_events', $request->title, 'event');
+        return response()->json(['message' => 'Event added successfully.', 'data' => $feed], 201);
     }
 
     public function store_agentFeed(Request $request)
@@ -306,5 +319,14 @@ class AdminActivityController extends Controller
         }
         $popfeed->delete();
         return ResponseHelper::sendResponse(['id' => $id], 'Popup Feed deleted successfully.');
+    }
+
+    /** Portal Notifications — only on create, respects admin toggle in Notifications config. */
+    private function notifyAdminActivity(Request $request, string $key, ?string $title, string $type): void
+    {
+        if (($request->id ?? 0) > 0 || !$title) {
+            return;
+        }
+        NotificationHelper::sendConfiguredBroadcast($key, ['[name]' => (string) $title], $type);
     }
 }

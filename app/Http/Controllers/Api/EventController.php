@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
+use App\Helpers\NotificationHelper;
 
 class EventController extends Controller
 {
@@ -41,6 +42,12 @@ class EventController extends Controller
         $validated = $request->validated();
 
         $event = Event::create($validated);
+
+        NotificationHelper::sendConfiguredBroadcast(
+            'new_events',
+            ['[name]' => (string) ($validated['title'] ?? $validated['name'] ?? 'Event')],
+            'events'
+        );
 
         return [
             "message" => "Event successfully created.",

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDonationRequest;
 use App\Http\Requests\UpdateDonationRequest;
+use App\Helpers\NotificationHelper;
 
 class DonationController extends Controller
 {
@@ -44,6 +45,12 @@ class DonationController extends Controller
         $validated['end_date'] .= ' 23:59:59'; 
 
         $donation = Donation::create($validated);
+
+        NotificationHelper::sendConfiguredBroadcast(
+            'new_donation',
+            ['[name]' => (string) ($validated['title'] ?? $validated['name'] ?? 'Donation')],
+            'donation'
+        );
 
         return [
             "message" => "Donation successfully created.",

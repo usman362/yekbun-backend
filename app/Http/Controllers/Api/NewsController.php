@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\News;
 use App\Models\NewsCategory;
+use App\Helpers\NotificationHelper;
 
 class NewsController extends Controller
 {
@@ -54,6 +55,7 @@ class NewsController extends Controller
             'category_id' => $request->category_id,
             'image' => $imagePath
         ]);
+        NotificationHelper::sendConfiguredBroadcast('new_news', ['[name]' => (string) $request->title], 'news');
         return response()->json([
             "success" => true,
             "message" => "News successfully created.",
