@@ -104,6 +104,7 @@ use App\Http\Controllers\Api\Admin\FileController as AdminFileController;
 use App\Http\Controllers\Api\Admin\FeedsSettingsAdminController;
 use App\Http\Controllers\Api\Admin\AppUpdatesAdminController;
 use App\Http\Controllers\Api\Admin\MaintenanceAdminController;
+use App\Http\Controllers\Api\Admin\AutoLogoutAdminController;
 use App\Http\Controllers\Api\Admin\SystemAdminController;
 use App\Http\Controllers\Api\Admin\SettingsAdminController;
 use App\Http\Controllers\Api\Admin\TransactionsAdminController;
@@ -133,6 +134,8 @@ Route::get('/check-username', [AuthController::class, 'checkUsername']);
 Route::get('/app/update', [AppUpdatesAdminController::class, 'current']);
 // Public: mobile app checks what's under maintenance.
 Route::get('/maintenance', [MaintenanceAdminController::class, 'status']);
+// Public: mobile app reads the auto-logout / inactivity policy.
+Route::get('/app/auto-logout', [AutoLogoutAdminController::class, 'current']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's
@@ -926,6 +929,10 @@ Route::prefix('admin')->group(function () {
         // ─── Maintenance Mode ───
         Route::get('/maintenance', [MaintenanceAdminController::class, 'index']);
         Route::put('/maintenance', [MaintenanceAdminController::class, 'save']);
+
+        // ─── Auto-Logout policy ───
+        Route::get('/auto-logout', [AutoLogoutAdminController::class, 'index']);
+        Route::put('/auto-logout', [AutoLogoutAdminController::class, 'save']);
 
         Route::get('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'backgrounds']);
         Route::post('/feeds-settings/backgrounds', [FeedsSettingsAdminController::class, 'storeBackground']);
