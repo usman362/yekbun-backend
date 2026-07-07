@@ -272,6 +272,7 @@ Route::get('app-setting/ringtone', [RingtoneController::class, 'index']);
 Route::post('app-setting/ringtone', [RingtoneController::class, 'store']);
 Route::delete('app-setting/ringtone/{id}', [RingtoneController::class, 'destroy']);
 Route::get('/ringtone', [RingtoneController::class, 'get']);
+Route::post('/ringtone/{id}/download', [RingtoneController::class, 'download']);
 
 // ─── History ───
 Route::get('/history', [HistoryController::class, 'index']);
