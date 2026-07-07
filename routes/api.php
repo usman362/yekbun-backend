@@ -174,9 +174,9 @@ Route::post('update-version', [AppVersionController::class, 'updateVersion']);
 // ─── Public Feeds & Content ───
 Route::get('public-feeds', [FeedsController::class, 'public_index']);
 Route::get('voting-public', [VotingController::class, 'votingPublic']);
-Route::get('/get-artists-public', [MultimediaController::class, 'getArtistsPublic']);
-Route::get('/get-all-songs-public', [MultimediaController::class, 'getAllSongsPublic']);
-Route::get('/get-all-videos-public', [MultimediaController::class, 'getAllClipsPublic']);
+Route::get('/get-artists-public', [MultimediaController::class, 'getArtistsPublic'])->middleware('maintenance:music');
+Route::get('/get-all-songs-public', [MultimediaController::class, 'getAllSongsPublic'])->middleware('maintenance:music');
+Route::get('/get-all-videos-public', [MultimediaController::class, 'getAllClipsPublic'])->middleware('maintenance:music');
 Route::post('/media-trimmer', [MultimediaController::class, 'mediaTrimmer']);
 
 // ─── Public Views ───
@@ -574,10 +574,10 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('/user-suggestions', [UserSuggestionController::class, 'index']);
 
     // ─── Multimedia / Artists ───
-    Route::get('/get-artists', [MultimediaController::class, 'getArtists']);
-    Route::get('/get-all-songs', [MultimediaController::class, 'getAllSongs']);
-    Route::get('/get-all-videos', [MultimediaController::class, 'getAllClips']);
-    Route::get('/get-artist-songs/{id}', [MultimediaController::class, 'getSongByArtists']);
+    Route::get('/get-artists', [MultimediaController::class, 'getArtists'])->middleware('maintenance:music');
+    Route::get('/get-all-songs', [MultimediaController::class, 'getAllSongs'])->middleware('maintenance:music');
+    Route::get('/get-all-videos', [MultimediaController::class, 'getAllClips'])->middleware('maintenance:music');
+    Route::get('/get-artist-songs/{id}', [MultimediaController::class, 'getSongByArtists'])->middleware('maintenance:music');
     Route::get('/get-artist-videos/{id}', [MultimediaController::class, 'getClipsByArtists']);
     Route::get('/get-popular-artists', [MultimediaController::class, 'getPopularArtists']);
     Route::get('/artists-grouped', [MultimediaController::class, 'getArtistsGrouped']);

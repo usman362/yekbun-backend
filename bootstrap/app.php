@@ -13,7 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'jwt.custom' => \App\Http\Middleware\JwtMiddleware::class,
+            'jwt.custom'  => \App\Http\Middleware\JwtMiddleware::class,
+            'maintenance' => \App\Http\Middleware\CheckMaintenance::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
