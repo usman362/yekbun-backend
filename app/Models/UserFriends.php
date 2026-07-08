@@ -17,4 +17,16 @@ class UserFriends extends Model
         'user_type',
         'status',
     ];
+
+    /** Owner side of the friendship row. */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** The connected friend on this row. */
+    public function friend()
+    {
+        return $this->belongsTo(User::class, 'friend_id');
+    }
 }

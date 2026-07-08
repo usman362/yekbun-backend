@@ -248,30 +248,34 @@ class UsersController extends Controller
     public function block_list(Request $request, $id)
     {
         try {
-            $user = User::select('_id')->with(['block' => function ($q) {
-                $q->with('user');
-            }])->find($id);
-            $block_list = $user->block ?? [];
-            return ResponseHelper::sendResponse(['block_list' => $block_list], 'Block List Fetch Successfully');
+            $user = User::with(['block' => fn ($q) => $q->with('user')])->find($id);
+            if (!$user) {
+                return ResponseHelper::sendResponse([], 'User Not Found!', false, 404);
+            }
+            return ResponseHelper::sendResponse(['block_list' => $user->block ?? []], 'Block List Fetch Successfully');
         } catch (Exception $e) {
-            return ResponseHelper::sendResponse([], 'Error to Fetch Block List', false, 403);
+            return ResponseHelper::sendResponse([], 'Error to Fetch Block List: ' . $e->getMessage(), false, 403);
         }
     }
 
     public function freind_list(Request $request, $id)
     {
         try {
-            $user = User::select('_id')->with(['family' => function ($q) {
-                $q->with('user');
-            }])->find($id);
-            $family_list = $user->family ?? [];
-            $user = User::select('_id')->with(['friends' => function ($q) {
-                $q->with('user');
-            }])->find($id);
-            $friends_list = $user->friends ?? [];
-            return ResponseHelper::sendResponse(['friends_list' => $friends_list, 'family_list' => $family_list], 'Friends List Fetch Successfully');
+            $user = User::with([
+                'family' => fn ($q) => $q->with('user'),
+                'friends' => fn ($q) => $q->with('user'),
+            ])->find($id);
+
+            if (!$user) {
+                return ResponseHelper::sendResponse([], 'User Not Found!', false, 404);
+            }
+
+            return ResponseHelper::sendResponse([
+                'friends_list' => $user->friends ?? [],
+                'family_list' => $user->family ?? [],
+            ], 'Friends List Fetch Successfully');
         } catch (Exception $e) {
-            return ResponseHelper::sendResponse([], 'Error to Fetch Friends List', false, 403);
+            return ResponseHelper::sendResponse([], 'Error to Fetch Friends List: ' . $e->getMessage(), false, 403);
         }
     }
 
@@ -323,9 +327,10 @@ class UsersController extends Controller
     public function family_list(Request $request, $id)
     {
         try {
-            $user = User::select('_id')->with(['family' => function ($q) {
-                $q->with('user');
-            }])->find($id);
+            $user = User::with(['family' => fn ($q) => $q->with('user')])->find($id);
+            if (!$user) {
+                return ResponseHelper::sendResponse([], 'User Not Found!', false, 404);
+            }
             $family_list = $user->family;
             return ResponseHelper::sendResponse($family_list, 'Family List Fetch Successfully');
         } catch (Exception $e) {
