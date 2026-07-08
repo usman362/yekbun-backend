@@ -274,25 +274,39 @@ class FeedsController extends Controller
                 default            => [],
             };
             if (!empty($types) && $notify && $notify->feeds == 1) {
-                $recipientIds = UserFriends::where('user_id', Auth::id())
-                    ->whereIn('user_type', $types)
-                    ->pluck('friend_id')
-                    ->unique()
-                    ->toArray();
-                $users = User::whereIn('_id', $recipientIds)
-                    ->whereNotNull('fcm_token')
-                    ->whereIn('info_banner', ['banner', 'alert'])
-                    ->get();
-                foreach ($users as $user) {
-                    NotificationHelper::sendNotification($user->id, 'Feeds Notification', $description);
-                    NotificationCenter::create([
-                        'title' => 'Feeds Notification',
-                        'description' => $description,
-                        'user_id' => $user->id,
-                        'user_image' => $user->image ?? null,
-                        'type' => 'user_feeds',
-                        'is_read' => 0,
-                    ]);
+                // Notification delivery must NEVER block feed creation. The feed is already
+                // persisted above; any failure here (bad ObjectId, FCM, etc.) is logged and
+                // swallowed so the client still gets a 201.
+                try {
+                    // Only keep real 24-char hex ObjectId strings — a single invalid id in
+                    // whereIn('_id', ...) throws and previously 500'd the whole request.
+                    $recipientIds = UserFriends::where('user_id', Auth::id())
+                        ->whereIn('user_type', $types)
+                        ->pluck('friend_id')
+                        ->map(fn($id) => (string) $id)
+                        ->filter(fn($id) => preg_match('/^[0-9a-fA-F]{24}$/', $id))
+                        ->unique()
+                        ->values()
+                        ->toArray();
+                    if (!empty($recipientIds)) {
+                        $users = User::whereIn('_id', $recipientIds)
+                            ->whereNotNull('fcm_token')
+                            ->whereIn('info_banner', ['banner', 'alert'])
+                            ->get();
+                        foreach ($users as $user) {
+                            NotificationHelper::sendNotification($user->id, 'Feeds Notification', $description);
+                            NotificationCenter::create([
+                                'title' => 'Feeds Notification',
+                                'description' => $description,
+                                'user_id' => $user->id,
+                                'user_image' => $user->image ?? null,
+                                'type' => 'user_feeds',
+                                'is_read' => 0,
+                            ]);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Feed notification failed: ' . $e->getMessage());
                 }
             }
             return response()->json(['message' => 'Feed has been created Successfully', 'feed' => $feed, 'success' => true], 201);
