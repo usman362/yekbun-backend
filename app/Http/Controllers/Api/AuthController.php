@@ -117,7 +117,11 @@ class AuthController extends Controller
             }
 
             try {
-                if (!$token = JWTAuth::fromUser($user)) {
+                // Single-session enforcement: bump version so any previously issued tokens become stale.
+                $user->session_version = (int) ($user->session_version ?? 0) + 1;
+                $user->save();
+
+                if (!$token = JWTAuth::claims(['sv' => (int) $user->session_version])->fromUser($user)) {
                     return ResponseHelper::sendResponse([], 'Invalid Creadentials!', false, 400);
                 }
             } catch (JWTException $e) {
@@ -814,7 +818,11 @@ class AuthController extends Controller
         }
 
         try {
-            if (!$token = JWTAuth::fromUser($user)) {
+            // Single-session enforcement: bump version so any previously issued tokens become stale.
+            $user->session_version = (int) ($user->session_version ?? 0) + 1;
+            $user->save();
+
+            if (!$token = JWTAuth::claims(['sv' => (int) $user->session_version])->fromUser($user)) {
                 return ResponseHelper::sendResponse([], 'Login failed!', false, 400);
             }
         } catch (JWTException $e) {

@@ -98,6 +98,11 @@ class User extends Authenticatable implements MustVerifyEmail, JWTSubject
         'expired_at' => 'datetime',
     ];
 
+    protected $attributes = [
+        // Used for single-session enforcement (1 device at a time). Incremented on every login.
+        'session_version' => 0,
+    ];
+
     public static function boot()
     {
         parent::boot();

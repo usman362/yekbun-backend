@@ -158,7 +158,11 @@ class OtpLoginController extends Controller
         $user->save();
 
         try {
-            $token = JWTAuth::fromUser($user);
+            // Single-session enforcement: bump version so any previously issued tokens become stale.
+            $user->session_version = (int) ($user->session_version ?? 0) + 1;
+            $user->save();
+
+            $token = JWTAuth::claims(['sv' => (int) $user->session_version])->fromUser($user);
             if (!$token) {
                 return ResponseHelper::sendResponse([], 'Could not issue session token.', false, 500);
             }

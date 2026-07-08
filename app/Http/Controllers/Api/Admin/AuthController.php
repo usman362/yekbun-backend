@@ -51,7 +51,11 @@ class AuthController extends Controller
         }
 
         try {
-            $token = JWTAuth::fromUser($user);
+            // Enforce single active session per admin account as well.
+            $user->session_version = (int) ($user->session_version ?? 0) + 1;
+            $user->save();
+
+            $token = JWTAuth::claims(['sv' => (int) $user->session_version])->fromUser($user);
         } catch (JWTException $e) {
             return ResponseHelper::sendResponse([], 'Could not create token.', false, 500);
         }
