@@ -245,40 +245,37 @@ class VotingController extends Controller
             ];
         }
 
-        // Optional voters list for the client (who already voted).
-        $includeUsers = (string) request()->get('include_users', '0') === '1';
+        // Include voters list by default (who already voted) — mobile expects this without
+        // needing an extra query param. Keep it bounded to avoid heavy payloads.
+        $limit = min((int) request()->get('limit', 50), 200);
+        $offset = max((int) request()->get('offset', 0), 0);
+
+        $voters_total = VotingReaction::where('voting_id', (string) $id)->count();
+        $voterIds = VotingReaction::where('voting_id', (string) $id)
+            ->orderBy('created_at', 'desc')
+            ->skip($offset)
+            ->take($limit)
+            ->pluck('user_id')
+            ->map(fn($uid) => (string) $uid)
+            ->unique()
+            ->values()
+            ->toArray();
+
         $voters = [];
-        $voters_total = 0;
-        if ($includeUsers) {
-            $limit = min((int) request()->get('limit', 50), 200);
-            $offset = max((int) request()->get('offset', 0), 0);
-
-            $voters_total = VotingReaction::where('voting_id', (string) $id)->count();
-            $voterIds = VotingReaction::where('voting_id', (string) $id)
-                ->orderBy('created_at', 'desc')
-                ->skip($offset)
-                ->take($limit)
-                ->pluck('user_id')
-                ->map(fn($uid) => (string) $uid)
-                ->unique()
-                ->values()
-                ->toArray();
-
-            if (!empty($voterIds)) {
-                $users = User::whereIn('_id', $voterIds)->get()->keyBy('_id');
-                $voters = collect($voterIds)->map(function ($uid) use ($users) {
-                    $u = $users->get($uid);
-                    if (!$u) return null;
-                    return [
-                        '_id'      => (string) $u->_id,
-                        'username' => $u->username ?? null,
-                        'name'     => $u->name ?? null,
-                        'image'    => Helpers::mediaUrl($u->image ?? null),
-                        'gender'   => $u->gender ?? null,
-                        'province' => $u->province ?? null,
-                    ];
-                })->filter()->values()->toArray();
-            }
+        if (!empty($voterIds)) {
+            $users = User::whereIn('_id', $voterIds)->get()->keyBy('_id');
+            $voters = collect($voterIds)->map(function ($uid) use ($users) {
+                $u = $users->get($uid);
+                if (!$u) return null;
+                return [
+                    '_id'      => (string) $u->_id,
+                    'username' => $u->username ?? null,
+                    'name'     => $u->name ?? null,
+                    'image'    => Helpers::mediaUrl($u->image ?? null),
+                    'gender'   => $u->gender ?? null,
+                    'province' => $u->province ?? null,
+                ];
+            })->filter()->values()->toArray();
         }
 
         return ResponseHelper::sendResponse([
