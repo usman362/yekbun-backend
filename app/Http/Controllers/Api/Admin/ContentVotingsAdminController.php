@@ -38,10 +38,11 @@ class ContentVotingsAdminController extends Controller
             $options = is_array($v->options) ? $v->options : [];
             $optionsOut = array_map(function ($opt, $idx) use ($byType) {
                 $type = $opt['type'] ?? ($idx + 1);
+                $image = $opt['image'] ?? null;
                 return [
                     'title' => $opt['title'] ?? "Option " . ($idx + 1),
                     'type'  => (int) $type,
-                    'image' => $opt['image'] ?? null,
+                    'image' => $image ? (Helpers::mediaUrl($image) ?? $image) : null,
                     'count' => (int) ($byType->get((string) $type, $byType->get($type, 0))),
                 ];
             }, $options, array_keys($options));
@@ -50,9 +51,9 @@ class ContentVotingsAdminController extends Controller
                 'id'           => $v->_id,
                 'name'         => $v->name ?? '',
                 'description'  => $v->description ?? '',
-                'banner'       => $v->banner ?? $v->image ?? '',
-                'viewBanner'   => $v->view_banner ?? null,
-                'audio'        => $v->audio ?? null,
+                'banner'       => Helpers::mediaUrl($v->banner ?? $v->image ?? null) ?? '',
+                'viewBanner'   => Helpers::mediaUrl($v->view_banner ?? null),
+                'audio'        => Helpers::mediaUrl($v->audio ?? null),
                 'status'       => (string) ($v->status ?? '0'),
                 'voteType'     => $v->vote_type ?? 'single',
                 'options'      => $optionsOut,
@@ -149,10 +150,11 @@ class ContentVotingsAdminController extends Controller
         $byType = $reactions->groupBy('type')->map(fn($g) => $g->count());
         $optionCounts = array_map(function ($opt, $idx) use ($byType) {
             $type = $opt['type'] ?? ($idx + 1);
+            $image = $opt['image'] ?? null;
             return [
                 'title' => $opt['title'] ?? 'Option ' . ($idx + 1),
                 'type'  => (int) $type,
-                'image' => $opt['image'] ?? null,
+                'image' => $image ? (Helpers::mediaUrl($image) ?? $image) : null,
                 'count' => (int) ($byType->get((string) $type, $byType->get($type, 0))),
             ];
         }, $options, array_keys($options));
