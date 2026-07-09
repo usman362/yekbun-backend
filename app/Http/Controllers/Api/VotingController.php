@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Voting;
@@ -244,9 +245,47 @@ class VotingController extends Controller
             ];
         }
 
+        // Optional voters list for the client (who already voted).
+        $includeUsers = (string) request()->get('include_users', '0') === '1';
+        $voters = [];
+        $voters_total = 0;
+        if ($includeUsers) {
+            $limit = min((int) request()->get('limit', 50), 200);
+            $offset = max((int) request()->get('offset', 0), 0);
+
+            $voters_total = VotingReaction::where('voting_id', (string) $id)->count();
+            $voterIds = VotingReaction::where('voting_id', (string) $id)
+                ->orderBy('created_at', 'desc')
+                ->skip($offset)
+                ->take($limit)
+                ->pluck('user_id')
+                ->map(fn($uid) => (string) $uid)
+                ->unique()
+                ->values()
+                ->toArray();
+
+            if (!empty($voterIds)) {
+                $users = User::whereIn('_id', $voterIds)->get()->keyBy('_id');
+                $voters = collect($voterIds)->map(function ($uid) use ($users) {
+                    $u = $users->get($uid);
+                    if (!$u) return null;
+                    return [
+                        '_id'      => (string) $u->_id,
+                        'username' => $u->username ?? null,
+                        'name'     => $u->name ?? null,
+                        'image'    => Helpers::mediaUrl($u->image ?? null),
+                        'gender'   => $u->gender ?? null,
+                        'province' => $u->province ?? null,
+                    ];
+                })->filter()->values()->toArray();
+            }
+        }
+
         return ResponseHelper::sendResponse([
             'vote' => $vote, 'statistics' => $statistics, 'province_statistics' => $province_statistics,
-            'totals' => ['reviews' => $total_reviews, 'likes' => $total_likes, 'neutrals' => $total_neutrals, 'dislikes' => $total_dislikes]
+            'totals' => ['reviews' => $total_reviews, 'likes' => $total_likes, 'neutrals' => $total_neutrals, 'dislikes' => $total_dislikes],
+            'voters_total' => $voters_total,
+            'voters' => $voters,
         ], 'Voting Statistics!');
     }
 

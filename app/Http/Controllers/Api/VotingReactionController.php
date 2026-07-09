@@ -52,13 +52,27 @@ class VotingReactionController extends Controller
 
         $user_id = Auth::id(); // Assuming auth middleware is applied
 
-        // Check if user already reacted
-        $reaction = VotingReaction::updateOrCreate(
-            ['user_id' => $user_id, 'voting_id' => $request->voting_id],
-            ['type' => (int)$request->type]
-        );
+        // Enforce "one vote per voting" (no re-vote).
+        // If the user already voted on this voting_id once, block further votes.
+        $existing = VotingReaction::where('user_id', (string) $user_id)
+            ->where('voting_id', (string) $request->voting_id)
+            ->first();
+        if ($existing) {
+            return ResponseHelper::sendResponse(
+                ['reaction' => $existing],
+                'You have already voted for this poll.',
+                false,
+                409
+            );
+        }
 
-        return ResponseHelper::sendResponse($reaction,'Reaction Stored Successfully!');
+        $reaction = VotingReaction::create([
+            'user_id'   => (string) $user_id,
+            'voting_id' => (string) $request->voting_id,
+            'type'      => (int) $request->type,
+        ]);
+
+        return ResponseHelper::sendResponse($reaction, 'Reaction Stored Successfully!');
     }
 
     public function votingViews(Request $request)
