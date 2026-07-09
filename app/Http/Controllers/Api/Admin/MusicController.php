@@ -13,6 +13,7 @@ use App\Models\Region;
 use App\Models\Song;
 use App\Models\SongViews;
 use App\Models\VideoClip;
+use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -375,14 +376,66 @@ class MusicController extends Controller
         ], 'Video clip updated.');
     }
 
+    public function deleteSong($id)
+    {
+        $song = Song::find($id);
+        if (!$song) {
+            return ResponseHelper::sendResponse([], 'Song not found.', false, 404);
+        }
+
+        foreach (['audio', 'image'] as $field) {
+            if (!empty($song->{$field})) {
+                $this->deleteFromCdn((string) $song->{$field});
+            }
+        }
+
+        SongViews::where('song_id', $song->_id)->delete();
+        $song->delete();
+
+        return ResponseHelper::sendResponse([], 'Song deleted.');
+    }
+
     public function deleteClip($id)
     {
         $clip = VideoClip::find($id);
         if (!$clip) {
             return ResponseHelper::sendResponse([], 'Video clip not found.', false, 404);
         }
+
+        foreach (['video', 'clip', 'thumbnail'] as $field) {
+            if (!empty($clip->{$field})) {
+                $this->deleteFromCdn((string) $clip->{$field});
+            }
+        }
+
         $clip->delete();
         return ResponseHelper::sendResponse([], 'Video clip deleted.');
+    }
+
+    /** Remove a stored media path from BunnyCDN (relative path or full CDN URL). */
+    private function deleteFromCdn(string $path): void
+    {
+        $relative = $this->cdnRelativePath($path);
+        if ($relative === '') {
+            return;
+        }
+        (new BunnyCDNService())->delete($relative);
+    }
+
+    private function cdnRelativePath(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+        $cdnBase = rtrim((string) env('BUNNY_CDN_URL'), '/');
+        if ($cdnBase !== '' && Str::startsWith($path, $cdnBase . '/')) {
+            return ltrim(Str::after($path, $cdnBase . '/'), '/');
+        }
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return '';
+        }
+        return ltrim($path, '/');
     }
 
     public function artistSongs($id)
