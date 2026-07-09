@@ -14,6 +14,7 @@ use App\Models\Song;
 use App\Models\SongViews;
 use App\Models\VideoClip;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class MusicController extends Controller
 {
@@ -47,13 +48,19 @@ class MusicController extends Controller
             ->groupBy('artist_id')
             ->map(fn($g) => $g->count());
 
+        $listenCounts = SongViews::whereIn('artist_id', $artistIds)
+            ->get()
+            ->groupBy('artist_id')
+            ->map(fn($g) => $g->count());
+
         $provinceIds = $artists->pluck('province_id')->unique()->filter()->toArray();
         $provinces = Region::whereIn('_id', $provinceIds)->get()->keyBy(fn($r) => (string) $r->_id);
 
-        $result = $artists->map(function ($a) use ($songCounts, $clipCounts, $favCounts, $provinces) {
+        $result = $artists->map(function ($a) use ($songCounts, $clipCounts, $favCounts, $listenCounts, $provinces) {
             $songs = $songCounts->get($a->_id, 0);
             $clips = $clipCounts->get($a->_id, 0);
             $likes = $favCounts->get($a->_id, 0);
+            $listens = (int) ($listenCounts->get((string) $a->_id, $listenCounts->get($a->_id, 0)));
             $provinceName = $a->province_id ? ($provinces->get((string) $a->province_id)->name ?? '') : '';
 
             return [
@@ -67,9 +74,11 @@ class MusicController extends Controller
                 'clips'       => $clips,
                 'status'      => $a->status == 1 ? 'published' : 'draft',
                 'likes'       => (int) ($a->total_views ?? $likes),
+                'listens'     => $listens,
                 'avatar'      => Helpers::mediaUrl($a->image) ?? '',
                 'followers'   => $likes,
-                'popularity'  => min(100, $songs * 5 + $clips * 3 + $likes * 2),
+                // Popularity = real engagement only (listens + favorites), not catalog size.
+                'popularity'  => min(100, (int) floor($listens / 10) + $likes * 5),
             ];
         })->values();
 
@@ -173,11 +182,12 @@ class MusicController extends Controller
         // Read duration BEFORE fileCDNUpload (it moves the file off the temp path).
         $length = $this->extractDuration($audioFile->getRealPath());
         if ($length) $song->length = $length;
+        $songFolder = $this->artistMediaFolder($song->artist_id, 'audios/songs');
         // fileCDNUpload transcodes mp3 → m4a and returns the CDN-relative path.
-        $song->audio = Helpers::fileCDNUpload($audioFile, 'audios/songs');
+        $song->audio = Helpers::fileCDNUpload($audioFile, $songFolder);
 
         if ($request->hasFile('cover')) {
-            $song->image = Helpers::fileCDNUpload($request->file('cover'), 'images/songs');
+            $song->image = Helpers::fileCDNUpload($request->file('cover'), $this->artistMediaFolder($song->artist_id, 'images/songs'));
         }
 
         $song->save();
@@ -274,13 +284,16 @@ class MusicController extends Controller
         if ($request->filled('length'))    $clip->length    = $request->input('length');
 
         if ($request->hasFile('thumbnail')) {
-            $clip->thumbnail = Helpers::fileCDNUpload($request->file('thumbnail'), 'images/thumbnails/clips');
+            $clip->thumbnail = Helpers::fileCDNUpload(
+                $request->file('thumbnail'),
+                $this->artistMediaFolder($clip->artist_id, 'images/thumbnails/clips')
+            );
         }
         if ($request->hasFile('video')) {
             $videoFile = $request->file('video');
             $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
             $length = $this->extractDuration($videoFile->getRealPath());
-            $clip->video = Helpers::fileCDNUpload($videoFile, 'videos/clips');
+            $clip->video = Helpers::fileCDNUpload($videoFile, $this->artistMediaFolder($clip->artist_id, 'videos/clips'));
             $clip->file_size = $sizeMb;
             if ($length) $clip->length = $length;
         }
@@ -298,6 +311,17 @@ class MusicController extends Controller
             'video'     => Helpers::mediaUrl($clip->video) ?? '',
             'length'    => $clip->length ?? '0:00',
         ], 'Video clip created.');
+    }
+
+    /** CDN subfolder per artist, e.g. audios/songs/abbas_ahmed */
+    private function artistMediaFolder(string $artistId, string $baseFolder): string
+    {
+        $artist = Artist::find($artistId);
+        $slug = Str::slug((string) ($artist->name ?? ''), '_');
+        if ($slug === '') {
+            $slug = 'artist_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $artistId);
+        }
+        return rtrim($baseFolder, '/') . '/' . $slug;
     }
 
     private function extractDuration(?string $path): ?string
@@ -328,13 +352,16 @@ class MusicController extends Controller
         if ($request->filled('length'))    $clip->length    = $request->input('length');
 
         if ($request->hasFile('thumbnail')) {
-            $clip->thumbnail = Helpers::fileCDNUpload($request->file('thumbnail'), 'images/thumbnails/clips');
+            $clip->thumbnail = Helpers::fileCDNUpload(
+                $request->file('thumbnail'),
+                $this->artistMediaFolder($clip->artist_id, 'images/thumbnails/clips')
+            );
         }
         if ($request->hasFile('video')) {
             $videoFile = $request->file('video');
             $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
             $length = $this->extractDuration($videoFile->getRealPath());
-            $clip->video = Helpers::fileCDNUpload($videoFile, 'videos/clips');
+            $clip->video = Helpers::fileCDNUpload($videoFile, $this->artistMediaFolder($clip->artist_id, 'videos/clips'));
             $clip->file_size = $sizeMb;
             if ($length) $clip->length = $length;
         }
