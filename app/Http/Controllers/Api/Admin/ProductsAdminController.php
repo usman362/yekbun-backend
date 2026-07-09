@@ -216,7 +216,7 @@ class ProductsAdminController extends Controller
 
         $url = Helpers::fileCDNUpload($request->file('image'), 'images/products');
 
-        return ResponseHelper::sendResponse(['url' => $url], 'Image uploaded');
+        return ResponseHelper::sendResponse(['url' => Helpers::mediaUrl($url)], 'Image uploaded');
     }
 
     // ── Seeders (mirror old admin_yekbun defaults so UI is populated on first load) ──

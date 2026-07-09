@@ -136,7 +136,7 @@ class CmsController extends Controller
                 'id'   => $m->slot_id ?? (string) $m->_id,
                 'name' => $m->name,
                 'slot' => $m->slot,
-                'url'  => $m->url,
+                'url'  => Helpers::mediaUrl($m->url),
             ];
         })->values();
 
@@ -163,6 +163,7 @@ class CmsController extends Controller
         // If the slot didn't exist yet (admin added it ad-hoc), keep a friendly name.
         $row->slot = $request->slot;
         if (empty($row->name)) $row->name = $request->input('name', $request->slot);
+        // Store the path (relative). Convert to full URL only when responding.
         $row->url = $url;
         $row->save();
 
@@ -170,7 +171,7 @@ class CmsController extends Controller
             'id'   => $row->slot_id ?? (string) $row->_id,
             'name' => $row->name,
             'slot' => $row->slot,
-            'url'  => $row->url,
+            'url'  => Helpers::mediaUrl($row->url),
         ], 'Media updated');
     }
 

@@ -61,7 +61,10 @@ class BunnyCDNService
             throw new \Exception("Upload failed: " . $response->body());
         }
 
-        return $this->cdnUrl . '/' . $path;
+        // Store and return only the relative path. Client apps may have different base URL
+        // strategies (some prepend their own CDN base), so returning absolute URLs here
+        // causes double-prefix bugs. Use Helpers::mediaUrl($path) when a full URL is needed.
+        return $path;
     }
 
     public function delete($filePath)
