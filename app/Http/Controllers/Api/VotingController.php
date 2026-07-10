@@ -10,14 +10,21 @@ use App\Models\Voting;
 use App\Models\VotingReaction;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class VotingController extends Controller
 {
+    /** Default voters preview size on list endpoints (keep payloads light). */
+    private const LIST_VOTERS_LIMIT = 20;
+
+    /** Default voters size on detail/stats endpoints. */
+    private const DETAIL_VOTERS_LIMIT = 50;
+
     public function index()
     {
         $votings = Voting::where('status', '1')->with('reactions')->get();
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
@@ -29,18 +36,21 @@ class VotingController extends Controller
                 $q->whereHas('reactions', fn($r) => $r->where('user_id', '!=', $userId))
                     ->orWhereDoesntHave('reactions');
             })->with('reactions')->get();
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
     public function mostViews()
     {
         $votings = Voting::where('status', '1')->with('reactions')->orderBy('views', 'desc')->get();
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
     public function alreadyVoted()
     {
         $votings = Voting::where('status', '1')->whereHas('reactions', fn($r) => $r->where('user_id', Auth::id()))->with('reactions')->get();
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
@@ -56,6 +66,7 @@ class VotingController extends Controller
             ->limit(1)
             ->get();
 
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
@@ -72,12 +83,15 @@ class VotingController extends Controller
 
         if ($voting) $query->where('_id', '!=', $voting->_id);
 
-        return ResponseHelper::sendResponse($query->get(), 'Votings Fetch Successfully!');
+        $votings = $query->get();
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
     public function votingPublic()
     {
         $votings = Voting::where('status', '1')->with('reactions')->get();
+        $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
     }
 
@@ -100,6 +114,7 @@ class VotingController extends Controller
     {
         $votings = Voting::where('status', '1')->with('reactions')->find($id);
         if (!$votings) return ResponseHelper::sendResponse([], 'Voting Fetch Successfully!');
+        $this->attachVotersToModel($votings, self::DETAIL_VOTERS_LIMIT);
         return ResponseHelper::sendResponse($votings, 'Voting Fetch Successfully!');
     }
 
@@ -142,6 +157,7 @@ class VotingController extends Controller
             $voting_reaction = VotingReaction::where('user_id', $id)->where('vote_id', $voting[0]->id)->first();
             $voting[0]->user_reaction = $voting_reaction;
         }
+        $this->attachVotersToCollection($voting, self::LIST_VOTERS_LIMIT);
         return response()->json(['success' => true, 'data' => $voting]);
     }
 
@@ -151,6 +167,7 @@ class VotingController extends Controller
         foreach ($voting as $item) {
             $item->user_reaction = VotingReaction::where('user_id', $id)->where('vote_id', $item->id)->first();
         }
+        $this->attachVotersToCollection($voting, self::LIST_VOTERS_LIMIT);
         return response()->json(['success' => true, 'data' => $voting]);
     }
 
@@ -160,6 +177,7 @@ class VotingController extends Controller
         foreach ($voting as $item) {
             $item->user_reaction = VotingReaction::where('user_id', $id)->where('vote_id', $item->id)->first();
         }
+        $this->attachVotersToCollection($voting, self::LIST_VOTERS_LIMIT);
         return response()->json(['success' => true, 'data' => $voting]);
     }
 
@@ -168,6 +186,7 @@ class VotingController extends Controller
         $voting = Voting::with(['voting_category', 'gallery'])->find($id);
         if ($voting) {
             $voting->user_reaction = VotingReaction::where('user_id', $user_id)->where('vote_id', $voting->id)->first();
+            $this->attachVotersToModel($voting, self::DETAIL_VOTERS_LIMIT);
         }
         return response()->json(['success' => true, 'data' => $voting]);
     }
@@ -245,44 +264,15 @@ class VotingController extends Controller
             ];
         }
 
-        // Include voters list by default (who already voted) — mobile expects this without
-        // needing an extra query param. Keep it bounded to avoid heavy payloads.
-        $limit = min((int) request()->get('limit', 50), 200);
+        $limit = min((int) request()->get('limit', self::DETAIL_VOTERS_LIMIT), 200);
         $offset = max((int) request()->get('offset', 0), 0);
-
-        $voters_total = VotingReaction::where('voting_id', (string) $id)->count();
-        $voterIds = VotingReaction::where('voting_id', (string) $id)
-            ->orderBy('created_at', 'desc')
-            ->skip($offset)
-            ->take($limit)
-            ->pluck('user_id')
-            ->map(fn($uid) => (string) $uid)
-            ->unique()
-            ->values()
-            ->toArray();
-
-        $voters = [];
-        if (!empty($voterIds)) {
-            $users = User::whereIn('_id', $voterIds)->get()->keyBy('_id');
-            $voters = collect($voterIds)->map(function ($uid) use ($users) {
-                $u = $users->get($uid);
-                if (!$u) return null;
-                return [
-                    '_id'      => (string) $u->_id,
-                    'username' => $u->username ?? null,
-                    'name'     => $u->name ?? null,
-                    'image'    => Helpers::mediaUrl($u->image ?? null),
-                    'gender'   => $u->gender ?? null,
-                    'province' => $u->province ?? null,
-                ];
-            })->filter()->values()->toArray();
-        }
+        $votersPayload = $this->buildVotersPayload((string) $id, $limit, $offset);
 
         return ResponseHelper::sendResponse([
             'vote' => $vote, 'statistics' => $statistics, 'province_statistics' => $province_statistics,
             'totals' => ['reviews' => $total_reviews, 'likes' => $total_likes, 'neutrals' => $total_neutrals, 'dislikes' => $total_dislikes],
-            'voters_total' => $voters_total,
-            'voters' => $voters,
+            'voters_total' => $votersPayload['voters_total'],
+            'voters' => $votersPayload['voters'],
         ], 'Voting Statistics!');
     }
 
@@ -303,6 +293,149 @@ class VotingController extends Controller
             ];
         }
 
-        return ResponseHelper::sendResponse(['vote' => $vote, 'statistics' => $statistics], 'Voting Statistics by Province!');
+        $votersPayload = $this->buildVotersPayload((string) $id, self::DETAIL_VOTERS_LIMIT);
+
+        return ResponseHelper::sendResponse([
+            'vote' => $vote,
+            'statistics' => $statistics,
+            'voters_total' => $votersPayload['voters_total'],
+            'voters' => $votersPayload['voters'],
+        ], 'Voting Statistics by Province!');
+    }
+
+    /**
+     * Attach voters_total + voters preview onto a single Voting model.
+     */
+    private function attachVotersToModel(Voting $voting, int $limit = self::DETAIL_VOTERS_LIMIT): void
+    {
+        $payload = $this->buildVotersPayload((string) $voting->_id, $limit);
+        $voting->setAttribute('voters_total', $payload['voters_total']);
+        $voting->setAttribute('voters', $payload['voters']);
+    }
+
+    /**
+     * Batch-attach voters_total + voters onto each voting in a collection (avoids N+1).
+     */
+    private function attachVotersToCollection(Collection $votings, int $limit = self::LIST_VOTERS_LIMIT): void
+    {
+        if ($votings->isEmpty()) {
+            return;
+        }
+
+        $votingIds = $votings->map(fn($v) => (string) $v->_id)->filter()->unique()->values()->all();
+        if (empty($votingIds)) {
+            return;
+        }
+
+        // Pull all reactions for these votings once, newest first.
+        $reactions = VotingReaction::whereIn('voting_id', $votingIds)
+            ->orderBy('created_at', 'desc')
+            ->get(['voting_id', 'user_id', 'created_at']);
+
+        $grouped = $reactions->groupBy(fn($r) => (string) $r->voting_id);
+
+        // Collect unique user ids we actually need (limited per voting).
+        $neededUserIds = [];
+        $perVotingUserIds = [];
+        foreach ($votingIds as $vid) {
+            $ids = ($grouped->get($vid) ?? collect())
+                ->pluck('user_id')
+                ->map(fn($uid) => (string) $uid)
+                ->unique()
+                ->take($limit)
+                ->values()
+                ->all();
+            $perVotingUserIds[$vid] = $ids;
+            foreach ($ids as $uid) {
+                $neededUserIds[$uid] = true;
+            }
+        }
+
+        $usersById = collect();
+        if (!empty($neededUserIds)) {
+            $validIds = [];
+            foreach (array_keys($neededUserIds) as $uid) {
+                try {
+                    // Filter invalid ObjectIds so whereIn doesn't 500.
+                    new \MongoDB\BSON\ObjectId($uid);
+                    $validIds[] = $uid;
+                } catch (\Throwable $e) {
+                    // skip
+                }
+            }
+            if (!empty($validIds)) {
+                $usersById = User::whereIn('_id', $validIds)->get()->keyBy(fn($u) => (string) $u->_id);
+            }
+        }
+
+        foreach ($votings as $voting) {
+            $vid = (string) $voting->_id;
+            $total = ($grouped->get($vid) ?? collect())->count();
+            $voterIds = $perVotingUserIds[$vid] ?? [];
+            $voters = [];
+            foreach ($voterIds as $uid) {
+                $u = $usersById->get($uid);
+                if (!$u) continue;
+                $voters[] = $this->formatVoter($u);
+            }
+            $voting->setAttribute('voters_total', $total);
+            $voting->setAttribute('voters', $voters);
+        }
+    }
+
+    /**
+     * Build voters list for one voting_id (used by stats / single detail).
+     *
+     * @return array{voters_total:int, voters:array<int, array<string, mixed>>}
+     */
+    private function buildVotersPayload(string $votingId, int $limit = self::DETAIL_VOTERS_LIMIT, int $offset = 0): array
+    {
+        $voters_total = VotingReaction::where('voting_id', $votingId)->count();
+        $voterIds = VotingReaction::where('voting_id', $votingId)
+            ->orderBy('created_at', 'desc')
+            ->skip(max($offset, 0))
+            ->take(max(1, min($limit, 200)))
+            ->pluck('user_id')
+            ->map(fn($uid) => (string) $uid)
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $voters = [];
+        if (!empty($voterIds)) {
+            $validIds = [];
+            foreach ($voterIds as $uid) {
+                try {
+                    new \MongoDB\BSON\ObjectId($uid);
+                    $validIds[] = $uid;
+                } catch (\Throwable $e) {
+                    // skip invalid
+                }
+            }
+            if (!empty($validIds)) {
+                $users = User::whereIn('_id', $validIds)->get()->keyBy(fn($u) => (string) $u->_id);
+                $voters = collect($voterIds)->map(function ($uid) use ($users) {
+                    $u = $users->get($uid);
+                    return $u ? $this->formatVoter($u) : null;
+                })->filter()->values()->toArray();
+            }
+        }
+
+        return [
+            'voters_total' => $voters_total,
+            'voters' => $voters,
+        ];
+    }
+
+    private function formatVoter(User $u): array
+    {
+        return [
+            '_id'      => (string) $u->_id,
+            'username' => $u->username ?? null,
+            'name'     => $u->name ?? null,
+            'image'    => Helpers::mediaUrl($u->image ?? null),
+            'gender'   => $u->gender ?? null,
+            'province' => $u->province ?? null,
+        ];
     }
 }
