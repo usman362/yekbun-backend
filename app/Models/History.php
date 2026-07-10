@@ -44,7 +44,7 @@ class History extends Model
             ->where('comment_type', 'audio');
     }
     public function shares() { return $this->hasMany(FeedShare::class, 'feed_id'); }
-    public function likes() { return $this->hasMany(FeedLikes::class, 'feed_id')->where('feed_type', 'history'); }
-    public function views() { return $this->hasMany(FeedViews::class, 'feed_id')->where('feed_type', 'history'); }
+    public function likes() { return $this->hasMany(FeedLikes::class, 'feed_id'); }
+    public function views() { return $this->hasMany(FeedViews::class, 'feed_id'); }
     public function user() { return $this->belongsTo(User::class); }
 }

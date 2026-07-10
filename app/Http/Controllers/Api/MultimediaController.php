@@ -10,12 +10,7 @@ use App\Models\AIVideo;
 use App\Models\Artist;
 use App\Models\ArtistFavorite;
 use App\Models\Clips;
-use App\Models\ClipsLikes;
-use App\Models\ClipsViews;
 use App\Models\Feed;
-use App\Models\FeedComments;
-use App\Models\FeedLikes;
-use App\Models\FeedViews;
 use App\Models\History;
 use App\Models\Media;
 use App\Models\MusicPlay;
@@ -592,102 +587,61 @@ class MultimediaController extends Controller
         $media = $query->limit($perPage)->get();
         $byType = $media->groupBy('type');
 
-        // Thumbnails from source tables (Media.thumbnail often empty historically).
-        $lookups = [
-            'clips'  => $byType->get('clips')  ? Clips::whereIn('_id', $this->idQueryVariants($byType->get('clips')->pluck('media_id')->all()))->pluck('thumbnail', '_id')->toArray() : [],
-            'videos' => $byType->get('videos') ? VideoClip::whereIn('_id', $this->idQueryVariants($byType->get('videos')->pluck('media_id')->all()))->pluck('thumbnail', '_id')->toArray() : [],
-            'feeds'  => $byType->get('feeds')  ? Feed::whereIn('_id', $this->idQueryVariants($byType->get('feeds')->pluck('media_id')->all()))->pluck('thumbnail', '_id')->toArray() : [],
+        // Same count source as HistoryController / AIVideoController / Feeds:
+        // load the real row, then $row->comments->count() / $row->views->count().
+        $sources = [
+            'history'    => $this->loadSources(History::class, $byType->get('history')),
+            'ai_videos'  => $this->loadSources(AIVideo::class, $byType->get('ai_videos')),
+            'user_feeds' => $this->loadSources(Feed::class, $byType->get('user_feeds')),
+            'feeds'      => $this->loadSources(Feed::class, $byType->get('feeds')),
+            'clips'      => $this->loadSources(Clips::class, $byType->get('clips')),
+            'videos'     => $this->loadSources(VideoClip::class, $byType->get('videos')),
         ];
 
-        // Live engagement counts — never trust stale Media.commentCount / seenCount alone.
-        $historyIds = $byType->get('history')?->pluck('media_id')->all() ?? [];
-        $aiIds = $byType->get('ai_videos')?->pluck('media_id')->all() ?? [];
-        $feedIds = collect()
-            ->merge($byType->get('user_feeds')?->pluck('media_id') ?? [])
-            ->merge($byType->get('feeds')?->pluck('media_id') ?? [])
-            ->all();
-        $clipIds = $byType->get('clips')?->pluck('media_id')->all() ?? [];
-
-        $countsById = [];
-        foreach ($this->engagementCountsForFeedType($historyIds, 'history') as $id => $c) {
-            $countsById[$id] = $c;
-        }
-        foreach ($this->engagementCountsForFeedType($aiIds, 'ai_videos') as $id => $c) {
-            $countsById[$id] = $c;
-        }
-        // User feed videos may be stored as user_feeds or feeds.
-        foreach ($this->engagementCountsForFeedType($feedIds, 'user_feeds') as $id => $c) {
-            $countsById[$id] = $c;
-        }
-        foreach ($this->engagementCountsForFeedType($feedIds, 'feeds') as $id => $c) {
-            if (!isset($countsById[$id])) {
-                $countsById[$id] = $c;
-                continue;
-            }
-            $countsById[$id]['commentCount'] += $c['commentCount'];
-            $countsById[$id]['voiceCount'] += $c['voiceCount'];
-            $countsById[$id]['emojisCount'] += $c['emojisCount'];
-            $countsById[$id]['seenCount'] += $c['seenCount'];
-        }
-        foreach ($this->engagementCountsForClips($clipIds) as $id => $c) {
-            $countsById[$id] = $c;
-        }
-
-        // Source rows for URI / thumbnail fallback (history + AI).
-        $histories = !empty($historyIds)
-            ? History::whereIn('_id', $this->idQueryVariants($historyIds))->get()->keyBy(fn ($h) => (string) $h->_id)
-            : collect();
-        $aiVideos = !empty($aiIds)
-            ? AIVideo::whereIn('_id', $this->idQueryVariants($aiIds))->get()->keyBy(fn ($h) => (string) $h->_id)
-            : collect();
-
-        $media->transform(function ($m) use ($lookups, $countsById, $histories, $aiVideos) {
+        $media->transform(function ($m) use ($sources) {
             $mediaId = (string) ($m->media_id ?? '');
+            $type = (string) ($m->type ?? '');
+            $source = $sources[$type][$mediaId] ?? null;
 
+            // Thumbnail: Media first, else source row (same as before).
             $raw = $m->thumbnail ?? null;
-            if (empty($raw)) {
-                $raw = $lookups[$m->type][$m->media_id]
-                    ?? $lookups[$m->type][$mediaId]
-                    ?? null;
-                // pluck keys may be ObjectId — try string match
-                if (empty($raw) && isset($lookups[$m->type])) {
-                    foreach ($lookups[$m->type] as $k => $thumb) {
-                        if ((string) $k === $mediaId) {
-                            $raw = $thumb;
-                            break;
-                        }
-                    }
-                }
+            if (empty($raw) && $source) {
+                $raw = $source->thumbnail ?? null;
             }
             $m->thumbnail = $raw ? Helpers::mediaUrl($raw) : null;
 
-            $live = $countsById[$mediaId] ?? null;
-            if ($live) {
-                $m->commentCount = (int) $live['commentCount'];
-                $m->voiceCount   = (int) $live['voiceCount'];
-                $m->emojisCount  = (int) $live['emojisCount'];
-                $m->seenCount    = (int) $live['seenCount'];
+            // Counts — identical approach to HistoryController::index / AIVideoController::index.
+            if ($source) {
+                $m->commentCount = method_exists($source, 'comments')
+                    ? (int) $source->comments->count()
+                    : (int) ($source->comments_count ?? $m->commentCount ?? 0);
+                $m->voiceCount = method_exists($source, 'voice_comments')
+                    ? (int) $source->voice_comments->count()
+                    : (int) ($source->voice_comments_count ?? $m->voiceCount ?? 0);
+                $m->emojisCount = method_exists($source, 'likes')
+                    ? (int) $source->likes->count()
+                    : (int) ($source->likes_count ?? $m->emojisCount ?? 0);
+                $m->seenCount = method_exists($source, 'views')
+                    ? (int) $source->views->count()
+                    : (int) ($source->views_count ?? $m->seenCount ?? 0);
+
+                if (empty($m->uri) && is_array($source->video ?? null) && !empty($source->video[0]['path'])) {
+                    $m->uri = Helpers::mediaUrl($source->video[0]['path']);
+                } elseif (empty($m->uri) && !empty($source->clip)) {
+                    $m->uri = Helpers::mediaUrl($source->clip);
+                }
             } else {
-                // Fallback to denormalized Media fields (still always present for mobile).
+                // Already synced onto Media by ViewsController / FeedsController via Helpers::userMedia.
                 $m->commentCount = (int) ($m->commentCount ?? 0);
                 $m->voiceCount   = (int) ($m->voiceCount ?? 0);
                 $m->emojisCount  = (int) ($m->emojisCount ?? 0);
                 $m->seenCount    = (int) ($m->seenCount ?? 0);
             }
 
-            $source = null;
-            if ($m->type === 'history') {
-                $source = $histories->get($mediaId);
-            } elseif ($m->type === 'ai_videos') {
-                $source = $aiVideos->get($mediaId);
-            }
-            if ($source && empty($m->uri) && is_array($source->video) && !empty($source->video[0]['path'])) {
-                $m->uri = Helpers::mediaUrl($source->video[0]['path']);
-            } elseif (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
+            if (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
                 $m->uri = Helpers::mediaUrl($m->uri) ?? $m->uri;
             }
 
-            // Force attributes into serialization (Mongo models sometimes omit unset dynamics).
             $m->setAttribute('commentCount', (int) $m->commentCount);
             $m->setAttribute('voiceCount', (int) $m->voiceCount);
             $m->setAttribute('emojisCount', (int) $m->emojisCount);
@@ -706,6 +660,27 @@ class MultimediaController extends Controller
                 'has_more' => $media->count() === $perPage,
             ]
         ], 'Media fetched successfully');
+    }
+
+    /**
+     * Load source rows keyed by string _id (History / AI / Feed / Clips).
+     * @return array<string, \Illuminate\Database\Eloquent\Model>
+     */
+    private function loadSources(string $modelClass, $group): array
+    {
+        if (!$group || $group->isEmpty()) {
+            return [];
+        }
+        $ids = $this->idQueryVariants($group->pluck('media_id')->all());
+        if ($ids === []) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($modelClass::whereIn('_id', $ids)->get() as $row) {
+            $map[(string) $row->_id] = $row;
+        }
+        return $map;
     }
 
     /** String + ObjectId variants so whereIn matches either storage style. */
@@ -732,98 +707,5 @@ class MultimediaController extends Controller
             }
         }
         return $out;
-    }
-
-    /**
-     * Batch live counts for history / AI / user feeds (feed_comments + likes + views).
-     * @return array<string, array{commentCount:int,voiceCount:int,emojisCount:int,seenCount:int}>
-     */
-    private function engagementCountsForFeedType(array $mediaIds, string $feedType): array
-    {
-        $keys = [];
-        foreach ($mediaIds as $id) {
-            $s = (string) $id;
-            if ($s !== '') {
-                $keys[$s] = [
-                    'commentCount' => 0,
-                    'voiceCount'   => 0,
-                    'emojisCount'  => 0,
-                    'seenCount'    => 0,
-                ];
-            }
-        }
-        if ($keys === []) {
-            return [];
-        }
-
-        $variants = $this->idQueryVariants(array_keys($keys));
-
-        foreach (FeedComments::whereIn('feed_id', $variants)->where('feed_type', $feedType)->get(['feed_id', 'comment_type']) as $c) {
-            $fid = (string) $c->feed_id;
-            if (!isset($keys[$fid])) {
-                continue;
-            }
-            if (($c->comment_type ?? 'normal') === 'audio') {
-                $keys[$fid]['voiceCount']++;
-            } else {
-                $keys[$fid]['commentCount']++;
-            }
-        }
-
-        foreach (FeedLikes::whereIn('feed_id', $variants)->where('feed_type', $feedType)->get(['feed_id']) as $row) {
-            $fid = (string) $row->feed_id;
-            if (isset($keys[$fid])) {
-                $keys[$fid]['emojisCount']++;
-            }
-        }
-
-        foreach (FeedViews::whereIn('feed_id', $variants)->where('feed_type', $feedType)->get(['feed_id']) as $row) {
-            $fid = (string) $row->feed_id;
-            if (isset($keys[$fid])) {
-                $keys[$fid]['seenCount']++;
-            }
-        }
-
-        return $keys;
-    }
-
-    /**
-     * Batch live counts for user clips.
-     * @return array<string, array{commentCount:int,voiceCount:int,emojisCount:int,seenCount:int}>
-     */
-    private function engagementCountsForClips(array $clipIds): array
-    {
-        $keys = [];
-        foreach ($clipIds as $id) {
-            $s = (string) $id;
-            if ($s !== '') {
-                $keys[$s] = [
-                    'commentCount' => 0,
-                    'voiceCount'   => 0,
-                    'emojisCount'  => 0,
-                    'seenCount'    => 0,
-                ];
-            }
-        }
-        if ($keys === []) {
-            return [];
-        }
-
-        $variants = $this->idQueryVariants(array_keys($keys));
-
-        foreach (ClipsLikes::whereIn('clip_id', $variants)->get(['clip_id']) as $row) {
-            $fid = (string) $row->clip_id;
-            if (isset($keys[$fid])) {
-                $keys[$fid]['emojisCount']++;
-            }
-        }
-        foreach (ClipsViews::whereIn('clip_id', $variants)->get(['clip_id']) as $row) {
-            $fid = (string) $row->clip_id;
-            if (isset($keys[$fid])) {
-                $keys[$fid]['seenCount']++;
-            }
-        }
-
-        return $keys;
     }
 }
