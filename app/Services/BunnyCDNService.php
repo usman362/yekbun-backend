@@ -13,10 +13,10 @@ class BunnyCDNService
 
     public function __construct()
     {
-        $this->zone = env('BUNNY_STORAGE_ZONE');
-        $this->key = env('BUNNY_STORAGE_KEY');
-        $this->region = env('BUNNY_REGION', 'de');
-        $this->cdnUrl = env('BUNNY_CDN_URL');
+        $this->cdnUrl = config('services.bunny.cdn_url') ?: env('BUNNY_CDN_URL');
+        $this->zone = config('services.bunny.storage_zone') ?: env('BUNNY_STORAGE_ZONE');
+        $this->key = config('services.bunny.storage_key') ?: env('BUNNY_STORAGE_KEY');
+        $this->region = config('services.bunny.region') ?: env('BUNNY_REGION', 'de');
     }
 
     private function apiBase()

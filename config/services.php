@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'bunny' => [
+        'cdn_url'      => env('BUNNY_CDN_URL', 'https://yekbun.b-cdn.net'),
+        'storage_zone' => env('BUNNY_STORAGE_ZONE'),
+        'storage_key'  => env('BUNNY_STORAGE_KEY'),
+        'region'       => env('BUNNY_REGION', 'de'),
+    ],
+
 ];

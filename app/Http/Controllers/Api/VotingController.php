@@ -25,7 +25,7 @@ class VotingController extends Controller
     {
         $votings = Voting::where('status', '1')->with('reactions')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function waitingVote()
@@ -37,21 +37,21 @@ class VotingController extends Controller
                     ->orWhereDoesntHave('reactions');
             })->with('reactions')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function mostViews()
     {
         $votings = Voting::where('status', '1')->with('reactions')->orderBy('views', 'desc')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function alreadyVoted()
     {
         $votings = Voting::where('status', '1')->whereHas('reactions', fn($r) => $r->where('user_id', Auth::id()))->with('reactions')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function latestVotes()
@@ -67,7 +67,7 @@ class VotingController extends Controller
             ->get();
 
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function previousVotes()
@@ -85,14 +85,14 @@ class VotingController extends Controller
 
         $votings = $query->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function votingPublic()
     {
         $votings = Voting::where('status', '1')->with('reactions')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Votings Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function store(Request $request)
@@ -115,7 +115,7 @@ class VotingController extends Controller
         $votings = Voting::where('status', '1')->with('reactions')->find($id);
         if (!$votings) return ResponseHelper::sendResponse([], 'Voting Fetch Successfully!');
         $this->attachVotersToModel($votings, self::DETAIL_VOTERS_LIMIT);
-        return ResponseHelper::sendResponse($votings, 'Voting Fetch Successfully!');
+        return ResponseHelper::sendResponse($this->presentVotingMedia($votings), 'Voting Fetch Successfully!');
     }
 
     public function update(Request $request, $id)
@@ -158,7 +158,7 @@ class VotingController extends Controller
             $voting[0]->user_reaction = $voting_reaction;
         }
         $this->attachVotersToCollection($voting, self::LIST_VOTERS_LIMIT);
-        return response()->json(['success' => true, 'data' => $voting]);
+        return response()->json(['success' => true, 'data' => $this->presentVotingsCollection($voting)]);
     }
 
     public function fetch($id = null)
@@ -168,7 +168,7 @@ class VotingController extends Controller
             $item->user_reaction = VotingReaction::where('user_id', $id)->where('vote_id', $item->id)->first();
         }
         $this->attachVotersToCollection($voting, self::LIST_VOTERS_LIMIT);
-        return response()->json(['success' => true, 'data' => $voting]);
+        return response()->json(['success' => true, 'data' => $this->presentVotingsCollection($voting)]);
     }
 
     public function fetch_all($id = null)
@@ -178,7 +178,7 @@ class VotingController extends Controller
             $item->user_reaction = VotingReaction::where('user_id', $id)->where('vote_id', $item->id)->first();
         }
         $this->attachVotersToCollection($voting, self::LIST_VOTERS_LIMIT);
-        return response()->json(['success' => true, 'data' => $voting]);
+        return response()->json(['success' => true, 'data' => $this->presentVotingsCollection($voting)]);
     }
 
     public function get_details($id, $user_id = null)
@@ -187,6 +187,7 @@ class VotingController extends Controller
         if ($voting) {
             $voting->user_reaction = VotingReaction::where('user_id', $user_id)->where('vote_id', $voting->id)->first();
             $this->attachVotersToModel($voting, self::DETAIL_VOTERS_LIMIT);
+            $this->presentVotingMedia($voting);
         }
         return response()->json(['success' => true, 'data' => $voting]);
     }
@@ -269,7 +270,9 @@ class VotingController extends Controller
         $votersPayload = $this->buildVotersPayload((string) $id, $limit, $offset);
 
         return ResponseHelper::sendResponse([
-            'vote' => $vote, 'statistics' => $statistics, 'province_statistics' => $province_statistics,
+            'vote' => $this->presentVotingMedia($vote),
+            'statistics' => $statistics,
+            'province_statistics' => $province_statistics,
             'totals' => ['reviews' => $total_reviews, 'likes' => $total_likes, 'neutrals' => $total_neutrals, 'dislikes' => $total_dislikes],
             'voters_total' => $votersPayload['voters_total'],
             'voters' => $votersPayload['voters'],
@@ -429,13 +432,46 @@ class VotingController extends Controller
 
     private function formatVoter(User $u): array
     {
+        $image = Helpers::mediaUrl($u->image ?? $u->avatar ?? null) ?? '';
+
         return [
             '_id'      => (string) $u->_id,
             'username' => $u->username ?? null,
             'name'     => $u->name ?? null,
-            'image'    => Helpers::mediaUrl($u->image ?? null),
+            'image'    => $image,
+            'avatar'   => $image,
             'gender'   => $u->gender ?? null,
             'province' => $u->province ?? null,
         ];
+    }
+
+    /** Resolve banner / option images to full CDN URLs on voting payloads. */
+    private function presentVotingMedia($voting)
+    {
+        if (!$voting) {
+            return $voting;
+        }
+
+        foreach (['banner', 'image', 'view_banner', 'audio'] as $field) {
+            if (!empty($voting->{$field})) {
+                $voting->setAttribute($field, Helpers::mediaUrl($voting->{$field}) ?? $voting->{$field});
+            }
+        }
+
+        if (is_array($voting->options)) {
+            $voting->options = array_map(function ($o) {
+                if (is_array($o) && !empty($o['image'])) {
+                    $o['image'] = Helpers::mediaUrl($o['image']) ?? $o['image'];
+                }
+                return $o;
+            }, $voting->options);
+        }
+
+        return $voting;
+    }
+
+    private function presentVotingsCollection(Collection $votings): Collection
+    {
+        return $votings->map(fn($v) => $this->presentVotingMedia($v))->values();
     }
 }

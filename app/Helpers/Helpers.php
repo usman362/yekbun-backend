@@ -14,42 +14,55 @@ class Helpers
      *
      * Rules:
      * - empty / null → null
-     * - already absolute (http/https) → return as-is
-     * - if file exists in local storage (storage/app/public/{path}) → asset('storage/...')
-     * - else if BUNNY_CDN_URL set → CDN URL
-     * - else fallback storage URL (graceful 404)
-     *
-     * This handles old-project's mixed pattern (some paths stored on CDN, others local).
+     * - already absolute (http/https) → return as-is (encoded path)
+     * - else prefix BUNNY CDN base (config-cached safe)
+     * - never return a bare relative path
      */
     public static function mediaUrl($path)
     {
-        if (empty($path)) return null;
+        if ($path === null || $path === '') {
+            return null;
+        }
+        // Arrays occasionally show up from legacy gallery-style fields.
+        if (is_array($path)) {
+            $path = $path['path'] ?? $path['url'] ?? reset($path) ?: null;
+            if ($path === null || $path === '') {
+                return null;
+            }
+        }
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
         if (Str::startsWith($path, ['http://', 'https://'])) {
-            // Encode any spaces / special chars in already-absolute URL (preserve scheme/host)
             return preg_replace_callback('#^(https?://[^/]+)(/.*)?$#', function ($m) {
-                if (empty($m[2])) return $m[1];
+                if (empty($m[2])) {
+                    return $m[1];
+                }
                 $segments = array_map('rawurlencode', explode('/', ltrim($m[2], '/')));
                 return $m[1] . '/' . implode('/', $segments);
             }, $path);
         }
 
         $relative = ltrim($path, '/');
-        // Encode path segments (keeps slashes, encodes spaces and other special chars)
+        // Strip accidental "storage/" prefix from older local uploads.
+        if (Str::startsWith($relative, 'storage/')) {
+            $relative = Str::after($relative, 'storage/');
+        }
         $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
 
-        // Prefer local storage if file exists
-        $publicPath = function_exists('public_path') ? public_path('storage/' . $relative) : null;
-        $storagePath = function_exists('storage_path') ? storage_path('app/public/' . $relative) : null;
-        if (($publicPath && file_exists($publicPath)) || ($storagePath && file_exists($storagePath))) {
-            return asset('storage/' . $encoded);
+        $cdn = rtrim((string) (config('services.bunny.cdn_url') ?: env('BUNNY_CDN_URL') ?: 'https://yekbun.b-cdn.net'), '/');
+        if ($cdn !== '') {
+            return $cdn . '/' . $encoded;
         }
 
-        // Fall back to CDN if configured
-        $cdn = env('BUNNY_CDN_URL');
-        if (!empty($cdn)) return rtrim($cdn, '/') . '/' . $encoded;
-
-        // Last resort: storage URL anyway
-        return asset('storage/' . $encoded);
+        // Last resort: app storage URL (still absolute).
+        $url = asset('storage/' . $encoded);
+        if (!Str::startsWith($url, ['http://', 'https://'])) {
+            $url = rtrim((string) config('app.url'), '/') . '/' . ltrim($url, '/');
+        }
+        return $url;
     }
 
     /**
@@ -67,7 +80,7 @@ class Helpers
         }
 
         $candidates = array_values(array_filter([
-            rtrim((string) env('BUNNY_CDN_URL'), '/'),
+            rtrim((string) (config('services.bunny.cdn_url') ?: env('BUNNY_CDN_URL') ?: ''), '/'),
             'https://yekbun.b-cdn.net',
             'http://yekbun.b-cdn.net',
             rtrim((string) config('app.url'), '/') . '/storage',

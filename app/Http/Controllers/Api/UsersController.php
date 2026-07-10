@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\Helpers;
 use App\Helpers\NotificationHelper;
 use App\Helpers\PermissionHelper;
 use App\Helpers\ResponseHelper;
@@ -630,7 +631,7 @@ class UsersController extends Controller
         $user = User::where('device_imei', $request->device_imei)->first();
         if ($user) {
             $data = [
-                'image' => $user->image ?? null,
+                'image' => Helpers::mediaUrl($user->image ?? null),
                 'status' => $user->status,
                 'email' => $user->email,
             ];
