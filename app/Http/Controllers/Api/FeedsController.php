@@ -456,7 +456,7 @@ class FeedsController extends Controller
                         $sectionUserImages[] = [
                             'user_id' => $user->_id,
                             'name' => $user->name ?? '',
-                            'image' => Helpers::mediaUrl($user->image) ?? '',
+                            'image' => Helpers::cdnRelativePath($user->image) ?? '',
                         ];
                     }
                 }

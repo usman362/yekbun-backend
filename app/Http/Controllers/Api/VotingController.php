@@ -432,7 +432,8 @@ class VotingController extends Controller
 
     private function formatVoter(User $u): array
     {
-        $image = Helpers::mediaUrl($u->image ?? $u->avatar ?? null) ?? '';
+        // Mobile clients prepend CDN base themselves — return relative path only.
+        $image = Helpers::cdnRelativePath($u->image ?? $u->avatar ?? null) ?? '';
 
         return [
             '_id'      => (string) $u->_id,
@@ -445,7 +446,7 @@ class VotingController extends Controller
         ];
     }
 
-    /** Resolve banner / option images to full CDN URLs on voting payloads. */
+    /** Normalize banner / option media to relative CDN paths (no base URL). */
     private function presentVotingMedia($voting)
     {
         if (!$voting) {
@@ -454,14 +455,14 @@ class VotingController extends Controller
 
         foreach (['banner', 'image', 'view_banner', 'audio'] as $field) {
             if (!empty($voting->{$field})) {
-                $voting->setAttribute($field, Helpers::mediaUrl($voting->{$field}) ?? $voting->{$field});
+                $voting->setAttribute($field, Helpers::cdnRelativePath($voting->{$field}) ?? $voting->{$field});
             }
         }
 
         if (is_array($voting->options)) {
             $voting->options = array_map(function ($o) {
                 if (is_array($o) && !empty($o['image'])) {
-                    $o['image'] = Helpers::mediaUrl($o['image']) ?? $o['image'];
+                    $o['image'] = Helpers::cdnRelativePath($o['image']) ?? $o['image'];
                 }
                 return $o;
             }, $voting->options);

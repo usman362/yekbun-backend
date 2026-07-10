@@ -765,6 +765,7 @@ Route::prefix('admin')->group(function () {
         Route::delete('/music/songs/{id}', [AdminMusicController::class, 'deleteSong']);
         Route::get('/music/categories', [AdminMusicController::class, 'musicCategories']);
         Route::get('/music/video-clips', [AdminMusicController::class, 'videoClips']);
+        Route::post('/music/video-clips/generate-thumbnails', [AdminMusicController::class, 'generateClipThumbnails']);
         Route::post('/music/video-clips', [AdminMusicController::class, 'storeClip']);
         Route::match(['put','post'], '/music/video-clips/{id}', [AdminMusicController::class, 'updateClip']);
         Route::delete('/music/video-clips/{id}', [AdminMusicController::class, 'deleteClip']);

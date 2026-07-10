@@ -631,7 +631,7 @@ class UsersController extends Controller
         $user = User::where('device_imei', $request->device_imei)->first();
         if ($user) {
             $data = [
-                'image' => Helpers::mediaUrl($user->image ?? null),
+                'image' => Helpers::cdnRelativePath($user->image ?? null) ?? '',
                 'status' => $user->status,
                 'email' => $user->email,
             ];

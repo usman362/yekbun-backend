@@ -310,6 +310,67 @@ class MusicController extends Controller
         return ResponseHelper::sendResponse([], 'Artist deleted.');
     }
 
+    public function generateClipThumbnails(Request $request)
+    {
+        $request->validate([
+            'video_path' => 'required|string',
+            'duration'   => 'required|numeric|min:1',
+        ]);
+
+        $videoUrl = Helpers::mediaUrl($request->video_path) ?? $request->video_path;
+        $duration = (int) $request->duration;
+
+        $ffmpeg = trim((string) @shell_exec('which ffmpeg'));
+        if ($ffmpeg === '') {
+            return ResponseHelper::sendResponse(null, 'ffmpeg not installed on server', false, 500);
+        }
+
+        $timestamps = [
+            max(1, (int) round($duration * 0.25)),
+            max(1, (int) round($duration * 0.40)),
+            max(1, (int) round($duration * 0.75)),
+        ];
+
+        $bunny = new BunnyCDNService();
+        $baseName = pathinfo(parse_url($videoUrl, PHP_URL_PATH) ?: $videoUrl, PATHINFO_FILENAME);
+        $tmpDir = storage_path('app/thumb_tmp');
+        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
+
+        $thumbnails = [];
+        foreach ($timestamps as $i => $sec) {
+            $localTmp = $tmpDir . '/' . Str::random(12) . '.jpg';
+
+            $cmd = sprintf(
+                '%s -y -ss %d -i %s -frames:v 1 -q:v 2 %s 2>&1',
+                escapeshellcmd($ffmpeg),
+                $sec,
+                escapeshellarg($videoUrl),
+                escapeshellarg($localTmp)
+            );
+            @shell_exec($cmd);
+
+            if (!file_exists($localTmp) || filesize($localTmp) === 0) {
+                @unlink($localTmp);
+                continue;
+            }
+
+            $cdnUrl = $bunny->upload(
+                'images/thumbnails/clips',
+                $baseName . "_thumb_{$i}_" . Str::random(6) . '.jpg',
+                file_get_contents($localTmp),
+                'image/jpeg'
+            );
+            @unlink($localTmp);
+            $thumbnails[] = Helpers::cdnRelativePath($cdnUrl) ?: $cdnUrl;
+        }
+
+        if (count($thumbnails) === 0) {
+            return ResponseHelper::sendResponse(null, 'Failed to generate thumbnails', false, 500);
+        }
+
+        return ResponseHelper::sendResponse(['thumbnails' => $thumbnails], 'Thumbnails generated.');
+    }
+
     public function storeClip(Request $request)
     {
         $request->validate([
@@ -329,7 +390,10 @@ class MusicController extends Controller
                 $request->file('thumbnail'),
                 $this->artistMediaFolder($clip->artist_id, 'images/thumbnails/clips')
             );
+        } elseif ($request->filled('thumbnail')) {
+            $clip->thumbnail = Helpers::cdnRelativePath($request->input('thumbnail'));
         }
+
         if ($request->hasFile('video')) {
             $videoFile = $request->file('video');
             $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
@@ -337,6 +401,14 @@ class MusicController extends Controller
             $clip->video = Helpers::fileCDNUpload($videoFile, $this->artistMediaFolder($clip->artist_id, 'videos/clips'));
             $clip->file_size = $sizeMb;
             if ($length) $clip->length = $length;
+        } elseif ($request->filled('video_path')) {
+            $clip->video = Helpers::cdnRelativePath($request->input('video_path'));
+            if ($request->filled('file_size')) {
+                $clip->file_size = $request->input('file_size');
+            }
+            if ($request->filled('video_duration') && !$request->filled('length')) {
+                $clip->length = $this->formatDurationSeconds((float) $request->input('video_duration'));
+            }
         }
         $clip->save();
 
@@ -373,7 +445,13 @@ class MusicController extends Controller
         $out = @shell_exec(escapeshellcmd($ffprobe) . ' -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ' . escapeshellarg($path) . ' 2>/dev/null');
         $secs = (float) trim((string) $out);
         if ($secs <= 0) return null;
-        $m = floor($secs / 60);
+        return $this->formatDurationSeconds($secs);
+    }
+
+    private function formatDurationSeconds(float $secs): ?string
+    {
+        if ($secs <= 0) return null;
+        $m = (int) floor($secs / 60);
         $s = (int) round($secs - ($m * 60));
         if ($s === 60) { $m++; $s = 0; }
         return sprintf('%02d:%02d', $m, $s);
@@ -400,7 +478,10 @@ class MusicController extends Controller
                 $request->file('thumbnail'),
                 $this->artistMediaFolder($clip->artist_id, 'images/thumbnails/clips')
             );
+        } elseif ($request->filled('thumbnail')) {
+            $clip->thumbnail = Helpers::cdnRelativePath($request->input('thumbnail'));
         }
+
         if ($request->hasFile('video')) {
             $videoFile = $request->file('video');
             $sizeMb = round($videoFile->getSize() / 1024 / 1024, 2);
@@ -408,6 +489,14 @@ class MusicController extends Controller
             $clip->video = Helpers::fileCDNUpload($videoFile, $this->artistMediaFolder($clip->artist_id, 'videos/clips'));
             $clip->file_size = $sizeMb;
             if ($length) $clip->length = $length;
+        } elseif ($request->filled('video_path')) {
+            $clip->video = Helpers::cdnRelativePath($request->input('video_path'));
+            if ($request->filled('file_size')) {
+                $clip->file_size = $request->input('file_size');
+            }
+            if ($request->filled('video_duration') && !$request->filled('length')) {
+                $clip->length = $this->formatDurationSeconds((float) $request->input('video_duration'));
+            }
         }
         $clip->save();
 

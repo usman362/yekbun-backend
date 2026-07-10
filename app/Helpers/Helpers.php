@@ -66,8 +66,8 @@ class Helpers
     }
 
     /**
-     * Strip CDN / app base URL so only a relative storage path is persisted in the DB.
-     * Full URLs belong in API responses (via mediaUrl), never in Mongo fields.
+     * Strip CDN / app base URL so only a relative storage path is returned / persisted.
+     * Mobile clients prepend the CDN base themselves — do not put full URLs in API payloads.
      */
     public static function cdnRelativePath(?string $path): ?string
     {
