@@ -243,6 +243,9 @@ class MusicController extends Controller
             return ResponseHelper::sendResponse([], 'Artist not found.', false, 404);
         }
 
+        // Draft/inactive → published on edit should fire the same Portal Notification as create.
+        $wasPublished = (string) $artist->status === '1';
+
         if ($request->filled('name'))        $artist->name        = $request->input('name');
         if ($request->filled('gender'))      $artist->gender      = $request->input('gender');
         if ($request->filled('province_id')) $artist->province_id = $request->input('province_id');
@@ -252,6 +255,15 @@ class MusicController extends Controller
             $artist->image = Helpers::fileCDNUpload($request->file('image'), 'images/artist');
         }
         $artist->save();
+
+        if (!$wasPublished && (string) $artist->status === '1') {
+            // Publishing the artist also publishes all of their songs + video clips
+            // (content is usually uploaded as draft under a draft artist).
+            Song::where('artist_id', $id)->update(['status' => '1']);
+            VideoClip::where('artist_id', $id)->update(['status' => '1']);
+
+            NotificationHelper::sendConfiguredBroadcast('new_artist', ['[name]' => (string) $artist->name], 'artist');
+        }
 
         return ResponseHelper::sendResponse([
             'id'     => (string) $artist->getKey(),
@@ -374,6 +386,9 @@ class MusicController extends Controller
             return ResponseHelper::sendResponse([], 'Video clip not found.', false, 404);
         }
 
+        // Draft/inactive → published on edit should fire the same Portal Notification as create.
+        $wasPublished = (string) $clip->status === '1';
+
         if ($request->filled('name'))      $clip->name      = $request->input('name');
         if ($request->filled('artist_id')) $clip->artist_id = $request->input('artist_id');
         if ($request->filled('status'))    $clip->status    = $request->input('status');
@@ -396,12 +411,45 @@ class MusicController extends Controller
         }
         $clip->save();
 
+        if (!$wasPublished && (string) $clip->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_video_clips', ['[name]' => (string) $clip->name], 'video_clips');
+        }
+
         return ResponseHelper::sendResponse([
             'id'        => (string) $clip->getKey(),
             'name'      => $clip->name,
             'thumbnail' => Helpers::mediaUrl($clip->thumbnail) ?? '',
             'video'     => Helpers::mediaUrl($clip->video) ?? '',
         ], 'Video clip updated.');
+    }
+
+    public function updateSong(Request $request, $id)
+    {
+        $song = Song::find($id);
+        if (!$song) {
+            return ResponseHelper::sendResponse([], 'Song not found.', false, 404);
+        }
+
+        $request->validate([
+            'status' => 'sometimes|in:0,1',
+        ]);
+
+        // Draft → published on edit fires the same Portal Notification as create.
+        $wasPublished = (string) $song->status === '1';
+
+        if ($request->filled('status')) {
+            $song->status = $request->input('status');
+        }
+        $song->save();
+
+        if (!$wasPublished && (string) $song->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_music', ['[name]' => (string) $song->name], 'music');
+        }
+
+        return ResponseHelper::sendResponse([
+            'id'     => (string) $song->getKey(),
+            'status' => (string) $song->status === '1' ? 'Published' : 'Draft',
+        ], 'Song updated.');
     }
 
     public function deleteSong($id)
@@ -485,6 +533,7 @@ class MusicController extends Controller
                 'listens'  => (int) $viewCounts->get($s->_id, 0),
                 'trend'    => 'up',
                 'track'    => Helpers::mediaUrl($s->audio) ?? '',
+                'status'   => $s->status == 1 ? 'Published' : 'Draft',
             ];
         });
 

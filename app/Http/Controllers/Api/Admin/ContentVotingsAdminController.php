@@ -97,8 +97,16 @@ class ContentVotingsAdminController extends Controller
         if (!$v) {
             return ResponseHelper::sendResponse(null, 'Survey not found', false, 404);
         }
+
+        // Draft/inactive → published on edit should fire the same Portal Notification as create.
+        $wasPublished = (string) $v->status === '1';
+
         $this->fillVoting($v, $request);
         $v->save();
+
+        if (!$wasPublished && (string) $v->status === '1') {
+            NotificationHelper::sendConfiguredBroadcast('new_votes', ['[name]' => (string) $v->name], 'votes');
+        }
 
         return ResponseHelper::sendResponse(['id' => $v->_id], 'Survey updated.');
     }
