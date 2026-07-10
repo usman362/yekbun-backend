@@ -566,6 +566,8 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('/previous-votes', [VotingController::class, 'previousVotes']);
     Route::get('/already-voted-votes', [VotingController::class, 'alreadyVoted']);
     Route::get('/waiting-votes', [VotingController::class, 'waitingVote']);
+    Route::get('/surveys-home', [VotingController::class, 'surveysHome']);
+    Route::get('/votes-home', [VotingController::class, 'surveysHome']);
     Route::get('/voting/{voting_id}/reactions', [VotingReactionController::class, 'index']);
     Route::post('/voting-views', [VotingReactionController::class, 'votingViews']);
     Route::delete('/voting/reaction/{id}', [VotingReactionController::class, 'destroy']);

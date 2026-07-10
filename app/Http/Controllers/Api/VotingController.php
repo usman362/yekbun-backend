@@ -30,13 +30,14 @@ class VotingController extends Controller
 
     public function waitingVote()
     {
-        $userId = Auth::id();
+        // Surveys the current user has NOT voted on yet.
         $votings = Voting::where('status', '1')
-            ->where(function ($q) use ($userId) {
-                $q->whereHas('reactions', fn($r) => $r->where('user_id', '!=', $userId))
-                    ->orWhereDoesntHave('reactions');
-            })->with('reactions')->get();
+            ->whereDoesntHave('reactions')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc')
+            ->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        $this->enrichSurveyFlags($votings, isNew: false, hasVoted: false);
         return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
@@ -44,22 +45,26 @@ class VotingController extends Controller
     {
         $votings = Voting::where('status', '1')->with('reactions')->orderBy('views', 'desc')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        $this->enrichSurveyFlags($votings);
         return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function alreadyVoted()
     {
-        $votings = Voting::where('status', '1')->whereHas('reactions', fn($r) => $r->where('user_id', Auth::id()))->with('reactions')->get();
+        // Survey ready — surveys the current user HAS already voted on.
+        $votings = Voting::where('status', '1')
+            ->whereHas('reactions')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc')
+            ->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        $this->enrichSurveyFlags($votings, isNew: false, hasVoted: true);
         return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function latestVotes()
     {
-        // Return a collection (always an array) for consistency with previousVotes / alreadyVoted /
-        // mostViews / waitingVote. Empty case => `data: []`, single-record case => `data: [{...}]`.
-        // Earlier this used `->first()` (object) and returned `[]` on empty, which caused mobile
-        // clients to crash because they wrapped single objects in an array and ended up with `[[]]`.
+        // Latest Surveys — newest published survey(s), flagged is_new / "is a new one".
         $votings = Voting::where('status', '1')
             ->with('reactions')
             ->orderBy('created_at', 'desc')
@@ -67,31 +72,102 @@ class VotingController extends Controller
             ->get();
 
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        $this->enrichSurveyFlags($votings, isNew: true);
         return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
     public function previousVotes()
     {
+        // Past Surveys — surveys the user has NOT voted for (excludes the absolute latest).
         $userId = Auth::id();
-        $voting = Voting::where('status', '1')->with('reactions')->orderBy('created_at', 'desc')->first();
+        $latest = Voting::where('status', '1')->orderBy('created_at', 'desc')->first();
 
         $query = Voting::where('status', '1')
-            ->where(function ($q) use ($userId) {
-                $q->whereHas('reactions', fn($r) => $r->where('user_id', '!=', $userId))
-                    ->orWhereDoesntHave('reactions');
-            })->with('reactions')->orderBy('created_at', 'desc');
+            ->whereDoesntHave('reactions')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc');
 
-        if ($voting) $query->where('_id', '!=', $voting->_id);
+        if ($latest) {
+            $query->where('_id', '!=', $latest->_id);
+        }
 
         $votings = $query->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        $this->enrichSurveyFlags($votings, isNew: false, hasVoted: false);
         return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
+    }
+
+    /**
+     * Mobile Surveys home — 3 sections in one response:
+     *  1. latest_surveys  → newest (is_new = true / "is a new one")
+     *  2. past_surveys    → user has NOT voted
+     *  3. survey_ready    → user HAS voted
+     */
+    public function surveysHome()
+    {
+        $latest = Voting::where('status', '1')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc')
+            ->limit(1)
+            ->get();
+
+        $latestId = optional($latest->first())->_id;
+
+        $pastQuery = Voting::where('status', '1')
+            ->whereDoesntHave('reactions')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc');
+        if ($latestId) {
+            $pastQuery->where('_id', '!=', $latestId);
+        }
+        $past = $pastQuery->get();
+
+        $ready = Voting::where('status', '1')
+            ->whereHas('reactions')
+            ->with('reactions')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $this->attachVotersToCollection($latest, self::LIST_VOTERS_LIMIT);
+        $this->attachVotersToCollection($past, self::LIST_VOTERS_LIMIT);
+        $this->attachVotersToCollection($ready, self::LIST_VOTERS_LIMIT);
+
+        $this->enrichSurveyFlags($latest, isNew: true);
+        $this->enrichSurveyFlags($past, isNew: false, hasVoted: false);
+        $this->enrichSurveyFlags($ready, isNew: false, hasVoted: true);
+
+        return ResponseHelper::sendResponse([
+            'latest_surveys' => $this->presentVotingsCollection($latest),
+            'past_surveys'   => $this->presentVotingsCollection($past),
+            'survey_ready'   => $this->presentVotingsCollection($ready),
+        ], 'Surveys home fetched successfully!');
+    }
+
+    /**
+     * Attach is_new / has_voted / section labels for mobile UI.
+     * @param  bool|null  $hasVoted  null = derive from loaded reactions relation
+     */
+    private function enrichSurveyFlags(Collection $votings, bool $isNew = false, ?bool $hasVoted = null): void
+    {
+        foreach ($votings as $v) {
+            $voted = $hasVoted;
+            if ($voted === null) {
+                $voted = $v->relationLoaded('reactions')
+                    ? $v->reactions->isNotEmpty()
+                    : $v->reactions()->exists();
+            }
+            $v->setAttribute('is_new', $isNew);
+            $v->setAttribute('is_a_new_one', $isNew); // alias for mobile copy "is a new one"
+            $v->setAttribute('has_voted', (bool) $voted);
+            $v->setAttribute('section', $isNew ? 'latest_surveys' : ($voted ? 'survey_ready' : 'past_surveys'));
+        }
     }
 
     public function votingPublic()
     {
         $votings = Voting::where('status', '1')->with('reactions')->get();
         $this->attachVotersToCollection($votings, self::LIST_VOTERS_LIMIT);
+        $this->enrichSurveyFlags($votings);
         return ResponseHelper::sendResponse($this->presentVotingsCollection($votings), 'Votings Fetch Successfully!');
     }
 
