@@ -635,11 +635,11 @@ class FeedsController extends Controller
         if ($request->feed_type == 'ai_videos') $feed = AIVideo::find($id);
 
         if ($feed) {
-            $feed->comments_count = isset($feed->comments) ? $feed->comments->count() : 0;
-            $feed->voice_comments_count = isset($feed->voice_comments) ? $feed->voice_comments->count() : 0;
-            $feed->likes_count = isset($feed->likes) ? $feed->likes->count() : 0;
-            $feed->views_count = isset($feed->views) ? $feed->views->count() : 0;
-            $feed->shares_count = isset($feed->shares) ? $feed->shares->count() : 0;
+            $feed->comments_count = method_exists($feed, 'comments') ? $feed->comments()->count() : (int) ($feed->comments_count ?? 0);
+            $feed->voice_comments_count = method_exists($feed, 'voice_comments') ? $feed->voice_comments()->count() : (int) ($feed->voice_comments_count ?? 0);
+            $feed->likes_count = method_exists($feed, 'likes') ? $feed->likes()->count() : (int) ($feed->likes_count ?? 0);
+            $feed->views_count = method_exists($feed, 'views') ? $feed->views()->count() : (int) ($feed->views_count ?? 0);
+            $feed->shares_count = method_exists($feed, 'shares') ? $feed->shares()->count() : (int) ($feed->shares_count ?? 0);
             $feed->save();
         }
 

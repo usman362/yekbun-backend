@@ -10,7 +10,12 @@ use App\Models\AIVideo;
 use App\Models\Artist;
 use App\Models\ArtistFavorite;
 use App\Models\Clips;
+use App\Models\ClipsLikes;
+use App\Models\ClipsViews;
 use App\Models\Feed;
+use App\Models\FeedComments;
+use App\Models\FeedLikes;
+use App\Models\FeedViews;
 use App\Models\History;
 use App\Models\Media;
 use App\Models\MusicPlay;
@@ -577,71 +582,116 @@ class MultimediaController extends Controller
 
         $query = Media::with('user')->orderBy('_id', 'desc');
         if ($cursor) {
-            $query->where('_id', '<', new ObjectId($cursor));
+            try {
+                $query->where('_id', '<', new ObjectId($cursor));
+            } catch (\Throwable $e) {
+                // Invalid cursor — ignore and return first page.
+            }
         }
 
         $media = $query->limit($perPage)->get();
-
-        // ── Thumbnail enrichment ───────────────────────────────────────────────
-        // Media rows historically never stored thumbnails — they live on the source row
-        // (Clips.thumbnail, VideoClip.thumbnail, Feed.thumbnail, etc.). For the mobile
-        // video grid we resolve those once per request: batch the source IDs by type,
-        // pluck thumbnails in one query per source table, then attach to each Media row.
-        // Doing this here means EVERY existing row gets a thumbnail without any data
-        // migration — and future writes only need to populate `Media.thumbnail` directly
-        // for it to take precedence.
         $byType = $media->groupBy('type');
 
-        // Per-source lookup maps: media_id → thumbnail URL
+        // Thumbnails from source tables (Media.thumbnail often empty historically).
         $lookups = [
-            'clips'  => $byType->get('clips')  ? Clips::whereIn('_id', $byType->get('clips')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
-            'videos' => $byType->get('videos') ? VideoClip::whereIn('_id', $byType->get('videos')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
-            'feeds'  => $byType->get('feeds')  ? Feed::whereIn('_id', $byType->get('feeds')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
+            'clips'  => $byType->get('clips')  ? Clips::whereIn('_id', $this->idQueryVariants($byType->get('clips')->pluck('media_id')->all()))->pluck('thumbnail', '_id')->toArray() : [],
+            'videos' => $byType->get('videos') ? VideoClip::whereIn('_id', $this->idQueryVariants($byType->get('videos')->pluck('media_id')->all()))->pluck('thumbnail', '_id')->toArray() : [],
+            'feeds'  => $byType->get('feeds')  ? Feed::whereIn('_id', $this->idQueryVariants($byType->get('feeds')->pluck('media_id')->all()))->pluck('thumbnail', '_id')->toArray() : [],
         ];
 
-        // Live engagement for history / AI videos (Media.commentCount / seenCount are often stale).
-        $historyIds = $byType->get('history')?->pluck('media_id')->filter()->values()->all() ?? [];
-        $aiIds = $byType->get('ai_videos')?->pluck('media_id')->filter()->values()->all() ?? [];
-        $histories = !empty($historyIds) ? History::whereIn('_id', $historyIds)->get()->keyBy(fn ($h) => (string) $h->_id) : collect();
-        $aiVideos = !empty($aiIds) ? AIVideo::whereIn('_id', $aiIds)->get()->keyBy(fn ($h) => (string) $h->_id) : collect();
+        // Live engagement counts — never trust stale Media.commentCount / seenCount alone.
+        $historyIds = $byType->get('history')?->pluck('media_id')->all() ?? [];
+        $aiIds = $byType->get('ai_videos')?->pluck('media_id')->all() ?? [];
+        $feedIds = collect()
+            ->merge($byType->get('user_feeds')?->pluck('media_id') ?? [])
+            ->merge($byType->get('feeds')?->pluck('media_id') ?? [])
+            ->all();
+        $clipIds = $byType->get('clips')?->pluck('media_id')->all() ?? [];
 
-        $media->transform(function ($m) use ($lookups, $histories, $aiVideos) {
-            // Honour an already-stored thumbnail first (future-proof: when we start writing
-            // thumbnails directly to the Media row this fast-path takes over with no code
-            // change here). Otherwise look it up by type + media_id and resolve to a full URL.
+        $countsById = [];
+        foreach ($this->engagementCountsForFeedType($historyIds, 'history') as $id => $c) {
+            $countsById[$id] = $c;
+        }
+        foreach ($this->engagementCountsForFeedType($aiIds, 'ai_videos') as $id => $c) {
+            $countsById[$id] = $c;
+        }
+        // User feed videos may be stored as user_feeds or feeds.
+        foreach ($this->engagementCountsForFeedType($feedIds, 'user_feeds') as $id => $c) {
+            $countsById[$id] = $c;
+        }
+        foreach ($this->engagementCountsForFeedType($feedIds, 'feeds') as $id => $c) {
+            if (!isset($countsById[$id])) {
+                $countsById[$id] = $c;
+                continue;
+            }
+            $countsById[$id]['commentCount'] += $c['commentCount'];
+            $countsById[$id]['voiceCount'] += $c['voiceCount'];
+            $countsById[$id]['emojisCount'] += $c['emojisCount'];
+            $countsById[$id]['seenCount'] += $c['seenCount'];
+        }
+        foreach ($this->engagementCountsForClips($clipIds) as $id => $c) {
+            $countsById[$id] = $c;
+        }
+
+        // Source rows for URI / thumbnail fallback (history + AI).
+        $histories = !empty($historyIds)
+            ? History::whereIn('_id', $this->idQueryVariants($historyIds))->get()->keyBy(fn ($h) => (string) $h->_id)
+            : collect();
+        $aiVideos = !empty($aiIds)
+            ? AIVideo::whereIn('_id', $this->idQueryVariants($aiIds))->get()->keyBy(fn ($h) => (string) $h->_id)
+            : collect();
+
+        $media->transform(function ($m) use ($lookups, $countsById, $histories, $aiVideos) {
+            $mediaId = (string) ($m->media_id ?? '');
+
             $raw = $m->thumbnail ?? null;
             if (empty($raw)) {
-                $raw = $lookups[$m->type][$m->media_id] ?? null;
+                $raw = $lookups[$m->type][$m->media_id]
+                    ?? $lookups[$m->type][$mediaId]
+                    ?? null;
+                // pluck keys may be ObjectId — try string match
+                if (empty($raw) && isset($lookups[$m->type])) {
+                    foreach ($lookups[$m->type] as $k => $thumb) {
+                        if ((string) $k === $mediaId) {
+                            $raw = $thumb;
+                            break;
+                        }
+                    }
+                }
             }
             $m->thumbnail = $raw ? Helpers::mediaUrl($raw) : null;
 
-            $source = null;
-            if ($m->type === 'history') {
-                $source = $histories->get((string) $m->media_id);
-            } elseif ($m->type === 'ai_videos') {
-                $source = $aiVideos->get((string) $m->media_id);
-            }
-            if ($source) {
-                // Prefer live relation counts so mobile always sees text/views correctly.
-                $m->commentCount = (int) $source->comments()->count();
-                $m->voiceCount   = (int) $source->voice_comments()->count();
-                $m->emojisCount  = (int) $source->likes()->count();
-                $m->seenCount    = (int) $source->views()->count();
-                if (empty($m->uri) && is_array($source->video) && !empty($source->video[0]['path'])) {
-                    $m->uri = Helpers::mediaUrl($source->video[0]['path']);
-                } elseif (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
-                    $m->uri = Helpers::mediaUrl($m->uri) ?? $m->uri;
-                }
+            $live = $countsById[$mediaId] ?? null;
+            if ($live) {
+                $m->commentCount = (int) $live['commentCount'];
+                $m->voiceCount   = (int) $live['voiceCount'];
+                $m->emojisCount  = (int) $live['emojisCount'];
+                $m->seenCount    = (int) $live['seenCount'];
             } else {
-                // Ensure keys always exist for the mobile client.
+                // Fallback to denormalized Media fields (still always present for mobile).
                 $m->commentCount = (int) ($m->commentCount ?? 0);
                 $m->voiceCount   = (int) ($m->voiceCount ?? 0);
                 $m->emojisCount  = (int) ($m->emojisCount ?? 0);
                 $m->seenCount    = (int) ($m->seenCount ?? 0);
-                if (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
-                    $m->uri = Helpers::mediaUrl($m->uri) ?? $m->uri;
-                }
             }
+
+            $source = null;
+            if ($m->type === 'history') {
+                $source = $histories->get($mediaId);
+            } elseif ($m->type === 'ai_videos') {
+                $source = $aiVideos->get($mediaId);
+            }
+            if ($source && empty($m->uri) && is_array($source->video) && !empty($source->video[0]['path'])) {
+                $m->uri = Helpers::mediaUrl($source->video[0]['path']);
+            } elseif (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
+                $m->uri = Helpers::mediaUrl($m->uri) ?? $m->uri;
+            }
+
+            // Force attributes into serialization (Mongo models sometimes omit unset dynamics).
+            $m->setAttribute('commentCount', (int) $m->commentCount);
+            $m->setAttribute('voiceCount', (int) $m->voiceCount);
+            $m->setAttribute('emojisCount', (int) $m->emojisCount);
+            $m->setAttribute('seenCount', (int) $m->seenCount);
 
             return $m;
         });
@@ -649,12 +699,131 @@ class MultimediaController extends Controller
         $nextCursor = optional($media->last())->_id;
 
         return ResponseHelper::sendResponse([
-            'media' => $media,
+            'media' => $media->values(),
             'pagination' => [
                 'per_page' => $perPage,
                 'next_cursor' => $nextCursor,
                 'has_more' => $media->count() === $perPage,
             ]
         ], 'Media fetched successfully');
+    }
+
+    /** String + ObjectId variants so whereIn matches either storage style. */
+    private function idQueryVariants(array $ids): array
+    {
+        $out = [];
+        foreach ($ids as $id) {
+            if ($id === null || $id === '') {
+                continue;
+            }
+            if ($id instanceof ObjectId) {
+                $out[] = $id;
+                $out[] = (string) $id;
+                continue;
+            }
+            $s = (string) $id;
+            $out[] = $s;
+            if (preg_match('/^[0-9a-fA-F]{24}$/', $s)) {
+                try {
+                    $out[] = new ObjectId($s);
+                } catch (\Throwable $e) {
+                    // skip invalid
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Batch live counts for history / AI / user feeds (feed_comments + likes + views).
+     * @return array<string, array{commentCount:int,voiceCount:int,emojisCount:int,seenCount:int}>
+     */
+    private function engagementCountsForFeedType(array $mediaIds, string $feedType): array
+    {
+        $keys = [];
+        foreach ($mediaIds as $id) {
+            $s = (string) $id;
+            if ($s !== '') {
+                $keys[$s] = [
+                    'commentCount' => 0,
+                    'voiceCount'   => 0,
+                    'emojisCount'  => 0,
+                    'seenCount'    => 0,
+                ];
+            }
+        }
+        if ($keys === []) {
+            return [];
+        }
+
+        $variants = $this->idQueryVariants(array_keys($keys));
+
+        foreach (FeedComments::whereIn('feed_id', $variants)->where('feed_type', $feedType)->get(['feed_id', 'comment_type']) as $c) {
+            $fid = (string) $c->feed_id;
+            if (!isset($keys[$fid])) {
+                continue;
+            }
+            if (($c->comment_type ?? 'normal') === 'audio') {
+                $keys[$fid]['voiceCount']++;
+            } else {
+                $keys[$fid]['commentCount']++;
+            }
+        }
+
+        foreach (FeedLikes::whereIn('feed_id', $variants)->where('feed_type', $feedType)->get(['feed_id']) as $row) {
+            $fid = (string) $row->feed_id;
+            if (isset($keys[$fid])) {
+                $keys[$fid]['emojisCount']++;
+            }
+        }
+
+        foreach (FeedViews::whereIn('feed_id', $variants)->where('feed_type', $feedType)->get(['feed_id']) as $row) {
+            $fid = (string) $row->feed_id;
+            if (isset($keys[$fid])) {
+                $keys[$fid]['seenCount']++;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * Batch live counts for user clips.
+     * @return array<string, array{commentCount:int,voiceCount:int,emojisCount:int,seenCount:int}>
+     */
+    private function engagementCountsForClips(array $clipIds): array
+    {
+        $keys = [];
+        foreach ($clipIds as $id) {
+            $s = (string) $id;
+            if ($s !== '') {
+                $keys[$s] = [
+                    'commentCount' => 0,
+                    'voiceCount'   => 0,
+                    'emojisCount'  => 0,
+                    'seenCount'    => 0,
+                ];
+            }
+        }
+        if ($keys === []) {
+            return [];
+        }
+
+        $variants = $this->idQueryVariants(array_keys($keys));
+
+        foreach (ClipsLikes::whereIn('clip_id', $variants)->get(['clip_id']) as $row) {
+            $fid = (string) $row->clip_id;
+            if (isset($keys[$fid])) {
+                $keys[$fid]['emojisCount']++;
+            }
+        }
+        foreach (ClipsViews::whereIn('clip_id', $variants)->get(['clip_id']) as $row) {
+            $fid = (string) $row->clip_id;
+            if (isset($keys[$fid])) {
+                $keys[$fid]['seenCount']++;
+            }
+        }
+
+        return $keys;
     }
 }
