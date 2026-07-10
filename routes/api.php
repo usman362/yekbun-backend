@@ -611,7 +611,6 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('get-my-clips', [ClipsController::class, 'getMyClips']);
     Route::post('store-clips', [ClipsController::class, 'store_clips']);
     Route::delete('delete-clips/{id}', [ClipsController::class, 'destroy']);
-    Route::post('view-clips', [ClipsController::class, 'view_clips']);
     Route::post('like-clips', [ClipsController::class, 'like_clips']);
     Route::get('get-clips-templates', [ClipsController::class, 'get_templates']);
     Route::post('store-clips-templates', [ClipsController::class, 'store_templates']);

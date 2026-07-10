@@ -624,6 +624,10 @@ class MultimediaController extends Controller
                 $m->seenCount = method_exists($source, 'views')
                     ? (int) $source->views->count()
                     : (int) ($source->views_count ?? $m->seenCount ?? 0);
+                // Clips: also honour legacy clips_views if higher than feed_views.
+                if ($type === 'clips' && method_exists($source, 'legacy_views')) {
+                    $m->seenCount = max($m->seenCount, (int) $source->legacy_views->count());
+                }
 
                 if (empty($m->uri) && is_array($source->video ?? null) && !empty($source->video[0]['path'])) {
                     $m->uri = Helpers::mediaUrl($source->video[0]['path']);

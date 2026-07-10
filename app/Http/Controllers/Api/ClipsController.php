@@ -10,6 +10,7 @@ use App\Models\Clips;
 use App\Models\ClipsViews;
 use App\Models\ClipsLikes;
 use App\Models\ClipTemplates;
+use App\Models\FeedViews;
 use App\Models\Media;
 use App\Models\NotificationCenter;
 use MongoDB\BSON\ObjectId;
@@ -513,7 +514,9 @@ class ClipsController extends Controller
 
     private function syncClipViewsCount(Clips $clip, string $clipId): int
     {
-        $count = ClipsViews::where('clip_id', $clipId)->count();
+        $fromFeedViews = (int) FeedViews::where('feed_id', $clipId)->where('feed_type', 'clips')->count();
+        $legacy = (int) ClipsViews::where('clip_id', $clipId)->count();
+        $count = max($fromFeedViews, $legacy);
         $clip->views_count = $count;
         $clip->save();
 
