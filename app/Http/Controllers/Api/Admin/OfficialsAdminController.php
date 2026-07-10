@@ -34,8 +34,8 @@ class OfficialsAdminController extends Controller
         $c = new Constitution();
         $c->title          = $request->title;
         $c->version        = $request->version;
-        $c->language_icon  = $request->language_icon;
-        $c->audio          = $request->audio;
+        $c->language_icon  = Helpers::cdnRelativePath($request->language_icon);
+        $c->audio          = Helpers::cdnRelativePath($request->audio);
         $c->content_text   = $request->content_text;
         $c->save();
 
@@ -56,8 +56,8 @@ class OfficialsAdminController extends Controller
 
         $c->title          = $request->title;
         $c->version        = $request->version;
-        if ($request->has('language_icon')) $c->language_icon = $request->language_icon;
-        if ($request->has('audio'))         $c->audio = $request->audio;
+        if ($request->has('language_icon')) $c->language_icon = Helpers::cdnRelativePath($request->language_icon);
+        if ($request->has('audio'))         $c->audio = Helpers::cdnRelativePath($request->audio);
         if ($request->has('content_text'))  $c->content_text = $request->content_text;
         $c->save();
 
@@ -90,8 +90,8 @@ class OfficialsAdminController extends Controller
         $p->country_name    = $request->country_name;
         $p->country_capital = $request->country_capital;
         $p->mass            = $request->mass;
-        $p->language_icon   = $request->language_icon;
-        $p->audio           = $request->audio;
+        $p->language_icon   = Helpers::cdnRelativePath($request->language_icon);
+        $p->audio           = Helpers::cdnRelativePath($request->audio);
         $p->about_text      = $request->about_text;
         $p->save();
 
@@ -113,8 +113,8 @@ class OfficialsAdminController extends Controller
         $p->country_name    = $request->country_name;
         $p->country_capital = $request->country_capital;
         $p->mass            = $request->mass;
-        if ($request->has('language_icon')) $p->language_icon = $request->language_icon;
-        if ($request->has('audio'))         $p->audio = $request->audio;
+        if ($request->has('language_icon')) $p->language_icon = Helpers::cdnRelativePath($request->language_icon);
+        if ($request->has('audio'))         $p->audio = Helpers::cdnRelativePath($request->audio);
         if ($request->has('about_text'))    $p->about_text = $request->about_text;
         $p->save();
 
@@ -180,7 +180,7 @@ class OfficialsAdminController extends Controller
     {
         $m->name        = $request->name;
         $m->description = $request->description;
-        if ($request->has('logo'))         $m->logo = $request->logo;
+        if ($request->has('logo'))         $m->logo = Helpers::cdnRelativePath($request->logo);
         if ($request->has('province'))     $m->province = $request->province;
         if ($request->has('city'))         $m->city = $request->city;
         if ($request->has('address'))      $m->address = $request->address;
@@ -209,8 +209,8 @@ class OfficialsAdminController extends Controller
         $c = new CivilLaw();
         $c->title          = $request->title;
         $c->version        = $request->version;
-        $c->language_icon  = $request->language_icon;
-        $c->audio          = $request->audio;
+        $c->language_icon  = Helpers::cdnRelativePath($request->language_icon);
+        $c->audio          = Helpers::cdnRelativePath($request->audio);
         $c->content_text   = $request->content_text;
         $c->save();
 
@@ -231,8 +231,8 @@ class OfficialsAdminController extends Controller
 
         $c->title          = $request->title;
         $c->version        = $request->version;
-        if ($request->has('language_icon')) $c->language_icon = $request->language_icon;
-        if ($request->has('audio'))         $c->audio = $request->audio;
+        if ($request->has('language_icon')) $c->language_icon = Helpers::cdnRelativePath($request->language_icon);
+        if ($request->has('audio'))         $c->audio = Helpers::cdnRelativePath($request->audio);
         if ($request->has('content_text'))  $c->content_text = $request->content_text;
         $c->save();
 
@@ -265,9 +265,9 @@ class OfficialsAdminController extends Controller
         $h->name            = $request->name;
         $h->date            = $request->date;
         $h->description     = $request->description;
-        $h->icon            = $request->icon;
-        $h->banner_image    = $request->banner_image;
-        $h->banner_video    = $request->banner_video;
+        $h->icon            = Helpers::cdnRelativePath($request->icon);
+        $h->banner_image    = Helpers::cdnRelativePath($request->banner_image);
+        $h->banner_video    = Helpers::cdnRelativePath($request->banner_video);
         $h->is_national_day = (bool) $request->input('is_national_day', false);
         $h->save();
 
@@ -289,9 +289,9 @@ class OfficialsAdminController extends Controller
         $h->name            = $request->name;
         $h->date            = $request->date;
         $h->description     = $request->description;
-        if ($request->has('icon'))            $h->icon = $request->icon;
-        if ($request->has('banner_image'))    $h->banner_image = $request->banner_image;
-        if ($request->has('banner_video'))    $h->banner_video = $request->banner_video;
+        if ($request->has('icon'))            $h->icon = Helpers::cdnRelativePath($request->icon);
+        if ($request->has('banner_image'))    $h->banner_image = Helpers::cdnRelativePath($request->banner_image);
+        if ($request->has('banner_video'))    $h->banner_video = Helpers::cdnRelativePath($request->banner_video);
         if ($request->has('is_national_day')) $h->is_national_day = (bool) $request->is_national_day;
         $h->save();
 

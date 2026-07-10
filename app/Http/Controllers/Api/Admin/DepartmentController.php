@@ -45,7 +45,7 @@ class DepartmentController extends Controller
 
         $d = new Department();
         $d->name           = $request->name;
-        $d->thumbnail_path = $request->thumbnail_path;
+        $d->thumbnail_path = Helpers::cdnRelativePath($request->thumbnail_path);
         $d->parent_id      = $request->parent_id ?? '0';
         $d->status         = $request->input('status', 'active');
         $d->save();
@@ -67,7 +67,7 @@ class DepartmentController extends Controller
         }
 
         $d->name = $request->name;
-        if ($request->has('thumbnail_path')) $d->thumbnail_path = $request->thumbnail_path;
+        if ($request->has('thumbnail_path')) $d->thumbnail_path = Helpers::cdnRelativePath($request->thumbnail_path);
         if ($request->has('parent_id'))      $d->parent_id      = $request->parent_id ?? '0';
         if ($request->has('status'))         $d->status         = $request->status;
         $d->save();

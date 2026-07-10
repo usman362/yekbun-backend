@@ -249,9 +249,9 @@ class ContentVotingsAdminController extends Controller
         $v->status      = (string) $request->input('status');
         $v->vote_type   = $request->input('vote_type', 'single');
 
-        if ($request->has('banner'))      $v->banner = $request->input('banner');
-        if ($request->has('view_banner')) $v->view_banner = $request->input('view_banner');
-        if ($request->has('audio'))       $v->audio = $request->input('audio');
+        if ($request->has('banner'))      $v->banner = Helpers::cdnRelativePath($request->input('banner'));
+        if ($request->has('view_banner')) $v->view_banner = Helpers::cdnRelativePath($request->input('view_banner'));
+        if ($request->has('audio'))       $v->audio = Helpers::cdnRelativePath($request->input('audio'));
 
         // options: array of {title, type, image}
         if ($request->has('options')) {
@@ -261,7 +261,7 @@ class ContentVotingsAdminController extends Controller
                     return [
                         'title' => (string) ($o['title'] ?? "Option " . ($idx + 1)),
                         'type'  => (int) ($o['type'] ?? ($idx + 1)),
-                        'image' => $o['image'] ?? null,
+                        'image' => Helpers::cdnRelativePath($o['image'] ?? null),
                     ];
                 }, $opts, array_keys($opts)));
             }

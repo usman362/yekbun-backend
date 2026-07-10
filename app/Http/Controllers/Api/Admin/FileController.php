@@ -49,11 +49,13 @@ class FileController extends Controller
 
         $sizeMB = round($f->getSize() / (1024 * 1024), 2);
 
-        // Bunny returns a relative path; admin UI needs a full CDN URL for preview /
-        // ffmpeg thumbnail generation. Store either form — Helpers::mediaUrl handles both.
+        // Always persist/return relative path as `path`. Full CDN URL is only for preview (`url`).
+        $relative = Helpers::cdnRelativePath($cdnUrl) ?: $cdnUrl;
+
         return ResponseHelper::sendResponse([
-            'path'          => Helpers::mediaUrl($cdnUrl) ?? $cdnUrl,
-            'relative_path' => $cdnUrl,
+            'path'          => $relative,
+            'relative_path' => $relative,
+            'url'           => Helpers::mediaUrl($relative) ?? $relative,
             'size'          => $sizeMB . ' MB',
             'duration'      => $duration,
         ], 'Uploaded');

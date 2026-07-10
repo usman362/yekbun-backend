@@ -46,6 +46,27 @@ class ContentAiVideoAdminController extends Controller
         );
     }
 
+    /** Keep the mobile `media` feed row in sync (commentCount / seenCount / uri). */
+    private function syncAiMedia(AIVideo $row): void
+    {
+        $uri = is_array($row->video) && !empty($row->video[0]['path'])
+            ? (string) $row->video[0]['path']
+            : 'exists';
+
+        Helpers::userMedia(
+            $row->_id,
+            $uri,
+            (int) ($row->comments_count ?? 0),
+            (int) ($row->voice_comments_count ?? 0),
+            (int) ($row->likes_count ?? 0),
+            (int) ($row->views_count ?? 0),
+            $row->user_id,
+            $row->source,
+            null,
+            'ai_videos'
+        );
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -67,16 +88,19 @@ class ContentAiVideoAdminController extends Controller
         $row->likes_count       = 0;
         $row->comments_count    = 0;
         $row->shares_count      = 0;
+        $row->voice_comments_count = 0;
 
-        $row->thumbnail = $request->thumbnail;
+        $row->thumbnail = Helpers::cdnRelativePath($request->thumbnail);
         $row->video = [[
-            'path'     => $request->video_path,
+            'path'     => Helpers::cdnRelativePath($request->video_path),
             'name'     => $request->input('video_name', ''),
             'duration' => $request->input('video_duration', 0),
             'size'     => $request->input('video_size', ''),
         ]];
 
         $row->save();
+
+        $this->syncAiMedia($row);
 
         // Only push when the video is actually published (status 1), not saved as draft.
         if ((string) $row->status === '1') {
@@ -109,11 +133,11 @@ class ContentAiVideoAdminController extends Controller
         $row->is_emoji          = (int) $request->input('is_emoji', 0);
 
         if ($request->filled('thumbnail')) {
-            $row->thumbnail = $request->thumbnail;
+            $row->thumbnail = Helpers::cdnRelativePath($request->thumbnail);
         }
         if ($request->filled('video_path')) {
             $row->video = [[
-                'path'     => $request->video_path,
+                'path'     => Helpers::cdnRelativePath($request->video_path),
                 'name'     => $request->input('video_name', ''),
                 'duration' => $request->input('video_duration', 0),
                 'size'     => $request->input('video_size', ''),
@@ -121,6 +145,8 @@ class ContentAiVideoAdminController extends Controller
         }
 
         $row->save();
+
+        $this->syncAiMedia($row);
 
         // Fire the push when a draft is published for the first time (0 → 1 transition).
         if (!$wasPublished && (string) $row->status === '1') {
@@ -162,7 +188,7 @@ class ContentAiVideoAdminController extends Controller
             'duration'   => 'required|numeric|min:1',
         ]);
 
-        $videoUrl = $request->video_path;
+        $videoUrl = Helpers::mediaUrl($request->video_path) ?? $request->video_path;
         $duration = (int) $request->duration;
 
         $ffmpeg = trim((string) @shell_exec('which ffmpeg'));
@@ -206,7 +232,7 @@ class ContentAiVideoAdminController extends Controller
                 'image/jpeg'
             );
             @unlink($localTmp);
-            $thumbnails[] = Helpers::mediaUrl($cdnUrl) ?? $cdnUrl;
+            $thumbnails[] = Helpers::cdnRelativePath($cdnUrl) ?: $cdnUrl;
         }
 
         if (count($thumbnails) === 0) {

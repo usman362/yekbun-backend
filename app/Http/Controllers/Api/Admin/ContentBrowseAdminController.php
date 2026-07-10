@@ -77,6 +77,7 @@ class ContentBrowseAdminController extends Controller
     /**
      * History / AI Video rows store CDN-relative thumbnail + video[].path —
      * resolve to full URLs so the dashboard can render without a client-side base.
+     * Also attach live engagement counts (stored denormalized fields are often stale/0).
      */
     private function presentVideoContent($row): array
     {
@@ -100,6 +101,14 @@ class ContentBrowseAdminController extends Controller
                 return $g;
             }, $arr['gallery']);
         }
+
+        // Live counts — text comments = comment_type normal; views from FeedViews.
+        $arr['comments_count']       = (int) $row->comments()->count();
+        $arr['voice_comments_count'] = (int) $row->voice_comments()->count();
+        $arr['likes_count']          = (int) $row->likes()->count();
+        $arr['views_count']          = (int) $row->views()->count();
+        $arr['shares_count']         = (int) $row->shares()->count();
+
         return $arr;
     }
 

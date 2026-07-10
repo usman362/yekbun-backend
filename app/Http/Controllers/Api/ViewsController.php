@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\FeedViews;
 use App\Models\Feed;
@@ -31,14 +32,39 @@ class ViewsController extends Controller
             ]);
         }
 
-        $feed = Feed::find($request->feed_id);
+        $feedType = (string) $request->feed_type;
+        $feed = null;
+        if ($feedType === 'history') {
+            $feed = \App\Models\History::find($request->feed_id);
+        } elseif ($feedType === 'ai_videos') {
+            $feed = \App\Models\AIVideo::find($request->feed_id);
+        } else {
+            $feed = Feed::find($request->feed_id);
+        }
+
         if ($feed) {
-            $feed->comments_count = $feed->comments->count();
-            $feed->voice_comments_count = $feed->voice_comments->count();
-            $feed->likes_count = $feed->likes->count();
-            $feed->views_count = $feed->views->count();
-            $feed->shares_count = $feed->shares->count();
+            $feed->comments_count = method_exists($feed, 'comments') ? $feed->comments()->count() : (int) ($feed->comments_count ?? 0);
+            $feed->voice_comments_count = method_exists($feed, 'voice_comments') ? $feed->voice_comments()->count() : (int) ($feed->voice_comments_count ?? 0);
+            $feed->likes_count = method_exists($feed, 'likes') ? $feed->likes()->count() : (int) ($feed->likes_count ?? 0);
+            $feed->views_count = method_exists($feed, 'views') ? $feed->views()->count() : FeedViews::where('feed_id', $request->feed_id)->count();
+            $feed->shares_count = method_exists($feed, 'shares') ? $feed->shares()->count() : (int) ($feed->shares_count ?? 0);
             $feed->save();
+
+            // Keep mobile videos feed (`media` collection) counts in sync for history / AI.
+            if (in_array($feedType, ['history', 'ai_videos'], true)) {
+                Helpers::userMedia(
+                    $feed->_id,
+                    'exists',
+                    (int) $feed->comments_count,
+                    (int) $feed->voice_comments_count,
+                    (int) $feed->likes_count,
+                    (int) $feed->views_count,
+                    $feed->user_id ?? null,
+                    $feed->source ?? null,
+                    null,
+                    $feedType
+                );
+            }
         }
 
         return ResponseHelper::sendResponse($feeds, 'Feeds View Succeed');

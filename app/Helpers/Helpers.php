@@ -52,6 +52,53 @@ class Helpers
         return asset('storage/' . $encoded);
     }
 
+    /**
+     * Strip CDN / app base URL so only a relative storage path is persisted in the DB.
+     * Full URLs belong in API responses (via mediaUrl), never in Mongo fields.
+     */
+    public static function cdnRelativePath(?string $path): ?string
+    {
+        if ($path === null) {
+            return null;
+        }
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        $candidates = array_values(array_filter([
+            rtrim((string) env('BUNNY_CDN_URL'), '/'),
+            'https://yekbun.b-cdn.net',
+            'http://yekbun.b-cdn.net',
+            rtrim((string) config('app.url'), '/') . '/storage',
+            rtrim((string) asset('storage'), '/'),
+        ]));
+
+        foreach ($candidates as $base) {
+            if ($base === '') {
+                continue;
+            }
+            if (Str::startsWith($path, $base . '/')) {
+                return ltrim(Str::after($path, $base . '/'), '/');
+            }
+            if ($path === $base) {
+                return '';
+            }
+        }
+
+        // Any other b-cdn.net absolute URL → path after host
+        if (preg_match('#^https?://[^/]*b-cdn\.net/(.+)$#i', $path, $m)) {
+            return ltrim($m[1], '/');
+        }
+
+        // Already relative (or unknown absolute we leave alone for external assets)
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        return ltrim($path, '/');
+    }
+
     public static function fileUpload($uploadedFile, $folder = null)
     {
         $uniqueName = $uploadedFile->getClientOriginalName();
@@ -115,8 +162,8 @@ class Helpers
             unlink($finalLocalFile);
         }
 
-        $cleanedcdnPath = Str::after($cdnPath, env('BUNNY_CDN_URL'));
-        return $cleanedcdnPath;
+        // BunnyCDNService::upload already returns a relative path — never persist a full CDN URL.
+        return self::cdnRelativePath($cdnPath) ?: $cdnPath;
     }
 
     public static function fileCDNUpload2($uploadedFile, $folder = 'files')
@@ -168,8 +215,7 @@ class Helpers
             unlink($finalLocalFile);
         }
 
-        $cleanedcdnPath = Str::after($cdnPath, env('BUNNY_CDN_URL'));
-        return $cleanedcdnPath;
+        return self::cdnRelativePath($cdnPath) ?: $cdnPath;
     }
 
     public static function formatDuration($durationInSeconds)

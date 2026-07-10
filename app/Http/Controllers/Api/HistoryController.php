@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\Helpers;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\History;
@@ -19,6 +20,7 @@ class HistoryController extends Controller
             $history->likes_count = $history->likes->count();
             $history->views_count = $history->views->count();
             $history->shares_count = $history->shares->count();
+            $this->presentMedia($history);
             return $history;
         });
         return ResponseHelper::sendResponse($histories, 'History has been Fetch Successfully!');
@@ -93,5 +95,21 @@ class HistoryController extends Controller
             return response()->json(['success' => true, 'data' => $history]);
         }
         return response()->json(['success' => false, 'message' => 'No history found.']);
+    }
+
+    /** Resolve stored relative CDN paths to full URLs for mobile clients. */
+    private function presentMedia(History $history): void
+    {
+        if (!empty($history->thumbnail)) {
+            $history->thumbnail = Helpers::mediaUrl($history->thumbnail);
+        }
+        if (is_array($history->video)) {
+            $history->video = array_map(function ($v) {
+                if (is_array($v) && !empty($v['path'])) {
+                    $v['path'] = Helpers::mediaUrl($v['path']);
+                }
+                return $v;
+            }, $history->video);
+        }
     }
 }

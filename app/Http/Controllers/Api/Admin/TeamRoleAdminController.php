@@ -163,7 +163,7 @@ class TeamRoleAdminController extends Controller
         $user->is_admin_user = 1;
         $user->user_type     = 'team_member';
         $user->status        = (int) $request->input('status', 1);
-        if ($request->filled('image')) $user->image = $request->image;
+        if ($request->filled('image')) $user->image = Helpers::cdnRelativePath($request->image);
         $user->save();
 
         return ResponseHelper::sendResponse(['id' => (string) $user->_id], 'Team member created.', true, 201);
@@ -194,7 +194,7 @@ class TeamRoleAdminController extends Controller
         $user->email   = $request->email;
         $user->role_id = (string) $role->_id;
         if ($request->filled('password')) $user->password = Hash::make($request->password);
-        if ($request->has('image'))       $user->image    = $request->image;
+        if ($request->has('image'))       $user->image    = Helpers::cdnRelativePath($request->image);
         if ($request->has('status'))      $user->status   = (int) $request->status;
         $user->save();
 

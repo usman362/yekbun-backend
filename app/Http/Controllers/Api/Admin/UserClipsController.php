@@ -90,7 +90,7 @@ class UserClipsController extends Controller
             'duration'   => 'required|numeric|min:1',
         ]);
 
-        $videoUrl = $request->video_path;
+        $videoUrl = Helpers::mediaUrl($request->video_path) ?? $request->video_path;
         $duration = (int) $request->duration;
 
         $ffmpeg = trim((string) @shell_exec('which ffmpeg'));
@@ -134,7 +134,7 @@ class UserClipsController extends Controller
                 'image/jpeg'
             );
             @unlink($localTmp);
-            $thumbnails[] = Helpers::mediaUrl($cdnUrl) ?? $cdnUrl;
+            $thumbnails[] = Helpers::cdnRelativePath($cdnUrl) ?: $cdnUrl;
         }
 
         if (count($thumbnails) === 0) {
@@ -147,13 +147,13 @@ class UserClipsController extends Controller
     private function fillTemplate(ClipTemplates $t, Request $request, bool $isCreate = true): void
     {
         $t->title = $request->input('title');
-        if ($request->has('json_path'))   $t->json_paths = $request->input('json_path');
+        if ($request->has('json_path'))   $t->json_paths = Helpers::cdnRelativePath($request->input('json_path'));
         if ($request->has('json_name'))   $t->json_name = $request->input('json_name');
         if ($request->has('json_size'))   $t->json_sizes = $request->input('json_size');
-        if ($request->has('video_path'))  $t->video_paths = $request->input('video_path');
+        if ($request->has('video_path'))  $t->video_paths = Helpers::cdnRelativePath($request->input('video_path'));
         if ($request->has('video_name'))  $t->video_name = $request->input('video_name');
         if ($request->has('video_size'))  $t->video_sizes = $request->input('video_size');
-        if ($request->filled('thumbnail')) $t->thumbnail = $request->input('thumbnail');
+        if ($request->filled('thumbnail')) $t->thumbnail = Helpers::cdnRelativePath($request->input('thumbnail'));
         if ($request->has('educated_price'))   $t->educated_price = $request->input('educated_price');
         if ($request->has('cultivated_price')) $t->cultivated_price = $request->input('cultivated_price');
         if ($request->has('text'))           $t->text = $request->input('text');

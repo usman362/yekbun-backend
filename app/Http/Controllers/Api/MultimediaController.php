@@ -599,7 +599,13 @@ class MultimediaController extends Controller
             'feeds'  => $byType->get('feeds')  ? Feed::whereIn('_id', $byType->get('feeds')->pluck('media_id'))->pluck('thumbnail', '_id')->toArray() : [],
         ];
 
-        $media->transform(function ($m) use ($lookups) {
+        // Live engagement for history / AI videos (Media.commentCount / seenCount are often stale).
+        $historyIds = $byType->get('history')?->pluck('media_id')->filter()->values()->all() ?? [];
+        $aiIds = $byType->get('ai_videos')?->pluck('media_id')->filter()->values()->all() ?? [];
+        $histories = !empty($historyIds) ? History::whereIn('_id', $historyIds)->get()->keyBy(fn ($h) => (string) $h->_id) : collect();
+        $aiVideos = !empty($aiIds) ? AIVideo::whereIn('_id', $aiIds)->get()->keyBy(fn ($h) => (string) $h->_id) : collect();
+
+        $media->transform(function ($m) use ($lookups, $histories, $aiVideos) {
             // Honour an already-stored thumbnail first (future-proof: when we start writing
             // thumbnails directly to the Media row this fast-path takes over with no code
             // change here). Otherwise look it up by type + media_id and resolve to a full URL.
@@ -608,6 +614,35 @@ class MultimediaController extends Controller
                 $raw = $lookups[$m->type][$m->media_id] ?? null;
             }
             $m->thumbnail = $raw ? Helpers::mediaUrl($raw) : null;
+
+            $source = null;
+            if ($m->type === 'history') {
+                $source = $histories->get((string) $m->media_id);
+            } elseif ($m->type === 'ai_videos') {
+                $source = $aiVideos->get((string) $m->media_id);
+            }
+            if ($source) {
+                // Prefer live relation counts so mobile always sees text/views correctly.
+                $m->commentCount = (int) $source->comments()->count();
+                $m->voiceCount   = (int) $source->voice_comments()->count();
+                $m->emojisCount  = (int) $source->likes()->count();
+                $m->seenCount    = (int) $source->views()->count();
+                if (empty($m->uri) && is_array($source->video) && !empty($source->video[0]['path'])) {
+                    $m->uri = Helpers::mediaUrl($source->video[0]['path']);
+                } elseif (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
+                    $m->uri = Helpers::mediaUrl($m->uri) ?? $m->uri;
+                }
+            } else {
+                // Ensure keys always exist for the mobile client.
+                $m->commentCount = (int) ($m->commentCount ?? 0);
+                $m->voiceCount   = (int) ($m->voiceCount ?? 0);
+                $m->emojisCount  = (int) ($m->emojisCount ?? 0);
+                $m->seenCount    = (int) ($m->seenCount ?? 0);
+                if (!empty($m->uri) && !str_starts_with((string) $m->uri, 'http')) {
+                    $m->uri = Helpers::mediaUrl($m->uri) ?? $m->uri;
+                }
+            }
+
             return $m;
         });
 

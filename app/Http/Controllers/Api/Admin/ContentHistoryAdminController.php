@@ -55,16 +55,19 @@ class ContentHistoryAdminController extends Controller
         $history->likes_count       = 0;
         $history->comments_count    = 0;
         $history->shares_count      = 0;
+        $history->voice_comments_count = 0;
 
-        $history->thumbnail = $request->thumbnail;
+        $history->thumbnail = Helpers::cdnRelativePath($request->thumbnail);
         $history->video = [[
-            'path'     => $request->video_path,
+            'path'     => Helpers::cdnRelativePath($request->video_path),
             'name'     => $request->input('video_name', ''),
             'duration' => $request->input('video_duration', 0),
             'size'     => $request->input('video_size', ''),
         ]];
 
         $history->save();
+
+        $this->syncHistoryMedia($history);
 
         // Push a notification to opted-in users when the history is PUBLISHED (status=1) —
         // same audience/pattern the app already uses for new clips.
@@ -88,6 +91,27 @@ class ContentHistoryAdminController extends Controller
         NotificationHelper::sendConfiguredBroadcast(
             'new_history',
             ['[name]' => (string) $history->title],
+            'history'
+        );
+    }
+
+    /** Keep the mobile `media` feed row in sync (commentCount / seenCount / uri). */
+    private function syncHistoryMedia(History $history): void
+    {
+        $uri = is_array($history->video) && !empty($history->video[0]['path'])
+            ? (string) $history->video[0]['path']
+            : 'exists';
+
+        Helpers::userMedia(
+            $history->_id,
+            $uri,
+            (int) ($history->comments_count ?? 0),
+            (int) ($history->voice_comments_count ?? 0),
+            (int) ($history->likes_count ?? 0),
+            (int) ($history->views_count ?? 0),
+            $history->user_id,
+            $history->source,
+            null,
             'history'
         );
     }
@@ -116,11 +140,11 @@ class ContentHistoryAdminController extends Controller
         $history->is_emoji          = (int) $request->input('is_emoji', 0);
 
         if ($request->filled('thumbnail')) {
-            $history->thumbnail = $request->thumbnail;
+            $history->thumbnail = Helpers::cdnRelativePath($request->thumbnail);
         }
         if ($request->filled('video_path')) {
             $history->video = [[
-                'path'     => $request->video_path,
+                'path'     => Helpers::cdnRelativePath($request->video_path),
                 'name'     => $request->input('video_name', ''),
                 'duration' => $request->input('video_duration', 0),
                 'size'     => $request->input('video_size', ''),
@@ -128,6 +152,8 @@ class ContentHistoryAdminController extends Controller
         }
 
         $history->save();
+
+        $this->syncHistoryMedia($history);
 
         if ((string) $request->status === '1' && !$wasPublished) {
             $this->broadcastNewHistory($history);
@@ -168,7 +194,7 @@ class ContentHistoryAdminController extends Controller
             'duration'   => 'required|numeric|min:1',
         ]);
 
-        $videoUrl = $request->video_path;
+        $videoUrl = Helpers::mediaUrl($request->video_path) ?? $request->video_path;
         $duration = (int) $request->duration;
 
         $ffmpeg = trim((string) @shell_exec('which ffmpeg'));
@@ -212,7 +238,8 @@ class ContentHistoryAdminController extends Controller
                 'image/jpeg'
             );
             @unlink($localTmp);
-            $thumbnails[] = Helpers::mediaUrl($cdnUrl) ?? $cdnUrl;
+            // Relative path only — admin UI prefixes CDN via mediaUrl when rendering.
+            $thumbnails[] = Helpers::cdnRelativePath($cdnUrl) ?: $cdnUrl;
         }
 
         if (count($thumbnails) === 0) {

@@ -31,8 +31,18 @@ class History extends Model
 
     public function history_category() { return $this->belongsTo(HistoryCategory::class, 'category_id'); }
     public function gallery() { return $this->hasMany(PostGallery::class); }
-    public function comments() { return $this->hasMany(FeedComments::class)->where('feed_type', 'history'); }
-    public function voice_comments() { return $this->hasMany(FeedComments::class, 'feed_id')->where('comment_type', 'audio'); }
+    public function comments()
+    {
+        return $this->hasMany(FeedComments::class, 'feed_id')
+            ->where('feed_type', 'history')
+            ->where('comment_type', 'normal');
+    }
+    public function voice_comments()
+    {
+        return $this->hasMany(FeedComments::class, 'feed_id')
+            ->where('feed_type', 'history')
+            ->where('comment_type', 'audio');
+    }
     public function shares() { return $this->hasMany(FeedShare::class, 'feed_id'); }
     public function likes() { return $this->hasMany(FeedLikes::class, 'feed_id'); }
     public function views() { return $this->hasMany(FeedViews::class, 'feed_id'); }
