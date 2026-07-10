@@ -266,6 +266,34 @@ class MusicController extends Controller
         if (!$artist) {
             return ResponseHelper::sendResponse([], 'Artist not found.', false, 404);
         }
+
+        // Same rule as the legacy dashboard: only empty artists (no songs, no clips) can be removed.
+        $songCount = Song::where('artist_id', $id)->count();
+        $clipCount = VideoClip::where('artist_id', $id)->count();
+        if ($songCount > 0 || $clipCount > 0) {
+            return ResponseHelper::sendResponse(
+                null,
+                'Cannot remove artist while songs or video clips still exist.',
+                false,
+                422
+            );
+        }
+
+        if (!empty($artist->image)) {
+            try {
+                $bunny = new BunnyCDNService();
+                $cdnBase = rtrim((string) env('BUNNY_CDN_URL'), '/');
+                $rel = $cdnBase !== '' && Str::startsWith((string) $artist->image, $cdnBase . '/')
+                    ? Str::after((string) $artist->image, $cdnBase . '/')
+                    : ltrim((string) $artist->image, '/');
+                if ($rel !== '' && !Str::startsWith($rel, ['http://', 'https://'])) {
+                    $bunny->delete($rel);
+                }
+            } catch (\Throwable $e) {
+                // Don't block DB delete if CDN cleanup fails.
+            }
+        }
+
         $artist->delete();
         return ResponseHelper::sendResponse([], 'Artist deleted.');
     }
