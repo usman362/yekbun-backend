@@ -131,7 +131,7 @@ class TeamRoleAdminController extends Controller
                 'roleId'  => $u->role_id ? (string) $u->role_id : null,
                 'status'  => ($u->status ?? 1) == 1 ? 'active' : 'inactive',
                 'avatar'  => Helpers::mediaUrl($u->image) ?? strtoupper(mb_substr((string) ($u->name ?? 'A'), 0, 2)),
-                'image'   => $u->image ?? null,
+                'image'   => Helpers::mediaUrl($u->image) ?? null,
                 'isSuperAdmin' => $isSuper,
             ];
         })->values();

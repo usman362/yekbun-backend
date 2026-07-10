@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Helpers\ResponseHelper;
+use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\CivilLaw;
 use App\Models\Constitution;
@@ -20,7 +21,9 @@ class OfficialsAdminController extends Controller
 
     public function constitutionsIndex()
     {
-        $rows = Constitution::orderBy('created_at', 'desc')->get();
+        $rows = Constitution::orderBy('created_at', 'desc')->get()
+            ->map(fn($r) => $this->presentMediaRow($r, ['language_icon', 'audio']))
+            ->values();
         return ResponseHelper::sendResponse($rows, 'Constitutions loaded.');
     }
 
@@ -36,7 +39,12 @@ class OfficialsAdminController extends Controller
         $c->content_text   = $request->content_text;
         $c->save();
 
-        return ResponseHelper::sendResponse($c, 'Constitution created.', true, 201);
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($c, ['language_icon', 'audio']),
+            'Constitution created.',
+            true,
+            201
+        );
     }
 
     public function constitutionsUpdate(Request $request, $id)
@@ -53,7 +61,10 @@ class OfficialsAdminController extends Controller
         if ($request->has('content_text'))  $c->content_text = $request->content_text;
         $c->save();
 
-        return ResponseHelper::sendResponse($c, 'Constitution updated.');
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($c, ['language_icon', 'audio']),
+            'Constitution updated.'
+        );
     }
 
     public function constitutionsDestroy($id)
@@ -65,7 +76,9 @@ class OfficialsAdminController extends Controller
 
     public function peopleIndex()
     {
-        $rows = PeopleTerritory::orderBy('created_at', 'desc')->get();
+        $rows = PeopleTerritory::orderBy('created_at', 'desc')->get()
+            ->map(fn($r) => $this->presentMediaRow($r, ['language_icon', 'audio']))
+            ->values();
         return ResponseHelper::sendResponse($rows, 'People & Territory loaded.');
     }
 
@@ -82,7 +95,12 @@ class OfficialsAdminController extends Controller
         $p->about_text      = $request->about_text;
         $p->save();
 
-        return ResponseHelper::sendResponse($p, 'Entry created.', true, 201);
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($p, ['language_icon', 'audio']),
+            'Entry created.',
+            true,
+            201
+        );
     }
 
     public function peopleUpdate(Request $request, $id)
@@ -100,7 +118,10 @@ class OfficialsAdminController extends Controller
         if ($request->has('about_text'))    $p->about_text = $request->about_text;
         $p->save();
 
-        return ResponseHelper::sendResponse($p, 'Entry updated.');
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($p, ['language_icon', 'audio']),
+            'Entry updated.'
+        );
     }
 
     public function peopleDestroy($id)
@@ -112,7 +133,9 @@ class OfficialsAdminController extends Controller
 
     public function ministriesIndex()
     {
-        $rows = Ministry::orderBy('created_at', 'desc')->get();
+        $rows = Ministry::orderBy('created_at', 'desc')->get()
+            ->map(fn($r) => $this->presentMediaRow($r, ['logo']))
+            ->values();
         return ResponseHelper::sendResponse($rows, 'Ministries loaded.');
     }
 
@@ -124,7 +147,12 @@ class OfficialsAdminController extends Controller
         $this->fillMinistry($m, $request);
         $m->save();
 
-        return ResponseHelper::sendResponse($m, 'Ministry created.', true, 201);
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($m, ['logo']),
+            'Ministry created.',
+            true,
+            201
+        );
     }
 
     public function ministriesUpdate(Request $request, $id)
@@ -137,7 +165,10 @@ class OfficialsAdminController extends Controller
         $this->fillMinistry($m, $request);
         $m->save();
 
-        return ResponseHelper::sendResponse($m, 'Ministry updated.');
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($m, ['logo']),
+            'Ministry updated.'
+        );
     }
 
     public function ministriesDestroy($id)
@@ -165,7 +196,9 @@ class OfficialsAdminController extends Controller
 
     public function civilLawsIndex()
     {
-        $rows = CivilLaw::orderBy('created_at', 'desc')->get();
+        $rows = CivilLaw::orderBy('created_at', 'desc')->get()
+            ->map(fn($r) => $this->presentMediaRow($r, ['language_icon', 'audio']))
+            ->values();
         return ResponseHelper::sendResponse($rows, 'Civil Laws loaded.');
     }
 
@@ -181,7 +214,12 @@ class OfficialsAdminController extends Controller
         $c->content_text   = $request->content_text;
         $c->save();
 
-        return ResponseHelper::sendResponse($c, 'Civil law created.', true, 201);
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($c, ['language_icon', 'audio']),
+            'Civil law created.',
+            true,
+            201
+        );
     }
 
     public function civilLawsUpdate(Request $request, $id)
@@ -198,7 +236,10 @@ class OfficialsAdminController extends Controller
         if ($request->has('content_text'))  $c->content_text = $request->content_text;
         $c->save();
 
-        return ResponseHelper::sendResponse($c, 'Civil law updated.');
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($c, ['language_icon', 'audio']),
+            'Civil law updated.'
+        );
     }
 
     public function civilLawsDestroy($id)
@@ -210,7 +251,9 @@ class OfficialsAdminController extends Controller
 
     public function holidaysIndex()
     {
-        $rows = Holiday::orderBy('created_at', 'desc')->get();
+        $rows = Holiday::orderBy('created_at', 'desc')->get()
+            ->map(fn($r) => $this->presentMediaRow($r, ['icon', 'banner_image', 'banner_video']))
+            ->values();
         return ResponseHelper::sendResponse($rows, 'Holidays loaded.');
     }
 
@@ -228,7 +271,12 @@ class OfficialsAdminController extends Controller
         $h->is_national_day = (bool) $request->input('is_national_day', false);
         $h->save();
 
-        return ResponseHelper::sendResponse($h, 'Holiday created.', true, 201);
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($h, ['icon', 'banner_image', 'banner_video']),
+            'Holiday created.',
+            true,
+            201
+        );
     }
 
     public function holidaysUpdate(Request $request, $id)
@@ -247,7 +295,10 @@ class OfficialsAdminController extends Controller
         if ($request->has('is_national_day')) $h->is_national_day = (bool) $request->is_national_day;
         $h->save();
 
-        return ResponseHelper::sendResponse($h, 'Holiday updated.');
+        return ResponseHelper::sendResponse(
+            $this->presentMediaRow($h, ['icon', 'banner_image', 'banner_video']),
+            'Holiday updated.'
+        );
     }
 
     public function holidaysDestroy($id)
@@ -321,6 +372,17 @@ class OfficialsAdminController extends Controller
 
         $row->delete();
         return ResponseHelper::sendResponse(['id' => $id], $label . ' deleted.');
+    }
+
+    private function presentMediaRow($row, array $fields): array
+    {
+        $arr = $row->toArray();
+        foreach ($fields as $field) {
+            if (!empty($arr[$field])) {
+                $arr[$field] = Helpers::mediaUrl($arr[$field]);
+            }
+        }
+        return $arr;
     }
 
     private function cdnPath(string $fullUrl, string $cdnBase): string

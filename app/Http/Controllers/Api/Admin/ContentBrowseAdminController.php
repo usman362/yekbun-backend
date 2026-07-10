@@ -26,14 +26,18 @@ class ContentBrowseAdminController extends Controller
 {
     public function history()
     {
-        $rows = History::where('status', '1')->orderBy('created_at', 'desc')->limit(100)->get();
+        $rows = History::orderBy('created_at', 'desc')->limit(100)->get()
+            ->map(fn($h) => $this->presentVideoContent($h))
+            ->values();
 
         return ResponseHelper::sendResponse($rows, 'History loaded.');
     }
 
     public function aiVideos()
     {
-        $rows = AIVideo::where('status', '1')->orderBy('created_at', 'desc')->limit(100)->get();
+        $rows = AIVideo::orderBy('created_at', 'desc')->limit(100)->get()
+            ->map(fn($h) => $this->presentVideoContent($h))
+            ->values();
 
         return ResponseHelper::sendResponse($rows, 'AI videos loaded.');
     }
@@ -47,9 +51,56 @@ class ContentBrowseAdminController extends Controller
 
     public function votings()
     {
-        $rows = Voting::where('status', '1')->with('reactions')->orderBy('created_at', 'desc')->get();
+        $rows = Voting::where('status', '1')->with('reactions')->orderBy('created_at', 'desc')->get()
+            ->map(function ($v) {
+                $arr = $v->toArray();
+                foreach (['banner', 'image', 'view_banner', 'audio'] as $field) {
+                    if (!empty($arr[$field])) {
+                        $arr[$field] = Helpers::mediaUrl($arr[$field]);
+                    }
+                }
+                if (is_array($arr['options'] ?? null)) {
+                    $arr['options'] = array_map(function ($o) {
+                        if (is_array($o) && !empty($o['image'])) {
+                            $o['image'] = Helpers::mediaUrl($o['image']);
+                        }
+                        return $o;
+                    }, $arr['options']);
+                }
+                return $arr;
+            })
+            ->values();
 
         return ResponseHelper::sendResponse($rows, 'Votings loaded.');
+    }
+
+    /**
+     * History / AI Video rows store CDN-relative thumbnail + video[].path —
+     * resolve to full URLs so the dashboard can render without a client-side base.
+     */
+    private function presentVideoContent($row): array
+    {
+        $arr = $row->toArray();
+        if (!empty($arr['thumbnail'])) {
+            $arr['thumbnail'] = Helpers::mediaUrl($arr['thumbnail']);
+        }
+        if (is_array($arr['video'] ?? null)) {
+            $arr['video'] = array_map(function ($v) {
+                if (is_array($v) && !empty($v['path'])) {
+                    $v['path'] = Helpers::mediaUrl($v['path']);
+                }
+                return $v;
+            }, $arr['video']);
+        }
+        if (is_array($arr['gallery'] ?? null)) {
+            $arr['gallery'] = array_map(function ($g) {
+                if (is_array($g) && !empty($g['path'])) {
+                    $g['path'] = Helpers::mediaUrl($g['path']);
+                }
+                return $g;
+            }, $arr['gallery']);
+        }
+        return $arr;
     }
 
     public function complaints(Request $request)
@@ -87,7 +138,36 @@ class ContentBrowseAdminController extends Controller
 
     public function postsPreview()
     {
-        $feeds = Feed::with('user')->orderBy('created_at', 'desc')->limit(40)->get();
+        $feeds = Feed::with('user')->orderBy('created_at', 'desc')->limit(40)->get()
+            ->map(function ($f) {
+                $arr = $f->toArray();
+                if (!empty($arr['image'])) {
+                    $arr['image'] = Helpers::mediaUrl($arr['image']);
+                }
+                if (is_array($arr['images'] ?? null)) {
+                    $arr['images'] = array_map(function ($img) {
+                        if (is_array($img) && !empty($img['path'])) {
+                            $img['path'] = Helpers::mediaUrl($img['path']);
+                        } elseif (is_string($img)) {
+                            return Helpers::mediaUrl($img);
+                        }
+                        return $img;
+                    }, $arr['images']);
+                }
+                if (is_array($arr['videos'] ?? null)) {
+                    $arr['videos'] = array_map(function ($vid) {
+                        if (is_array($vid) && !empty($vid['path'])) {
+                            $vid['path'] = Helpers::mediaUrl($vid['path']);
+                        }
+                        return $vid;
+                    }, $arr['videos']);
+                }
+                if (!empty($arr['user']['image'])) {
+                    $arr['user']['image'] = Helpers::mediaUrl($arr['user']['image']);
+                }
+                return $arr;
+            })
+            ->values();
 
         return ResponseHelper::sendResponse($feeds, 'Feeds preview loaded.');
     }

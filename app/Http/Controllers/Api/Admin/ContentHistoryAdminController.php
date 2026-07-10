@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
 use App\Helpers\NotificationHelper;
 use App\Helpers\CommentPresenter;
+use App\Helpers\Helpers;
 use App\Models\History;
 use App\Models\NotificationCenter;
 use App\Models\User;
@@ -211,7 +212,7 @@ class ContentHistoryAdminController extends Controller
                 'image/jpeg'
             );
             @unlink($localTmp);
-            $thumbnails[] = $cdnUrl;
+            $thumbnails[] = Helpers::mediaUrl($cdnUrl) ?? $cdnUrl;
         }
 
         if (count($thumbnails) === 0) {

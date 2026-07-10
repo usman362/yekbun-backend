@@ -134,7 +134,7 @@ class UserClipsController extends Controller
                 'image/jpeg'
             );
             @unlink($localTmp);
-            $thumbnails[] = $cdnUrl;
+            $thumbnails[] = Helpers::mediaUrl($cdnUrl) ?? $cdnUrl;
         }
 
         if (count($thumbnails) === 0) {
@@ -175,10 +175,10 @@ class UserClipsController extends Controller
             'variant'         => $t->variant ?? 'portrait',
             'educatedPrice'   => $t->educated_price ?? 'Free',
             'cultivatedPrice' => $t->cultivated_price ?? 'Free',
-            'jsonPath'        => $t->json_paths ?? '',
+            'jsonPath'        => Helpers::mediaUrl($t->json_paths) ?? ($t->json_paths ?? ''),
             'jsonName'        => $t->json_name ?? '',
             'jsonSize'        => $t->json_sizes ?? '',
-            'videoPath'       => $t->video_paths ?? '',
+            'videoPath'       => Helpers::mediaUrl($t->video_paths) ?? ($t->video_paths ?? ''),
             'videoName'       => $t->video_name ?? '',
             'videoSize'       => $t->video_sizes ?? '',
             'text'            => $t->text ?? '',

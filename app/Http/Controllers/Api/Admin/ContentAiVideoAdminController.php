@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Helpers\ResponseHelper;
 use App\Helpers\NotificationHelper;
 use App\Helpers\CommentPresenter;
+use App\Helpers\Helpers;
 use App\Models\AIVideo;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
@@ -205,7 +206,7 @@ class ContentAiVideoAdminController extends Controller
                 'image/jpeg'
             );
             @unlink($localTmp);
-            $thumbnails[] = $cdnUrl;
+            $thumbnails[] = Helpers::mediaUrl($cdnUrl) ?? $cdnUrl;
         }
 
         if (count($thumbnails) === 0) {

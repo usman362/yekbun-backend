@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\Helpers;
 use App\Helpers\ResponseHelper;
 use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
@@ -48,10 +49,13 @@ class FileController extends Controller
 
         $sizeMB = round($f->getSize() / (1024 * 1024), 2);
 
+        // Bunny returns a relative path; admin UI needs a full CDN URL for preview /
+        // ffmpeg thumbnail generation. Store either form — Helpers::mediaUrl handles both.
         return ResponseHelper::sendResponse([
-            'path'     => $cdnUrl,
-            'size'     => $sizeMB . ' MB',
-            'duration' => $duration,
+            'path'          => Helpers::mediaUrl($cdnUrl) ?? $cdnUrl,
+            'relative_path' => $cdnUrl,
+            'size'          => $sizeMB . ' MB',
+            'duration'      => $duration,
         ], 'Uploaded');
     }
 
