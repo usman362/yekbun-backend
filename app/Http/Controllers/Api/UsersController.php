@@ -104,32 +104,33 @@ class UsersController extends Controller
                 ['request_id' => $request->user_id, 'user_id' => Auth::id(), 'status' => $status]
             );
             $user = User::select('name', 'last_name', 'username', 'image', 'is_online', 'fcm_token')->find($request->user_id);
-            $username = $user->name . ' ' . $user->last_name;
             $current_user = User::find(Auth::id());
             if ($request->status == 1) {
-                NotificationHelper::sendNotification($request->user_id, ($current_user->name . ' ' . $current_user->last_name), 'You have a New Friend Request!');
+                // After successful save only — PDF: "{name} sent you a friend request."
+                $actorName = NotificationHelper::actorName($current_user);
+                NotificationHelper::notifyUser(
+                    $request->user_id,
+                    $actorName,
+                    $actorName . ' sent you a friend request.',
+                    'friend_request',
+                    Auth::id(),
+                    $current_user->image ?? null,
+                    'friend_request:' . Auth::id() . ':' . $request->user_id,
+                    $user_request->id ?? null,
+                    'user_request'
+                );
                 $data = [
-                    "to" => $user->fcm_token,
+                    "to" => $user->fcm_token ?? null,
                     "notification" => [
-                        "title" => $current_user->name . ' ' . $current_user->last_name,
-                        "body" => "You have a New Friend Request!"
+                        "title" => $actorName,
+                        "body" => $actorName . ' sent you a friend request.',
                     ],
                     "data" => [
                         "type" => "friend_request",
                         "user_id" => $request->user_id,
-                        "sender" => $current_user
-                    ]
+                        "sender" => $current_user,
+                    ],
                 ];
-                NotificationCenter::create([
-                    'title' => $current_user->name . ' ' . $current_user->last_name,
-                    'description' => 'You have a New Friend Request!',
-                    // Recipient of the request — use the request id directly (the selected
-                    // $user above may not include the primary key, making $user->id null).
-                    'user_id' => $request->user_id,
-                    'user_image' => $user->image ?? null,
-                    'type' => 'friend_request',
-                    'is_read' => 0,
-                ]);
                 return ResponseHelper::sendResponse($data, 'User Request Send Successfully');
             } else {
                 return ResponseHelper::sendResponse([], 'User Request Cancelled Successfully');
@@ -179,39 +180,54 @@ class UsersController extends Controller
             }
         }
         try {
-            if ($request->user_type !== 'rejected') {
+            // Capture before any loop that could shadow $request (legacy foreach bug).
+            $senderId = $request->user_id;
+            $userType = $request->user_type;
+
+            if ($userType !== 'rejected') {
                 $user_request = UserFriends::updateOrCreate(
-                    ['friend_id' => $request->user_id, 'user_id' => Auth::id()],
-                    ['friend_id' => $request->user_id, 'user_id' => Auth::id(), 'user_type' => $request->user_type]
+                    ['friend_id' => $senderId, 'user_id' => Auth::id()],
+                    ['friend_id' => $senderId, 'user_id' => Auth::id(), 'user_type' => $userType]
                 );
 
-                $user_request_to = UserFriends::updateOrCreate(
-                    ['user_id' => $request->user_id, 'friend_id' => Auth::id()],
-                    ['user_id' => $request->user_id, 'friend_id' => Auth::id(), 'user_type' => $request->user_type]
+                UserFriends::updateOrCreate(
+                    ['user_id' => $senderId, 'friend_id' => Auth::id()],
+                    ['user_id' => $senderId, 'friend_id' => Auth::id(), 'user_type' => $userType]
                 );
-                $oldRequests = UserRequest::where('request_id', Auth::id())->where('user_id', $request->user_id)->get();
-                if ($oldRequests) {
-                    foreach ($oldRequests as $request) {
-                        $request->delete();
-                    }
+                $oldRequests = UserRequest::where('request_id', Auth::id())->where('user_id', $senderId)->get();
+                foreach ($oldRequests as $oldRequest) {
+                    $oldRequest->delete();
                 }
-                $user = User::find($request->user_id);
-                if ($user) {
-                    $user->is_online = 1;
-                    $user->save();
+
+                // After successful accept — PDF: "{name} accepted your friend request."
+                $accepter = User::find(Auth::id());
+                $actorName = NotificationHelper::actorName($accepter);
+                NotificationHelper::notifyUser(
+                    $senderId,
+                    $actorName,
+                    $actorName . ' accepted your friend request.',
+                    'friend_accept',
+                    Auth::id(),
+                    $accepter->image ?? null,
+                    'friend_accept:' . Auth::id() . ':' . $senderId,
+                    $user_request->id ?? null,
+                    'user_friends'
+                );
+
+                $sender = User::find($senderId);
+                if ($sender) {
+                    $sender->is_online = 1;
+                    $sender->save();
                 }
-                $user = User::find(Auth::id());
-                if ($user) {
-                    $user->is_online = 1;
-                    $user->save();
+                if ($accepter) {
+                    $accepter->is_online = 1;
+                    $accepter->save();
                 }
                 return ResponseHelper::sendResponse($user_request, 'Request Accept Successfully');
             } else {
-                $oldRequests = UserRequest::where('request_id', Auth::id())->where('user_id', $request->user_id)->get();
-                if ($oldRequests) {
-                    foreach ($oldRequests as $request) {
-                        $request->delete();
-                    }
+                $oldRequests = UserRequest::where('request_id', Auth::id())->where('user_id', $senderId)->get();
+                foreach ($oldRequests as $oldRequest) {
+                    $oldRequest->delete();
                 }
                 return ResponseHelper::sendResponse([], 'Request Rejected Successfully');
             }

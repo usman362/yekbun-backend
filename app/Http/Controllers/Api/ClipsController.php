@@ -344,11 +344,10 @@ class ClipsController extends Controller
             'clips'
         );
 
-        $description = Auth::user()->name . ' ' . Auth::user()->last_name . ' has posted new Clip.';
+        $actor = Auth::user();
+        $actorName = NotificationHelper::actorName($actor);
+        $description = $actorName . ' shared a new video clip.';
         // Privacy: notify ONLY the circle this clip was shared with — never every user.
-        // Previously this pushed "new Clip" to ALL users with a token, so non-friends/
-        // non-family got pinged about (and were led to) private clips. Recipients are the
-        // people who can actually see it: friend_id rows where user_id = poster.
         $types = match ((string) $clip->share_with) {
             'friends'          => ['friends'],
             'family'           => ['family'],
@@ -356,21 +355,36 @@ class ClipsController extends Controller
             default            => [],
         };
         if (!empty($types)) {
-            $recipientIds = UserFriends::where('user_id', Auth::id())
-                ->whereIn('user_type', $types)
-                ->pluck('friend_id')
-                ->unique()
-                ->toArray();
-            $users = User::whereIn('_id', $recipientIds)
-                ->whereNotNull('fcm_token')
-                ->whereIn('info_banner', ['banner', 'alert'])
-                ->get();
-            foreach ($users as $user) {
-                NotificationHelper::sendNotification($user->id, 'Clips Notification', $description);
-                NotificationCenter::create([
-                    'title' => 'Clips Notification', 'description' => $description,
-                    'user_id' => $user->id, 'user_image' => $user->image ?? null, 'type' => 'clips', 'is_read' => 0,
-                ]);
+            try {
+                $recipientIds = UserFriends::where('user_id', Auth::id())
+                    ->whereIn('user_type', $types)
+                    ->pluck('friend_id')
+                    ->map(fn($id) => (string) $id)
+                    ->filter(fn($id) => preg_match('/^[0-9a-fA-F]{24}$/', $id))
+                    ->unique()
+                    ->values()
+                    ->toArray();
+                if (!empty($recipientIds)) {
+                    $users = User::whereIn('_id', $recipientIds)
+                        ->whereIn('info_banner', ['banner', 'alert'])
+                        ->get();
+                    $clipId = (string) $clip->_id;
+                    foreach ($users as $user) {
+                        NotificationHelper::notifyUser(
+                            $user->id,
+                            $actorName,
+                            $description,
+                            'clips',
+                            Auth::id(),
+                            $actor->image ?? null,
+                            'new_clip:' . $clipId . ':' . $user->id,
+                            $clipId,
+                            'clips'
+                        );
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Clip notification failed: ' . $e->getMessage());
             }
         }
         return ResponseHelper::sendResponse($clip, 'Clip has been Created Successfully!');
@@ -474,8 +488,24 @@ class ClipsController extends Controller
         }
 
         if (!$existingLike) {
-            ClipsLikes::create(['user_id' => $userId, 'clip_id' => $clipId, 'emoji' => $request->emoji ?? null]);
+            $likeRow = ClipsLikes::create(['user_id' => $userId, 'clip_id' => $clipId, 'emoji' => $request->emoji ?? null]);
             $this->syncClipLikesCount($clip, $clipId);
+
+            // PDF #5 — notify clip owner after like; skip own content.
+            $actor = Auth::user();
+            $actorName = NotificationHelper::actorName($actor);
+            NotificationHelper::notifyUser(
+                $clip->user_id ?? null,
+                $actorName,
+                $actorName . ' liked your post.',
+                'clip_likes',
+                $userId,
+                $actor->image ?? null,
+                'like:clips:' . (string) ($likeRow->id ?? $likeRow->_id),
+                $clipId,
+                'clips'
+            );
+
             return ResponseHelper::sendResponse($clip->fresh(), 'Clip Liked Successfully');
         }
 

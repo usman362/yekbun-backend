@@ -77,6 +77,7 @@ class NotificationsController extends Controller
         }
         $notification->is_read = 1;
         $notification->read_at = Carbon::now();
+        $notification->status = 'read';
         $notification->save();
         return ResponseHelper::sendResponse($notification, 'Notification has been Read Successfully!');
     }
@@ -154,7 +155,7 @@ class NotificationsController extends Controller
         NotificationCenter::where('user_id', $userId)
             ->whereIn('type', $types)
             ->where('is_read', 0)
-            ->update(['is_read' => 1, 'read_at' => Carbon::now()]);
+            ->update(['is_read' => 1, 'read_at' => Carbon::now(), 'status' => 'read']);
 
         return ResponseHelper::sendResponse(null, 'Wallet notifications marked as read.');
     }

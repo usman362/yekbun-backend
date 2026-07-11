@@ -14,6 +14,8 @@ class NotificationCenter extends Model
     protected $fillable = [
         'title', 'description', 'user_id', 'send_by_id', 'user_image', 'type',
         'category', 'image', 'link', 'is_read', 'read_at',
+        // Manual trigger pipeline (PDF): created → queued → sending → sent|failed → read
+        'status', 'dedupe_key', 'related_id', 'related_type', 'sent_at',
     ];
 
     public function user() { return $this->belongsTo(User::class, 'user_id'); }

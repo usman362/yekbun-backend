@@ -2,36 +2,118 @@
 
 namespace App\Helpers;
 
-use Illuminate\Support\Facades\Storage;
+use App\Jobs\SendPushNotification;
+use App\Models\NotificationCenter;
 use Google\Client as GoogleClient;
+use Illuminate\Support\Facades\Log;
 
 class NotificationHelper
 {
-    public static function sendNotification($user_id, $title = null, $body = null)
+    /**
+     * Create an in-app Notification Center row (after DB save of the triggering action),
+     * then dispatch FCM delivery through the Queue.
+     *
+     * Status flow: created → queued → (job) sending → sent|failed → (user opens) read
+     *
+     * Never throws — callers must not fail the parent action because of notification issues.
+     */
+    public static function notifyUser(
+        $userId,
+        ?string $title,
+        ?string $body,
+        string $type = 'general',
+        $sendById = null,
+        $actorImage = null,
+        ?string $dedupeKey = null,
+        $relatedId = null,
+        ?string $relatedType = null,
+        bool $skipSelf = true
+    ): ?NotificationCenter {
+        try {
+            if ($userId === null || $userId === '') {
+                return null;
+            }
+
+            if ($skipSelf && $sendById !== null && (string) $userId === (string) $sendById) {
+                return null;
+            }
+
+            if ($dedupeKey) {
+                $existing = NotificationCenter::where('dedupe_key', $dedupeKey)->first();
+                if ($existing) {
+                    // Friend request can be cancelled and re-sent — refresh instead of silently
+                    // dropping the new notify (permanent dedupe would block forever).
+                    if ($type === 'friend_request') {
+                        $existing->delete();
+                    } else {
+                        return null;
+                    }
+                }
+            }
+
+            $notification = NotificationCenter::create([
+                'title'         => $title,
+                'description'   => $body,
+                'user_id'       => $userId,
+                'send_by_id'    => $sendById,
+                'user_image'    => $actorImage,
+                'type'          => $type,
+                'related_id'    => $relatedId,
+                'related_type'  => $relatedType,
+                'dedupe_key'    => $dedupeKey,
+                'status'        => 'created',
+                'is_read'       => 0,
+            ]);
+
+            $notification->status = 'queued';
+            $notification->save();
+
+            SendPushNotification::dispatch((string) $notification->id);
+
+            return $notification;
+        } catch (\Throwable $e) {
+            Log::warning('notifyUser failed: ' . $e->getMessage(), [
+                'user_id' => $userId,
+                'type'    => $type,
+            ]);
+            return null;
+        }
+    }
+
+    /** Display name for notification copy ("John Doe"). */
+    public static function actorName($user): string
+    {
+        if (!$user) {
+            return 'Someone';
+        }
+        $name = trim(($user->name ?? '') . ' ' . ($user->last_name ?? ''));
+        return $name !== '' ? $name : (string) ($user->username ?? 'Someone');
+    }
+
+    /**
+     * Sync FCM push. Returns true when push succeeded OR was skipped because the user
+     * has no device token / FCM is not configured (in-app row still counts as delivered).
+     * Returns false only when an FCM attempt with a token fails.
+     */
+    public static function pushFcm($user_id, $title = null, $body = null): bool
     {
         $user = \App\Models\User::find($user_id);
         $fcm = $user->fcm_token ?? null;
 
         if (!$fcm) {
-            return response()->json(['message' => 'User does not have a device token'], 400);
+            return true; // in-app only — no push target
         }
 
-        // Never let a push failure bubble up — this helper is called inline inside friend
-        // requests, comments, etc. An uncaught FCM error (missing services.json, expired
-        // token, network blip) would otherwise break the whole parent operation.
         try {
             $projectId = env('FCM_PROJECT_ID');
-            // Explicit path (not Storage::path) — Laravel 11+ points the default disk at
-            // storage/app/private, but the service account lives at storage/app/json to match
-            // the legacy backend + where it's deployed.
             $credentialsFilePath = storage_path('app/json/services.json');
 
             if (!$projectId || !file_exists($credentialsFilePath)) {
-                \Illuminate\Support\Facades\Log::warning('FCM not configured — push skipped.', [
+                Log::warning('FCM not configured — push skipped.', [
                     'has_project_id' => (bool) $projectId,
                     'has_credentials' => file_exists($credentialsFilePath),
                 ]);
-                return response()->json(['message' => 'FCM not configured — push skipped'], 200);
+                return true;
             }
 
             $client = new GoogleClient();
@@ -42,25 +124,24 @@ class NotificationHelper
             $access_token = $token['access_token'] ?? null;
 
             if (!$access_token) {
-                \Illuminate\Support\Facades\Log::error('FCM: could not obtain access token.');
-                return response()->json(['message' => 'FCM auth failed — push skipped'], 200);
+                Log::error('FCM: could not obtain access token.');
+                return false;
             }
 
             $headers = [
                 "Authorization: Bearer $access_token",
-                'Content-Type: application/json'
+                'Content-Type: application/json',
             ];
 
-            $data = [
-                "message" => [
-                    "token" => $fcm,
-                    "notification" => [
-                        "title" => $title,
-                        "body" => $body,
+            $payload = json_encode([
+                'message' => [
+                    'token' => $fcm,
+                    'notification' => [
+                        'title' => $title,
+                        'body'  => $body,
                     ],
-                ]
-            ];
-            $payload = json_encode($data);
+                ],
+            ]);
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send");
@@ -71,21 +152,38 @@ class NotificationHelper
             curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
             $response = curl_exec($ch);
             $err = curl_error($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
             if ($err) {
-                \Illuminate\Support\Facades\Log::error('FCM curl error: ' . $err);
-                return response()->json(['message' => 'Curl Error: ' . $err], 200);
+                Log::error('FCM curl error: ' . $err);
+                return false;
             }
 
-            return response()->json([
-                'message' => 'Notification has been sent',
-                'response' => json_decode($response, true)
-            ]);
+            if ($httpCode >= 400) {
+                Log::error('FCM HTTP error', [
+                    'http' => $httpCode,
+                    'body' => $response,
+                    'user_id' => $user_id,
+                ]);
+                return false;
+            }
+
+            return true;
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('FCM push failed: ' . $e->getMessage(), ['user_id' => $user_id]);
-            return response()->json(['message' => 'Notification push failed (logged)', 'error' => $e->getMessage()], 200);
+            Log::error('FCM push failed: ' . $e->getMessage(), ['user_id' => $user_id]);
+            return false;
         }
+    }
+
+    /**
+     * Legacy sync wrapper — still used by a few call sites. Prefer notifyUser for new work.
+     * Failure-safe: never throws into the parent request.
+     */
+    public static function sendNotification($user_id, $title = null, $body = null)
+    {
+        self::pushFcm($user_id, $title, $body);
+        return response()->json(['message' => 'Notification processed']);
     }
 
     /**
@@ -138,11 +236,12 @@ class NotificationHelper
                     'user_id'     => $user->id,
                     'user_image'  => $user->image ?? null,
                     'type'        => $type,
+                    'status'      => 'sent',
                     'is_read'     => 0,
                 ]);
             }
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('sendConfiguredBroadcast failed: ' . $e->getMessage(), ['key' => $key]);
+            Log::error('sendConfiguredBroadcast failed: ' . $e->getMessage(), ['key' => $key]);
         }
     }
 }

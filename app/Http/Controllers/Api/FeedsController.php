@@ -259,14 +259,13 @@ class FeedsController extends Controller
         }
 
         if ($feeds->save()) {
-            $notification = Notifications::first();
             $notify = AdminNotification::first();
-            $description = Auth::user()->name . ' ' . Auth::user()->last_name . ' has posted new Feed.';
+            $actor = Auth::user();
+            $actorName = NotificationHelper::actorName($actor);
+            $description = $actorName . ' published a new post.';
 
             // Notify ONLY the circle the feed was shared with — the exact set that can now see
             // it (feed index visibility). Recipients = friend_id rows where user_id = poster.
-            // (Old code keyed on friend_id = poster — the wrong direction — and couldn't match
-            // the 'friends & family' value at all.)
             $types = match ((string) $request->user_type) {
                 'friends'          => ['friends'],
                 'family'           => ['family'],
@@ -274,12 +273,8 @@ class FeedsController extends Controller
                 default            => [],
             };
             if (!empty($types) && $notify && $notify->feeds == 1) {
-                // Notification delivery must NEVER block feed creation. The feed is already
-                // persisted above; any failure here (bad ObjectId, FCM, etc.) is logged and
-                // swallowed so the client still gets a 201.
+                // Notification delivery must NEVER block feed creation.
                 try {
-                    // Only keep real 24-char hex ObjectId strings — a single invalid id in
-                    // whereIn('_id', ...) throws and previously 500'd the whole request.
                     $recipientIds = UserFriends::where('user_id', Auth::id())
                         ->whereIn('user_type', $types)
                         ->pluck('friend_id')
@@ -290,19 +285,21 @@ class FeedsController extends Controller
                         ->toArray();
                     if (!empty($recipientIds)) {
                         $users = User::whereIn('_id', $recipientIds)
-                            ->whereNotNull('fcm_token')
                             ->whereIn('info_banner', ['banner', 'alert'])
                             ->get();
+                        $feedId = (string) ($feeds->id ?? $feeds->_id);
                         foreach ($users as $user) {
-                            NotificationHelper::sendNotification($user->id, 'Feeds Notification', $description);
-                            NotificationCenter::create([
-                                'title' => 'Feeds Notification',
-                                'description' => $description,
-                                'user_id' => $user->id,
-                                'user_image' => $user->image ?? null,
-                                'type' => 'user_feeds',
-                                'is_read' => 0,
-                            ]);
+                            NotificationHelper::notifyUser(
+                                $user->id,
+                                $actorName,
+                                $description,
+                                'user_feeds',
+                                Auth::id(),
+                                $actor->image ?? null,
+                                'new_feed:' . $feedId . ':' . $user->id,
+                                $feedId,
+                                'user_feeds'
+                            );
                         }
                     }
                 } catch (\Throwable $e) {
@@ -614,18 +611,47 @@ class FeedsController extends Controller
             'user' => $user
         ];
 
-        if (!empty($request->parent_id)) {
+        $actor = Auth::user();
+        $actorName = NotificationHelper::actorName($actor);
+        $commentId = (string) ($comment->id ?? $comment->_id);
+        $isReply = !empty($comment->parent_id);
+        $isVoice = ($commentType === 'audio');
+
+        if ($isReply) {
+            // PDF #8 — reply notifies original comment author (skip self-reply).
             $parentComment = FeedComments::find($request->parent_id);
-            if (isset($parentComment->user_id)) {
-                NotificationHelper::sendNotification($parentComment->user_id, 'Feeds Comment', Auth::user()->name . ' Replied to your Comment');
-                NotificationCenter::create([
-                    'title' => 'Feeds Comment',
-                    'description' => Auth::user()->name . ' Replied to your Comment',
-                    'user_id' => $parentComment->user_id,
-                    'user_image' => $parentComment->user->image ?? null,
-                    'type' => 'feed_comments',
-                    'is_read' => 0,
-                ]);
+            if ($parentComment && isset($parentComment->user_id)) {
+                NotificationHelper::notifyUser(
+                    $parentComment->user_id,
+                    $actorName,
+                    $actorName . ' replied to your comment.',
+                    'feed_comments',
+                    Auth::id(),
+                    $actor->image ?? null,
+                    'comment_reply:' . $commentId,
+                    $commentId,
+                    'feed_comments'
+                );
+            }
+        } else {
+            // PDF #6 / #7 — top-level text or voice comment notifies post owner.
+            $ownerFeed = $this->resolveFeedByType((string) $id, (string) $request->feed_type);
+            $ownerId = $ownerFeed->user_id ?? null;
+            if ($ownerId) {
+                $body = $isVoice
+                    ? ($actorName . ' left a voice comment on your post.')
+                    : ($actorName . ' commented on your post.');
+                NotificationHelper::notifyUser(
+                    $ownerId,
+                    $actorName,
+                    $body,
+                    $isVoice ? 'feed_voice_comments' : 'feed_comments',
+                    Auth::id(),
+                    $actor->image ?? null,
+                    ($isVoice ? 'voice_comment:' : 'comment:') . $commentId,
+                    $commentId,
+                    'feed_comments'
+                );
             }
         }
 
@@ -771,11 +797,12 @@ class FeedsController extends Controller
         if (!$user) return ResponseHelper::sendResponse([], 'User not authenticated!', false, 403);
 
         $like = FeedLikes::where('user_id', $user->id)->where('feed_id', $id)->where('feed_type', $request->feed_type)->first();
+        $likeRow = null;
         if ($like) {
             $like->delete();
             $liked = false;
         } else {
-            FeedLikes::create(['user_id' => $user->id, 'feed_id' => $id, 'feed_type' => $request->feed_type]);
+            $likeRow = FeedLikes::create(['user_id' => $user->id, 'feed_id' => $id, 'feed_type' => $request->feed_type]);
             $liked = true;
         }
 
@@ -783,6 +810,23 @@ class FeedsController extends Controller
 
         $feed = $this->resolveFeedByType($id, $request->feed_type);
         $counts = $this->syncFeedEngagementCounts($feed, (string) $id, $request->feed_type);
+
+        // PDF #5 — notify post owner after a new like; never on own content / unlike.
+        if ($liked && $feed && $likeRow) {
+            $ownerId = $feed->user_id ?? null;
+            $actorName = NotificationHelper::actorName($user);
+            NotificationHelper::notifyUser(
+                $ownerId,
+                $actorName,
+                $actorName . ' liked your post.',
+                'feed_likes',
+                $user->id,
+                $user->image ?? null,
+                'like:' . (string) ($likeRow->id ?? $likeRow->_id),
+                (string) $id,
+                $request->feed_type
+            );
+        }
 
         if ($feed && $request->feed_type !== 'admin_feeds') {
             Helpers::userMedia(
