@@ -26,7 +26,7 @@ class ContentBrowseAdminController extends Controller
 {
     public function history()
     {
-        $rows = History::orderBy('created_at', 'desc')->limit(100)->get()
+        $rows = History::with('user')->orderBy('created_at', 'desc')->limit(100)->get()
             ->map(fn($h) => $this->presentVideoContent($h))
             ->values();
 
@@ -35,7 +35,7 @@ class ContentBrowseAdminController extends Controller
 
     public function aiVideos()
     {
-        $rows = AIVideo::orderBy('created_at', 'desc')->limit(100)->get()
+        $rows = AIVideo::with('user')->orderBy('created_at', 'desc')->limit(100)->get()
             ->map(fn($h) => $this->presentVideoContent($h))
             ->values();
 
@@ -109,6 +109,21 @@ class ContentBrowseAdminController extends Controller
         $arr['views_count']          = (int) $row->views()->count();
         $arr['shares_count']         = (int) $row->shares()->count();
 
+        // Author profile — API disk (images/user), not Bunny CDN.
+        $author = $row->relationLoaded('user') ? $row->user : null;
+        if (!$author && !empty($row->user_id)) {
+            $author = \App\Models\User::find($row->user_id);
+        }
+        $arr['avatar'] = Helpers::profileImageUrl($author->image ?? null) ?? '';
+        $arr['creator'] = trim((string) (($author->name ?? '') . ' ' . ($author->last_name ?? '')))
+            ?: (string) ($author->username ?? $arr['title'] ?? 'Admin');
+        $arr['user'] = $author ? [
+            'id'       => (string) $author->_id,
+            'name'     => $author->name ?? '',
+            'username' => $author->username ?? '',
+            'image'    => Helpers::profileImageUrl($author->image ?? null) ?? '',
+        ] : null;
+
         return $arr;
     }
 
@@ -172,7 +187,7 @@ class ContentBrowseAdminController extends Controller
                     }, $arr['videos']);
                 }
                 if (!empty($arr['user']['image'])) {
-                    $arr['user']['image'] = Helpers::mediaUrl($arr['user']['image']);
+                    $arr['user']['image'] = Helpers::profileImageUrl($arr['user']['image']);
                 }
                 return $arr;
             })
@@ -301,7 +316,7 @@ class ContentBrowseAdminController extends Controller
             return [
                 'id'         => (string) $c->_id,
                 'username'   => $u->username ?? $u->name ?? 'User',
-                'avatar'     => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'avatar'     => Helpers::profileImageUrl($u->image ?? null) ?? '',
                 'text'       => $c->comment ?? '',
                 'audio'      => Helpers::mediaUrl($c->audio ?? null),
                 'image'      => Helpers::mediaUrl($c->image ?? null),
@@ -348,7 +363,7 @@ class ContentBrowseAdminController extends Controller
         return ResponseHelper::sendResponse([
             'id'         => (string) $comment->_id,
             'username'   => $auth->username ?? $auth->name ?? 'Admin',
-            'avatar'     => Helpers::mediaUrl($auth->image ?? null) ?? '',
+            'avatar'     => Helpers::profileImageUrl($auth->image ?? null) ?? '',
             'text'       => $comment->comment,
             'audio'      => null,
             'image'      => null,

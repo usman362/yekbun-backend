@@ -58,7 +58,7 @@ class CommentPresenter
         return [
             'id'        => (string) $c->getKey(),
             'username'  => $user->name ?? $user->username ?? 'User',
-            'avatar'    => Helpers::mediaUrl($user->image ?? null) ?? '',
+            'avatar'    => Helpers::profileImageUrl($user->image ?? null) ?? '',
             'text'      => (string) ($c->comment ?? ''),
             'audio'     => $isAudio ? (Helpers::mediaUrl($c->audio ?? null) ?? '') : null,
             'is_audio'  => $isAudio,

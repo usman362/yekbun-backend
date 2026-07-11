@@ -116,12 +116,12 @@ class FeedsController extends Controller
                     'comment_user'     => $commentUser ? [
                         'id'       => $commentUser->_id,
                         'username' => $commentUser->username ?? $commentUser->name ?? 'User',
-                        'avatar'   => Helpers::mediaUrl($commentUser->image) ?? '',
+                        'avatar'   => Helpers::profileImageUrl($commentUser->image) ?? '',
                     ] : null,
                     'reporter'         => $reporter ? [
                         'id'       => $reporter->_id,
                         'username' => $reporter->username ?? $reporter->name ?? 'User',
-                        'avatar'   => Helpers::mediaUrl($reporter->image) ?? '',
+                        'avatar'   => Helpers::profileImageUrl($reporter->image) ?? '',
                     ] : null,
                     'reason'           => $r->reason ?? '',
                     'reported_at'      => $r->created_at ? Carbon::parse($r->created_at)->diffForHumans() : '',
@@ -172,7 +172,7 @@ class FeedsController extends Controller
                 'image'        => Helpers::mediaUrl($c->image ?? null),
                 'emoji'        => $c->emoji ?? null,
                 'username'     => $u->username ?? $u->name ?? 'User',
-                'avatar'       => Helpers::mediaUrl($u->image ?? null) ?? '',
+                'avatar'       => Helpers::profileImageUrl($u->image ?? null) ?? '',
                 'timestamp'    => Carbon::parse($c->created_at)->diffForHumans(),
             ];
         })->values()->toArray();
@@ -212,7 +212,7 @@ class FeedsController extends Controller
             'image'        => null,
             'emoji'        => null,
             'username'     => $user->username ?? $user->name ?? 'Admin',
-            'avatar'       => Helpers::mediaUrl($user->image ?? null) ?? '',
+            'avatar'       => Helpers::profileImageUrl($user->image ?? null) ?? '',
             'timestamp'    => 'just now',
         ], 'Comment posted.', true, 201);
     }
@@ -446,7 +446,7 @@ class FeedsController extends Controller
                 return [
                     'id'        => $c->_id,
                     'username'  => $cu->username ?? $cu->name ?? 'User',
-                    'avatar'    => Helpers::mediaUrl($cu->image) ?? '',
+                    'avatar'    => Helpers::profileImageUrl($cu->image) ?? '',
                     'text'      => $c->comment ?? '',
                     'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
                 ];
@@ -455,7 +455,7 @@ class FeedsController extends Controller
             return [
                 'id'              => $feed->_id,
                 'username'        => $user->username ?? $user->name ?? 'Unknown',
-                'avatar'          => Helpers::mediaUrl($user->image) ?? '',
+                'avatar'          => Helpers::profileImageUrl($user->image) ?? '',
                 'timestamp'       => Carbon::parse($feed->created_at)->diffForHumans(),
                 'image'           => $firstImage,
                 // Always send the media array (even for a single item) so the card knows the
