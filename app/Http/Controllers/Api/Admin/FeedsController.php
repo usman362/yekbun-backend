@@ -6,6 +6,7 @@ use App\Helpers\ResponseHelper;
 use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\CommentsLike;
+use App\Models\Emoji;
 use App\Models\Feed;
 use App\Models\FeedComments;
 use App\Models\FlaggedUser;
@@ -432,7 +433,18 @@ class FeedsController extends Controller
             ->groupBy('feed_id')
             ->map(fn($g) => $g->count());
 
-        return $feeds->map(function ($feed) use ($users, $commentsByFeed, $reportCounts) {
+        // Resolve custom pack emoji names → image URLs in one query (mobile stores name in `emoji`).
+        $emojiNames = $feeds->pluck('emoji')
+            ->map(fn ($e) => is_string($e) ? trim($e) : '')
+            ->filter(fn ($e) => $e !== '' && strtolower($e) !== 'null')
+            ->unique()
+            ->values()
+            ->all();
+        $emojiByName = empty($emojiNames)
+            ? collect()
+            : Emoji::whereIn('name', $emojiNames)->get()->keyBy('name');
+
+        return $feeds->map(function ($feed) use ($users, $commentsByFeed, $reportCounts, $emojiByName) {
             $user = $users->get($feed->user_id);
 
             $media = $this->buildMedia($feed);
@@ -448,9 +460,20 @@ class FeedsController extends Controller
                     'username'  => $cu->username ?? $cu->name ?? 'User',
                     'avatar'    => Helpers::profileImageUrl($cu->image) ?? '',
                     'text'      => $c->comment ?? '',
+                    'emoji'     => $this->nonEmptyString($c->emoji ?? null) ?: null,
                     'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
                 ];
             })->values()->toArray();
+
+            $description = $this->nonEmptyString($feed->description ?? null);
+            $text        = $this->nonEmptyString($feed->text ?? null);
+            $emoji       = $this->nonEmptyString($feed->emoji ?? null) ?: null;
+            $emojiUrl    = $this->resolveEmojiUrl($emoji, $emojiByName);
+
+            // Uploaded images are often a mobile snapshot that already burns in the caption
+            // text. Client-side text overlay is only needed when there is no snapshot media
+            // (background-only / text posts) or when text_properties are present without images.
+            $hasUploadedMedia = !empty($media) && !collect($media)->contains(fn ($m) => ($m['id'] ?? '') === 'bg');
 
             return [
                 'id'              => $feed->_id,
@@ -472,7 +495,15 @@ class FeedsController extends Controller
                 'maxFlags'        => 5,
                 'location'        => $feed->location ?? null,
                 'comments'        => $comments,
-                'description'     => $feed->description ?? $feed->text ?? '',
+                // Empty-string description must not block fallback to `text` (?? only skips null).
+                'description'     => $description !== '' ? $description : $text,
+                'text'            => $text,
+                'emoji'           => $emoji,
+                'emoji_url'       => $emojiUrl,
+                'text_color'      => $this->nonEmptyString($feed->text_color ?? null) ?: null,
+                'text_properties' => $this->parseTextProperties($feed->text_properties ?? null),
+                'feed_type'       => $feed->feed_type ?? null,
+                'overlay_text'    => !$hasUploadedMedia && $text !== '',
                 'targetAudience'  => $this->formatUserType($feed->user_type),
             ];
         })->values()->toArray();
@@ -485,6 +516,9 @@ class FeedsController extends Controller
         if (!empty($feed->images) && is_array($feed->images)) {
             foreach ($feed->images as $img) {
                 $path = $img['path'] ?? '';
+                if ($path === '' || $path === null) {
+                    continue;
+                }
                 $media[] = [
                     'id'   => md5($path),
                     'type' => 'image',
@@ -496,6 +530,9 @@ class FeedsController extends Controller
         if (!empty($feed->videos) && is_array($feed->videos)) {
             foreach ($feed->videos as $vid) {
                 $path = $vid['path'] ?? '';
+                if ($path === '' || $path === null) {
+                    continue;
+                }
                 $media[] = [
                     'id'   => md5($path),
                     'type' => 'video',
@@ -512,6 +549,68 @@ class FeedsController extends Controller
             ];
         }
 
+        // Text posts often only have a background template (no uploaded snapshot).
+        if (empty($media)) {
+            $bg = $feed->background_image ?: ($feed->feed_background_image ?? null);
+            if ($this->nonEmptyString($bg)) {
+                $media[] = [
+                    'id'   => 'bg',
+                    'type' => 'image',
+                    'url'  => Helpers::mediaUrl($bg) ?? '',
+                ];
+            }
+        }
+
         return $media;
+    }
+
+    private function nonEmptyString($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        $s = trim((string) $value);
+        if ($s === '' || strtolower($s) === 'null') {
+            return '';
+        }
+        return $s;
+    }
+
+    private function parseTextProperties($raw): ?array
+    {
+        if ($raw === null || $raw === '' || $raw === 'null') {
+            return null;
+        }
+        if (is_array($raw)) {
+            return $raw;
+        }
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            return is_array($decoded) ? $decoded : null;
+        }
+        return null;
+    }
+
+    /**
+     * Custom pack emoji names resolve to an image URL; unicode / unknown names return null
+     * (frontend still renders the raw `emoji` string).
+     */
+    private function resolveEmojiUrl(?string $emoji, $emojiByName): ?string
+    {
+        if ($emoji === null || $emoji === '') {
+            return null;
+        }
+        if (Str::startsWith($emoji, ['http://', 'https://'])) {
+            return $emoji;
+        }
+        // Path-like values (legacy)
+        if (Str::contains($emoji, '/') || preg_match('/\.(gif|png|webp|jpe?g)$/i', $emoji)) {
+            return Helpers::storageUrl($emoji) ?? Helpers::mediaUrl($emoji);
+        }
+        $row = $emojiByName->get($emoji);
+        if ($row && !empty($row->image)) {
+            return Helpers::storageUrl($row->image) ?? Helpers::mediaUrl($row->image);
+        }
+        return null;
     }
 }
