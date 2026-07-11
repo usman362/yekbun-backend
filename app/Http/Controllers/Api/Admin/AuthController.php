@@ -98,18 +98,23 @@ class AuthController extends Controller
         $user = JWTAuth::parseToken()->authenticate();
 
         $validator = Validator::make($request->all(), [
-            'name'       => 'sometimes|string|max:255',
-            'email'      => 'sometimes|email|max:255',
+            'name'       => 'sometimes|nullable|string|max:255',
+            'email'      => 'sometimes|nullable|email|max:255',
             'phone'      => 'nullable|string|max:50',
             'country'    => 'nullable|string|max:100',
             'language'   => 'nullable|string|max:100',
             'department' => 'nullable|string|max:150',
             'bio'        => 'nullable|string|max:2000',
-            'image'      => 'nullable|image|max:5120',
+            'image'      => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
         ]);
 
         if ($validator->fails()) {
-            return ResponseHelper::sendResponse($validator->errors(), 'Validation failed', false, 422);
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                $validator->errors()->first() ?: 'Validation failed',
+                false,
+                422
+            );
         }
 
         if ($request->filled('email')) {
@@ -155,6 +160,43 @@ class AuthController extends Controller
         $user->save();
 
         return ResponseHelper::sendResponse($this->profilePayload($user->fresh()), 'Profile updated.');
+    }
+
+    /** Avatar-only upload — avoids multipart + field validation conflicts. */
+    public function updateAvatar(Request $request)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        $validator = Validator::make($request->all(), [
+            'image' => 'required|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                $validator->errors()->first() ?: 'Validation failed',
+                false,
+                422
+            );
+        }
+
+        if (!$request->hasFile('image')) {
+            return ResponseHelper::sendResponse([], 'No image file received.', false, 422);
+        }
+
+        try {
+            $existing = public_path('storage/' . ltrim((string) ($user->image ?? ''), '/'));
+            if (!empty($user->image) && is_file($existing)) {
+                @unlink($existing);
+            }
+        } catch (\Throwable $e) {
+            // ignore cleanup errors
+        }
+
+        $user->image = Helpers::fileUpload($request->file('image'), 'images/user');
+        $user->save();
+
+        return ResponseHelper::sendResponse($this->profilePayload($user->fresh()), 'Avatar updated.');
     }
 
     public function changePassword(Request $request)
