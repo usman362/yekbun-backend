@@ -189,9 +189,14 @@ class Helpers
 
     public static function fileUpload($uploadedFile, $folder = null)
     {
-        $uniqueName = $uploadedFile->getClientOriginalName();
+        $ext = strtolower((string) $uploadedFile->getClientOriginalExtension());
+        if ($ext === '') {
+            $ext = 'jpg';
+        }
+        // Unique name avoids collisions + odd client filenames breaking storage URLs.
+        $uniqueName = uniqid('img_', true) . '.' . $ext;
         $folder = $folder ?? 'files';
-        $filePath = $uploadedFile->storeAs("/{$folder}", $uniqueName, "public");
+        $filePath = $uploadedFile->storeAs($folder, $uniqueName, 'public');
         return $filePath;
     }
 

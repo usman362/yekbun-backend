@@ -105,7 +105,7 @@ class AuthController extends Controller
             'language'   => 'nullable|string|max:100',
             'department' => 'nullable|string|max:150',
             'bio'        => 'nullable|string|max:2000',
-            'image'      => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
+            'image'      => 'nullable|file|mimes:jpeg,jpg,png,gif,webp,bmp,heic,heif,avif|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -162,26 +162,34 @@ class AuthController extends Controller
         return ResponseHelper::sendResponse($this->profilePayload($user->fresh()), 'Profile updated.');
     }
 
-    /** Avatar-only upload — avoids multipart + field validation conflicts. */
     public function updateAvatar(Request $request)
     {
         $user = JWTAuth::parseToken()->authenticate();
 
-        $validator = Validator::make($request->all(), [
-            'image' => 'required|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
-        ]);
+        if (!$request->hasFile('image')) {
+            return ResponseHelper::sendResponse([], 'No image file received.', false, 422);
+        }
 
-        if ($validator->fails()) {
+        $file = $request->file('image');
+        $ext = strtolower((string) ($file->getClientOriginalExtension() ?? ''));
+        $allowed = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif'];
+
+        if (!in_array($ext, $allowed, true)) {
             return ResponseHelper::sendResponse(
-                $validator->errors(),
-                $validator->errors()->first() ?: 'Validation failed',
+                ['image' => ['Please upload a JPG, PNG, WEBP, GIF, or HEIC image.']],
+                'Please upload a JPG, PNG, WEBP, GIF, or HEIC image (max 10 MB).',
                 false,
                 422
             );
         }
 
-        if (!$request->hasFile('image')) {
-            return ResponseHelper::sendResponse([], 'No image file received.', false, 422);
+        if ($file->getSize() > 10 * 1024 * 1024) {
+            return ResponseHelper::sendResponse(
+                ['image' => ['Max file size is 10 MB.']],
+                'Max file size is 10 MB.',
+                false,
+                422
+            );
         }
 
         try {
@@ -193,7 +201,7 @@ class AuthController extends Controller
             // ignore cleanup errors
         }
 
-        $user->image = Helpers::fileUpload($request->file('image'), 'images/user');
+        $user->image = Helpers::fileUpload($file, 'images/user');
         $user->save();
 
         return ResponseHelper::sendResponse($this->profilePayload($user->fresh()), 'Avatar updated.');
