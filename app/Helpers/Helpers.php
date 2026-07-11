@@ -112,6 +112,81 @@ class Helpers
         return ltrim($path, '/');
     }
 
+    /**
+     * Absolute URL for files on the API public disk (storage/app/public).
+     * Profile avatars / banners use Helpers::fileUpload — they are NOT on Bunny CDN.
+     * Absolute http(s) values pass through unchanged.
+     */
+    public static function storageUrl($path)
+    {
+        if ($path === null || $path === '') {
+            return null;
+        }
+        if (is_array($path)) {
+            $path = $path['path'] ?? $path['url'] ?? reset($path) ?: null;
+            if ($path === null || $path === '') {
+                return null;
+            }
+        }
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        $relative = ltrim($path, '/');
+        if (Str::startsWith($relative, 'storage/')) {
+            $relative = Str::after($relative, 'storage/');
+        }
+
+        $url = asset('storage/' . $relative);
+        if (!Str::startsWith($url, ['http://', 'https://'])) {
+            $url = rtrim((string) config('app.url'), '/') . '/storage/' . $relative;
+        }
+        return $url;
+    }
+
+    /**
+     * Profile / avatar image URL. Local uploads → API storage; anything else → mediaUrl (CDN).
+     */
+    public static function profileImageUrl($path)
+    {
+        if ($path === null || $path === '') {
+            return null;
+        }
+        if (is_array($path)) {
+            $path = $path['path'] ?? $path['url'] ?? reset($path) ?: null;
+            if ($path === null || $path === '') {
+                return null;
+            }
+        }
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        $relative = ltrim($path, '/');
+        if (Str::startsWith($relative, 'storage/')) {
+            $relative = Str::after($relative, 'storage/');
+        }
+
+        // fileUpload targets (profile avatar, banner, etc.) live on the API disk.
+        if (
+            Str::startsWith($relative, 'images/user')
+            || Str::startsWith($relative, 'notification-users')
+        ) {
+            return self::storageUrl($relative);
+        }
+
+        return self::mediaUrl($path);
+    }
+
     public static function fileUpload($uploadedFile, $folder = null)
     {
         $uniqueName = $uploadedFile->getClientOriginalName();

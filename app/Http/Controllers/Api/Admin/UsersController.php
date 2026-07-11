@@ -67,7 +67,7 @@ class UsersController extends Controller
                 'email'        => $u->email ?? '',
                 'username'     => $u->username ?? '',
                 'userId'       => $u->user_id ?? '',
-                'avatar'       => Helpers::mediaUrl($u->image) ?? '',
+                'avatar'       => Helpers::profileImageUrl($u->image) ?? '',
                 'gender'       => $u->gender ?? 'male',
                 'status'       => $u->status == 1 ? 'active' : 'closed',
                 'deviceType'   => $u->device_type ?? 'android',
@@ -164,7 +164,7 @@ class UsersController extends Controller
                 'name'   => $fu->name ?? $fu->username ?? 'User',
                 'role'   => $fr->user_type === 'family' ? 'Family' : 'Friend',
                 'status' => ($fu->status ?? 1) == 1 ? 'online' : 'offline',
-                'avatar' => Helpers::mediaUrl($fu->image) ?? '',
+                'avatar' => Helpers::profileImageUrl($fu->image) ?? '',
             ];
         })->filter()->values();
 
@@ -276,7 +276,7 @@ class UsersController extends Controller
                 'phone'        => $u->phone ?? '',
                 'country'      => $u->country ?? '',
                 'origin'       => $u->origin ?? '',
-                'image'        => Helpers::mediaUrl($u->image) ?? '',
+                'image'        => Helpers::profileImageUrl($u->image) ?? '',
                 'level_label'  => $levelLabel,
                 'status'       => ($u->status ?? 1) == 1 ? 'active' : 'closed',
                 'gender'       => $u->gender ?? '',

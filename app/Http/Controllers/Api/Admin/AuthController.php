@@ -80,7 +80,7 @@ class AuthController extends Controller
                 'name'      => $user->name,
                 'email'     => $user->email,
                 'username'  => $user->username,
-                'image'     => Helpers::mediaUrl($user->image),
+                'image'     => Helpers::profileImageUrl($user->image),
                 'role'      => $user->is_superadmin ? 'superadmin' : 'admin',
             ],
         ], 'Login successful.');
@@ -95,7 +95,7 @@ class AuthController extends Controller
             'name'      => $user->name,
             'email'     => $user->email,
             'username'  => $user->username,
-            'image'     => Helpers::mediaUrl($user->image),
+            'image'     => Helpers::profileImageUrl($user->image),
             'role'      => $user->is_superadmin ? 'superadmin' : 'admin',
         ], 'User details fetched.');
     }
