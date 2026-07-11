@@ -6,7 +6,6 @@ use App\Helpers\ResponseHelper;
 use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\CommentsLike;
-use App\Models\Emoji;
 use App\Models\Feed;
 use App\Models\FeedComments;
 use App\Models\FlaggedUser;
@@ -163,6 +162,7 @@ class FeedsController extends Controller
 
         $rows = $comments->map(function ($c) use ($users) {
             $u = $users->get($c->user_id);
+            $emoji = $this->nonEmptyString($c->emoji ?? null) ?: null;
             return [
                 'id'           => $c->_id,
                 'feed_id'      => $c->feed_id,
@@ -171,7 +171,8 @@ class FeedsController extends Controller
                 'text'         => $c->comment ?? '',
                 'audio'        => Helpers::mediaUrl($c->audio ?? null),
                 'image'        => Helpers::mediaUrl($c->image ?? null),
-                'emoji'        => $c->emoji ?? null,
+                'emoji'        => $emoji,
+                'emoji_url'    => Helpers::emojiUrl($emoji),
                 'username'     => $u->username ?? $u->name ?? 'User',
                 'avatar'       => Helpers::profileImageUrl($u->image ?? null) ?? '',
                 'timestamp'    => Carbon::parse($c->created_at)->diffForHumans(),
@@ -212,6 +213,7 @@ class FeedsController extends Controller
             'audio'        => null,
             'image'        => null,
             'emoji'        => null,
+            'emoji_url'    => null,
             'username'     => $user->username ?? $user->name ?? 'Admin',
             'avatar'       => Helpers::profileImageUrl($user->image ?? null) ?? '',
             'timestamp'    => 'just now',
@@ -433,18 +435,7 @@ class FeedsController extends Controller
             ->groupBy('feed_id')
             ->map(fn($g) => $g->count());
 
-        // Resolve custom pack emoji names → image URLs in one query (mobile stores name in `emoji`).
-        $emojiNames = $feeds->pluck('emoji')
-            ->map(fn ($e) => is_string($e) ? trim($e) : '')
-            ->filter(fn ($e) => $e !== '' && strtolower($e) !== 'null')
-            ->unique()
-            ->values()
-            ->all();
-        $emojiByName = empty($emojiNames)
-            ? collect()
-            : Emoji::whereIn('name', $emojiNames)->get()->keyBy('name');
-
-        return $feeds->map(function ($feed) use ($users, $commentsByFeed, $reportCounts, $emojiByName) {
+        return $feeds->map(function ($feed) use ($users, $commentsByFeed, $reportCounts) {
             $user = $users->get($feed->user_id);
 
             $media = $this->buildMedia($feed);
@@ -455,12 +446,14 @@ class FeedsController extends Controller
 
             $comments = $feedComments->take(3)->map(function ($c) use ($commentUsers) {
                 $cu = $commentUsers->get($c->user_id);
+                $emoji = $this->nonEmptyString($c->emoji ?? null) ?: null;
                 return [
                     'id'        => $c->_id,
                     'username'  => $cu->username ?? $cu->name ?? 'User',
                     'avatar'    => Helpers::profileImageUrl($cu->image) ?? '',
                     'text'      => $c->comment ?? '',
-                    'emoji'     => $this->nonEmptyString($c->emoji ?? null) ?: null,
+                    'emoji'     => $emoji,
+                    'emoji_url' => Helpers::emojiUrl($emoji),
                     'timestamp' => Carbon::parse($c->created_at)->diffForHumans(),
                 ];
             })->values()->toArray();
@@ -468,7 +461,7 @@ class FeedsController extends Controller
             $description = $this->nonEmptyString($feed->description ?? null);
             $text        = $this->nonEmptyString($feed->text ?? null);
             $emoji       = $this->nonEmptyString($feed->emoji ?? null) ?: null;
-            $emojiUrl    = $this->resolveEmojiUrl($emoji, $emojiByName);
+            $emojiUrl    = Helpers::emojiUrl($emoji);
 
             // Uploaded images are often a mobile snapshot that already burns in the caption
             // text. Client-side text overlay is only needed when there is no snapshot media
@@ -587,29 +580,6 @@ class FeedsController extends Controller
         if (is_string($raw)) {
             $decoded = json_decode($raw, true);
             return is_array($decoded) ? $decoded : null;
-        }
-        return null;
-    }
-
-    /**
-     * Custom pack emoji names resolve to an image URL; unicode / unknown names return null
-     * (frontend still renders the raw `emoji` string).
-     */
-    private function resolveEmojiUrl(?string $emoji, $emojiByName): ?string
-    {
-        if ($emoji === null || $emoji === '') {
-            return null;
-        }
-        if (Str::startsWith($emoji, ['http://', 'https://'])) {
-            return $emoji;
-        }
-        // Path-like values (legacy)
-        if (Str::contains($emoji, '/') || preg_match('/\.(gif|png|webp|jpe?g)$/i', $emoji)) {
-            return Helpers::storageUrl($emoji) ?? Helpers::mediaUrl($emoji);
-        }
-        $row = $emojiByName->get($emoji);
-        if ($row && !empty($row->image)) {
-            return Helpers::storageUrl($row->image) ?? Helpers::mediaUrl($row->image);
         }
         return null;
     }

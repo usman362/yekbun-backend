@@ -54,15 +54,25 @@ class CommentPresenter
     {
         $user = $c->user;
         $isAudio = ($c->comment_type ?? '') === 'audio' || !empty($c->audio);
+        $emoji = is_string($c->emoji ?? null) ? trim((string) $c->emoji) : null;
+        if ($emoji === '' || strtolower((string) $emoji) === 'null') {
+            $emoji = null;
+        }
+        $emojiUrl = Helpers::emojiUrl($emoji);
+        $isEmoji = ($c->comment_type ?? '') === 'emoji' || (!$isAudio && empty($c->comment) && ($emoji || $emojiUrl));
 
         return [
-            'id'        => (string) $c->getKey(),
-            'username'  => $user->name ?? $user->username ?? 'User',
-            'avatar'    => Helpers::profileImageUrl($user->image ?? null) ?? '',
-            'text'      => (string) ($c->comment ?? ''),
-            'audio'     => $isAudio ? (Helpers::mediaUrl($c->audio ?? null) ?? '') : null,
-            'is_audio'  => $isAudio,
-            'timestamp' => $c->created_at ? Carbon::parse($c->created_at)->diffForHumans() : 'just now',
+            'id'         => (string) $c->getKey(),
+            'username'   => $user->name ?? $user->username ?? 'User',
+            'avatar'     => Helpers::profileImageUrl($user->image ?? null) ?? '',
+            'text'       => (string) ($c->comment ?? ''),
+            'audio'      => $isAudio ? (Helpers::mediaUrl($c->audio ?? null) ?? '') : null,
+            'is_audio'   => $isAudio,
+            'is_emoji'   => (bool) $isEmoji,
+            'emoji'      => $emoji,
+            'emoji_url'  => $emojiUrl,
+            'image'      => Helpers::mediaUrl($c->image ?? null),
+            'timestamp'  => $c->created_at ? Carbon::parse($c->created_at)->diffForHumans() : 'just now',
         ];
     }
 }

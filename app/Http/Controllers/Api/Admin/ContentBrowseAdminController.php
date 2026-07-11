@@ -313,6 +313,10 @@ class ContentBrowseAdminController extends Controller
 
         $rows = $comments->map(function ($c) use ($users, $likeCounts, $likedByMe) {
             $u = $users->get($c->user_id);
+            $emoji = is_string($c->emoji ?? null) ? trim((string) $c->emoji) : null;
+            if ($emoji === '' || strtolower((string) $emoji) === 'null') {
+                $emoji = null;
+            }
             return [
                 'id'         => (string) $c->_id,
                 'username'   => $u->username ?? $u->name ?? 'User',
@@ -320,7 +324,9 @@ class ContentBrowseAdminController extends Controller
                 'text'       => $c->comment ?? '',
                 'audio'      => Helpers::mediaUrl($c->audio ?? null),
                 'image'      => Helpers::mediaUrl($c->image ?? null),
-                'emoji'      => $c->emoji ?? null,
+                'emoji'      => $emoji,
+                'emoji_url'  => Helpers::emojiUrl($emoji),
+                'comment_type' => $c->comment_type ?? 'normal',
                 'likes'      => (int) $likeCounts->get((string) $c->_id, 0),
                 'liked'      => in_array((string) $c->_id, $likedByMe, true),
                 'created_at' => Carbon::parse($c->created_at)->diffForHumans(),
@@ -368,6 +374,7 @@ class ContentBrowseAdminController extends Controller
             'audio'      => null,
             'image'      => null,
             'emoji'      => null,
+            'emoji_url'  => null,
             'likes'      => 0,
             'liked'      => false,
             'created_at' => 'just now',

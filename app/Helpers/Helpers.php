@@ -179,12 +179,56 @@ class Helpers
         // fileUpload targets (profile avatar, banner, etc.) live on the API disk.
         if (
             Str::startsWith($relative, 'images/user')
+            || Str::startsWith($relative, 'images/emoji')
             || Str::startsWith($relative, 'notification-users')
         ) {
             return self::storageUrl($relative);
         }
 
         return self::mediaUrl($path);
+    }
+
+    /**
+     * Resolve a feed/comment emoji value to a displayable image URL.
+     * Accepts: absolute URL, storage/CDN path (images/emoji/...), or custom pack name.
+     * Unicode emoji strings return null — callers should render the raw glyph.
+     */
+    public static function emojiUrl($emoji)
+    {
+        if ($emoji === null || $emoji === '') {
+            return null;
+        }
+        $emoji = trim((string) $emoji);
+        if ($emoji === '' || strtolower($emoji) === 'null') {
+            return null;
+        }
+        if (Str::startsWith($emoji, ['http://', 'https://'])) {
+            return $emoji;
+        }
+
+        // Path to an uploaded pack image (common for comment_type=emoji).
+        if (Str::contains($emoji, '/') || preg_match('/\.(gif|png|webp|jpe?g)$/i', $emoji)) {
+            $relative = ltrim($emoji, '/');
+            if (Str::startsWith($relative, 'storage/')) {
+                $relative = Str::after($relative, 'storage/');
+            }
+            if (Str::startsWith($relative, 'images/emoji')) {
+                return self::storageUrl($relative);
+            }
+            return self::storageUrl($relative) ?? self::mediaUrl($relative);
+        }
+
+        // Custom pack name → lookup
+        try {
+            $row = \App\Models\Emoji::where('name', $emoji)->first();
+            if ($row && !empty($row->image)) {
+                return self::emojiUrl($row->image);
+            }
+        } catch (Exception $e) {
+            return null;
+        }
+
+        return null;
     }
 
     public static function fileUpload($uploadedFile, $folder = null)
