@@ -717,6 +717,9 @@ Route::prefix('admin')->group(function () {
 
     Route::middleware('jwt.custom')->group(function () {
         Route::get('/me', [AdminAuthController::class, 'me']);
+        Route::put('/profile', [AdminAuthController::class, 'updateProfile']);
+        Route::post('/profile', [AdminAuthController::class, 'updateProfile']); // multipart avatar
+        Route::post('/profile/password', [AdminAuthController::class, 'changePassword']);
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::post('/refresh', [AdminAuthController::class, 'refresh']);
 
