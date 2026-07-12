@@ -68,7 +68,10 @@ class NotificationHelper
             $notification->status = 'queued';
             $notification->save();
 
-            SendPushNotification::dispatch((string) $notification->id);
+            // MongoDB cannot run Laravel's database-queue worker (pop lock crashes),
+            // so deliver FCM in-process. Still uses the SendPushNotification job class
+            // for status updates (queued → sending → sent|failed).
+            SendPushNotification::dispatchSync((string) $notification->id);
 
             return $notification;
         } catch (\Throwable $e) {

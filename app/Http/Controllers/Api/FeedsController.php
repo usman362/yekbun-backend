@@ -95,6 +95,92 @@ class FeedsController extends Controller
         return ResponseHelper::sendResponse($data, 'Feeds fetch successfully');
     }
 
+    /**
+     * GET /api/user-feeds/{user_id}
+     * Returns feeds authored by the given user.
+     * Own profile → all non-deleted feeds.
+     * Other profile → only feeds the authenticated viewer is allowed to see
+     * (friends / family / friends & family / public-style audiences).
+     */
+    public function userFeeds(Request $request, $user_id = null)
+    {
+        $targetUserId = $user_id ?: $request->get('user_id');
+        if (empty($targetUserId)) {
+            return ResponseHelper::sendResponse([], 'User Id is Required', false, 422);
+        }
+
+        // Invalid ObjectId would 500 on where('_id') / find — validate first.
+        if (!is_string($targetUserId) || !preg_match('/^[0-9a-fA-F]{24}$/', $targetUserId)) {
+            return ResponseHelper::sendResponse([], 'Invalid User Id', false, 422);
+        }
+
+        $target = User::find($targetUserId);
+        if (!$target) {
+            return ResponseHelper::sendResponse([], 'User not found', false, 404);
+        }
+
+        $authId = Auth::id();
+        $perPage = max(1, min((int) $request->get('per_page', 5), 50));
+        $cursor = $request->get('cursor');
+
+        $feedsQuery = Feed::with(['user', 'shareUser', 'parentFeed'])
+            ->where('user_id', $targetUserId)
+            ->where(function ($q) {
+                $q->whereNull('is_deleted')->orWhere('is_deleted', false);
+            });
+
+        // Privacy when viewing someone else's profile.
+        if ((string) $authId !== (string) $targetUserId) {
+            $viewer = User::with(['friends', 'family'])->find($authId);
+            $friendIds = $viewer ? $viewer->friends->pluck('user_id')->map(fn ($id) => (string) $id)->all() : [];
+            $familyIds = $viewer ? $viewer->family->pluck('user_id')->map(fn ($id) => (string) $id)->all() : [];
+            $isFriend = in_array((string) $targetUserId, $friendIds, true);
+            $isFamily = in_array((string) $targetUserId, $familyIds, true);
+
+            $feedsQuery->where(function ($q) use ($isFriend, $isFamily) {
+                // Open / channel audiences (case variants seen in legacy data).
+                $q->whereIn('user_type', [
+                    'public', 'Public', 'all', 'All', 'channel', 'Channel',
+                ]);
+                if ($isFriend && $isFamily) {
+                    $q->orWhereIn('user_type', ['friends', 'family', 'friends & family']);
+                } elseif ($isFriend) {
+                    $q->orWhereIn('user_type', ['friends', 'friends & family']);
+                } elseif ($isFamily) {
+                    $q->orWhereIn('user_type', ['family', 'friends & family']);
+                }
+            });
+        }
+
+        $feedsQuery->orderBy('_id', 'desc');
+
+        if ($cursor) {
+            try {
+                $feedsQuery->where('_id', '<', new ObjectId($cursor));
+            } catch (Exception $e) {
+                return ResponseHelper::sendResponse([], 'Invalid cursor', false, 422);
+            }
+        }
+
+        $feeds = $feedsQuery->limit($perPage)->get();
+        $nextCursor = optional($feeds->last())->_id;
+
+        return ResponseHelper::sendResponse([
+            'feeds' => $feeds,
+            'user' => [
+                'id' => (string) $target->_id,
+                'username' => $target->username ?? $target->name ?? null,
+                'name' => $target->name ?? null,
+                'image' => Helpers::profileImageUrl($target->image ?? null),
+            ],
+            'pagination' => [
+                'per_page' => $perPage,
+                'next_cursor' => $nextCursor,
+                'has_more' => $feeds->count() === $perPage,
+            ],
+        ], 'User feeds fetched successfully');
+    }
+
     public function news()
     {
         $news = News::orderBy('created_at', 'desc')->get();
@@ -655,30 +741,27 @@ class FeedsController extends Controller
             }
         }
 
-        $feed = Feed::find($id);
-        if ($request->feed_type == 'admin_feeds') $feed = PopFeeds::find($id);
-        if ($request->feed_type == 'history') $feed = History::find($id);
-        if ($request->feed_type == 'ai_videos') $feed = AIVideo::find($id);
+        $feed = $this->resolveFeedByType((string) $id, (string) $request->feed_type);
 
         if ($feed) {
-            $feed->comments_count = method_exists($feed, 'comments') ? $feed->comments()->count() : (int) ($feed->comments_count ?? 0);
-            $feed->voice_comments_count = method_exists($feed, 'voice_comments') ? $feed->voice_comments()->count() : (int) ($feed->voice_comments_count ?? 0);
-            $feed->likes_count = method_exists($feed, 'likes') ? $feed->likes()->count() : (int) ($feed->likes_count ?? 0);
-            $feed->views_count = method_exists($feed, 'views') ? $feed->views()->count() : (int) ($feed->views_count ?? 0);
-            $feed->shares_count = method_exists($feed, 'shares') ? $feed->shares()->count() : (int) ($feed->shares_count ?? 0);
-            $feed->save();
+            $counts = $this->syncFeedEngagementCounts($feed, (string) $id, (string) $request->feed_type);
+            $feed->comments_count = $counts['comments_count'];
+            $feed->voice_comments_count = $counts['voice_comments_count'];
+            $feed->likes_count = $counts['likes_count'];
+            $feed->views_count = $counts['views_count'];
+            $feed->shares_count = $counts['shares_count'] ?? ($feed->shares_count ?? 0);
         }
 
         if ($feed && $request->feed_type !== 'admin_feeds') {
             Helpers::userMedia(
                 $feed->_id,
                 'exists',
-                $feed->comments_count,
-                $feed->voice_comments_count,
-                $feed->likes_count,
-                $feed->views_count,
-                $feed->user_id,
-                $feed->description,
+                $feed->comments_count ?? 0,
+                $feed->voice_comments_count ?? 0,
+                $feed->likes_count ?? 0,
+                $feed->views_count ?? 0,
+                $feed->user_id ?? null,
+                $feed->description ?? $feed->text ?? $feed->title ?? null,
                 null,
                 $request->feed_type
             );
@@ -745,12 +828,32 @@ class FeedsController extends Controller
         if (!$user) return ResponseHelper::sendResponse([], 'User not authenticated!', false, 403);
 
         $like = CommentsLike::where('user_id', $user->id)->where('comment_id', $id)->first();
+        $likeRow = null;
         if ($like) {
             $like->delete();
             $liked = false;
         } else {
-            CommentsLike::create(['user_id' => $user->id, 'comment_id' => $id, 'emoji' => $request->emoji]);
+            $likeRow = CommentsLike::create(['user_id' => $user->id, 'comment_id' => $id, 'emoji' => $request->emoji]);
             $liked = true;
+        }
+
+        // Notify comment author after a new like (skip self-like / unlike).
+        if ($liked && $likeRow) {
+            $comment = FeedComments::find($id);
+            if ($comment && isset($comment->user_id)) {
+                $actorName = NotificationHelper::actorName($user);
+                NotificationHelper::notifyUser(
+                    $comment->user_id,
+                    $actorName,
+                    $actorName . ' liked your comment.',
+                    'comment_likes',
+                    $user->id,
+                    $user->image ?? null,
+                    'comment_like:' . (string) ($likeRow->id ?? $likeRow->_id),
+                    (string) $id,
+                    'feed_comments'
+                );
+            }
         }
 
         return ResponseHelper::sendResponse([
@@ -910,6 +1013,9 @@ class FeedsController extends Controller
         }
         if ($feedType === 'ai_videos') {
             return AIVideo::find($id);
+        }
+        if ($feedType === 'clips') {
+            return \App\Models\Clips::find($id);
         }
 
         return Feed::find($id);

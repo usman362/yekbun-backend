@@ -526,6 +526,8 @@ Route::middleware('jwt.custom')->group(function () {
 
     // ─── Feeds ───
     Route::get('feeds', [FeedsController::class, 'index']);
+    Route::get('user-feeds/{user_id}', [FeedsController::class, 'userFeeds']);
+    Route::get('user-feeds', [FeedsController::class, 'userFeeds']); // ?user_id=
     Route::post('feeds', [FeedsController::class, 'store']);
     Route::post('share-feeds', [FeedsController::class, 'share']);
     Route::post('search-feeds-users', [FeedsController::class, 'search_user']);
