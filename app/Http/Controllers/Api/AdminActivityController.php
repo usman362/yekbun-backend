@@ -13,6 +13,24 @@ use Illuminate\Support\Facades\Validator;
 
 class AdminActivityController extends Controller
 {
+    /** True when request carries a real edit id (Mongo ObjectId string — not numeric `> 0`). */
+    private function isUpdateRequest(Request $request): bool
+    {
+        $id = $request->input('id');
+        if ($id === null || $id === '' || $id === '0' || $id === 0 || $id === false) {
+            return false;
+        }
+        return true;
+    }
+
+    private function findForUpdate(Request $request): ?PopFeeds
+    {
+        if (!$this->isUpdateRequest($request)) {
+            return null;
+        }
+        return PopFeeds::find($request->input('id'));
+    }
+
     public function getSystemInfo()
     {
         $popfeeds = PopFeeds::where('type', 'System')->orderBy('created_at', 'desc')->get();
@@ -98,11 +116,10 @@ class AdminActivityController extends Controller
             }
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Popup Feed updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'Popup Feed not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'Popup Feed updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'Popup Feed not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         $feed = PopFeeds::create($data);
         $this->notifyAdminActivity($request, 'admin_system_info', $request->title, 'system');
@@ -124,6 +141,7 @@ class AdminActivityController extends Controller
             'date_start' => $request->start_date, 'date_ends' => $request->end_date,
             'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0, 'type' => 'Donation',
+            'txt1' => $request->description ?? $request->txt1,
         ];
 
         if ($request->hasFile('image')) {
@@ -131,11 +149,10 @@ class AdminActivityController extends Controller
             $data['image'] = $image->storeAs('/images', time() . '-post.' . $image->getClientOriginalExtension(), 'public');
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Donation updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'Donation not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'Donation updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'Donation not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         $feed = PopFeeds::create($data);
         $this->notifyAdminActivity($request, 'admin_donation', $request->title, 'donation');
@@ -155,6 +172,7 @@ class AdminActivityController extends Controller
             'share_option' => $request->option ?: 'all-users', 'is_comments' => $request->comments ?? 0,
             'is_share' => $request->share ?? 0, 'is_emoji' => $request->emoji ?? 0,
             'txt1' => $request->txt1, 'txt2' => $request->txt2, 'txt3' => $request->txt3, 'type' => 'Surveys',
+            'allowed_provinces' => $request->allowed_provinces ?: null,
         ];
 
         foreach (['image' => 'images', 'icon1' => 'images/icons', 'icon2' => 'images/icons', 'icon3' => 'images/icons'] as $fileKey => $path) {
@@ -164,11 +182,10 @@ class AdminActivityController extends Controller
             }
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Survey updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'Survey not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'Survey updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'Survey not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         $feed = PopFeeds::create($data);
         $this->notifyAdminActivity($request, 'admin_surveys', $request->title, 'surveys');
@@ -197,11 +214,10 @@ class AdminActivityController extends Controller
             }
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Greeting updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'Greeting not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'Greeting updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'Greeting not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         $feed = PopFeeds::create($data);
         $this->notifyAdminActivity($request, 'admin_greetings', $request->title, 'greetings');
@@ -228,11 +244,10 @@ class AdminActivityController extends Controller
             }
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'SOS updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'SOS not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'SOS updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'SOS not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         $feed = PopFeeds::create($data);
         $this->notifyAdminActivity($request, 'admin_sos', $request->title, 'sos');
@@ -263,11 +278,10 @@ class AdminActivityController extends Controller
             $data['image'] = $image->storeAs('/images', time() . rand() . '-golive.' . $image->getClientOriginalExtension(), 'public');
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Event updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'Event not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'Event updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'Event not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         $feed = PopFeeds::create($data);
         $this->notifyAdminActivity($request, 'admin_events', $request->title, 'event');
@@ -295,11 +309,10 @@ class AdminActivityController extends Controller
             }
         }
 
-        if ($request->id > 0) {
-            $postpop = PopFeeds::find($request->id);
-            if ($postpop) { $postpop->update($data); return response()->json(['message' => 'Agent Feed updated successfully.', 'data' => $postpop], 200); }
-            return response()->json(['message' => 'Agent Feed not found.'], 404);
+        if ($postpop = $this->findForUpdate($request)) {
+            $postpop->update($data); return response()->json(['message' => 'Agent Feed updated successfully.', 'data' => $postpop], 200);
         }
+        if ($this->isUpdateRequest($request)) return response()->json(['message' => 'Agent Feed not found.'], 404);
         $data['user_id'] = 0; $data['status'] = 1;
         return response()->json(['message' => 'Agent Feed added successfully.', 'data' => PopFeeds::create($data)], 201);
     }
@@ -324,7 +337,7 @@ class AdminActivityController extends Controller
     /** Portal Notifications — only on create, respects admin toggle in Notifications config. */
     private function notifyAdminActivity(Request $request, string $key, ?string $title, string $type): void
     {
-        if (($request->id ?? 0) > 0 || !$title) {
+        if ($this->isUpdateRequest($request) || !$title) {
             return;
         }
         NotificationHelper::sendConfiguredBroadcast($key, ['[name]' => (string) $title], $type);
