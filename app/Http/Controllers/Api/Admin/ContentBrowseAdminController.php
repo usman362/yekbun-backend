@@ -233,8 +233,9 @@ class ContentBrowseAdminController extends Controller
     }
 
     /**
-     * Map raw PopFeeds records and resolve any local-storage paths to full URLs
-     * via Helpers::mediaUrl so the dashboard can render them directly.
+     * Map raw PopFeeds records and resolve media paths to absolute URLs.
+     * Admin Activity uploads go to the API public disk (storeAs … 'public'),
+     * NOT Bunny CDN — same as the old Blade admin (`asset('storage/…')`).
      */
     private function transformFeeds($rows): \Illuminate\Support\Collection
     {
@@ -252,7 +253,7 @@ class ContentBrowseAdminController extends Controller
             $arr = $f->toArray();
             foreach (['image', 'audio', 'video', 'icon1', 'icon2', 'icon3'] as $field) {
                 if (!empty($arr[$field])) {
-                    $arr[$field] = Helpers::mediaUrl($arr[$field]);
+                    $arr[$field] = Helpers::storageUrl($arr[$field]) ?? $arr[$field];
                 }
             }
             $arr['likes_count']    = (int) $likeCounts->get((string) $f->_id, 0);
