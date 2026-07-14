@@ -176,11 +176,12 @@ class Helpers
             $relative = Str::after($relative, 'storage/');
         }
 
-        // fileUpload targets (profile avatar, banner, etc.) live on the API disk.
+        // Local public-disk uploads (profile, legacy team avatars, notification images).
         if (
             Str::startsWith($relative, 'images/user')
             || Str::startsWith($relative, 'images/emoji')
             || Str::startsWith($relative, 'notification-users')
+            || Str::startsWith($relative, 'team-members')
         ) {
             return self::storageUrl($relative);
         }

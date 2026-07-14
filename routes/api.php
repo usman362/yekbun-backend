@@ -717,7 +717,7 @@ Route::middleware('jwt.custom')->group(function () {
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login']);
 
-    Route::middleware('jwt.custom')->group(function () {
+    Route::middleware(['jwt.custom', 'admin.user'])->group(function () {
         Route::get('/me', [AdminAuthController::class, 'me']);
         Route::put('/profile', [AdminAuthController::class, 'updateProfile']);
         Route::post('/profile', [AdminAuthController::class, 'updateProfile']); // multipart fields
