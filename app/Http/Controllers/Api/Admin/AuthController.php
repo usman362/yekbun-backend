@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Helpers\ActivityLogHelper;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
+use App\Models\AdminRole;
 use App\Models\User;
 use Illuminate\Http\Request;
 use App\Helpers\Helpers;
@@ -274,21 +275,76 @@ class AuthController extends Controller
     {
         $joined = $user->created_at ? Carbon::parse($user->created_at) : null;
         $lastLogin = !empty($user->last_login_at) ? Carbon::parse($user->last_login_at) : null;
+        $isSuper = (int) ($user->is_superadmin ?? 0) === 1;
+
+        $roleId = $user->role_id ? (string) $user->role_id : null;
+        $roleName = $isSuper ? 'Super Admin' : 'Admin';
+        $permissions = [];
+
+        if (!$isSuper && $roleId) {
+            $role = AdminRole::find($roleId);
+            if ($role) {
+                $roleName = (string) ($role->name ?: 'Admin');
+                $raw = is_array($role->permissions) ? $role->permissions
+                    : (is_array($role->permission) ? $role->permission : []);
+                $permissions = $this->canonicalPermissionList($raw);
+            }
+        }
 
         return [
-            'id'         => (string) $user->_id,
-            'name'       => $user->name ?? '',
-            'email'      => $user->email ?? '',
-            'username'   => $user->username ?? '',
-            'image'      => Helpers::profileImageUrl($user->image),
-            'role'       => $user->is_superadmin ? 'superadmin' : 'admin',
-            'phone'      => (string) ($user->phone ?? ''),
-            'country'    => (string) ($user->country ?? ''),
-            'language'   => (string) ($user->is_language ?? $user->language ?? ''),
-            'department' => (string) ($user->department ?? ''),
-            'bio'        => (string) ($user->bio ?? ''),
-            'joined_at'  => $joined ? $joined->format('d. M Y') : '',
-            'last_login' => $lastLogin ? $lastLogin->diffForHumans() : '',
+            'id'            => (string) $user->_id,
+            'name'          => trim(($user->name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->username ?? ''),
+            'email'         => $user->email ?? '',
+            'username'      => $user->username ?? '',
+            'image'         => Helpers::profileImageUrl($user->image),
+            // Machine role for gating (superadmin bypasses permission checks).
+            'role'          => $isSuper ? 'superadmin' : 'admin',
+            // Human-readable assigned Team Role name (shown in topbar).
+            'role_name'     => $roleName,
+            'role_id'       => $roleId,
+            'is_superadmin' => $isSuper,
+            'permissions'   => $permissions,
+            'phone'         => (string) ($user->phone ?? ''),
+            'country'       => (string) ($user->country ?? ''),
+            'language'      => (string) ($user->is_language ?? $user->language ?? ''),
+            'department'    => (string) ($user->department ?? ''),
+            'bio'           => (string) ($user->bio ?? ''),
+            'joined_at'     => $joined ? $joined->format('d. M Y') : '',
+            'last_login'    => $lastLogin ? $lastLogin->diffForHumans() : '',
         ];
+    }
+
+    /** Normalize stored permission keys to dotted form (dashboard.read). */
+    private function canonicalPermissionList(array $perms): array
+    {
+        $out = [];
+        foreach ($perms as $p) {
+            $key = trim((string) $p);
+            if ($key === '' || $key === 'admin_all' || $key === 'admin.all' || $key === '__select_all__') {
+                continue;
+            }
+            if (!str_contains($key, '.') && preg_match('/^([a-z0-9]+)_(.+)$/i', $key, $m)) {
+                $key = strtolower($m[1]) . '.' . $m[2];
+            }
+            $map = [
+                'dashboard_read'  => 'dashboard.read',
+                'user_read'       => 'users.read',
+                'channels_read'   => 'channels.read',
+                'channels_write'  => 'channels.write',
+                'feeds_read'      => 'feeds.read',
+                'feeds_write'     => 'feeds.write',
+                'music_read'      => 'music.read',
+                'music_write'     => 'music.write',
+                'surveys_read'    => 'surveys.read',
+                'surveys_write'   => 'surveys.write',
+                'settings_read'   => 'settings.read',
+                'settings_write'  => 'settings.write',
+            ];
+            if (isset($map[$key])) {
+                $key = $map[$key];
+            }
+            $out[$key] = $key;
+        }
+        return array_values($out);
     }
 }
