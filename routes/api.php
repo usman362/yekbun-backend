@@ -826,7 +826,8 @@ Route::prefix('admin')->group(function () {
         // ─── Languages ───
         Route::get('/languages/browse', [LanguagesAdminController::class, 'index']);
         Route::post('/languages', [LanguagesAdminController::class, 'store']);
-        Route::put('/languages/{id}', [LanguagesAdminController::class, 'update']);
+        // POST allowed for multipart flag uploads (PHP does not parse files on PUT reliably).
+        Route::match(['put', 'post'], '/languages/{id}', [LanguagesAdminController::class, 'update']);
         Route::delete('/languages/{id}', [LanguagesAdminController::class, 'destroy']);
         Route::get('/languages/{id}/keywords', [LanguagesAdminController::class, 'keywords']);
         Route::put('/languages/{languageId}/keywords/{translationId}', [LanguagesAdminController::class, 'updateKeyword']);

@@ -11,6 +11,24 @@ use Illuminate\Http\Request;
 
 class LanguagesAdminController extends Controller
 {
+    /** Language flags live on API public disk (not CDN) — same as old admin Languages. */
+    private function iconUrl(?string $path): ?string
+    {
+        if ($path === null || $path === '') {
+            return null;
+        }
+        $path = trim($path);
+        if ($path === '') {
+            return null;
+        }
+        // Legacy base64 previews accidentally stored in Mongo — pass through so UI still renders.
+        if (str_starts_with($path, 'data:') || str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return Helpers::storageUrl($path);
+    }
+
     public function index()
     {
         $languages = Language::orderBy('title')->get()->map(function ($lang) {
@@ -18,7 +36,7 @@ class LanguagesAdminController extends Controller
                 'id'        => (string) $lang->_id,
                 'name'      => $lang->title ?? $lang->name ?? '',
                 'code'      => $lang->code ?? '',
-                'icon'      => Helpers::mediaUrl($lang->icon),
+                'icon'      => $this->iconUrl($lang->icon ?? null),
                 'direction' => $lang->direction ?? 'ltr',
                 'active'    => ($lang->status ?? '1') === '1' || ($lang->status ?? 1) == 1,
             ];
@@ -34,6 +52,7 @@ class LanguagesAdminController extends Controller
             'code'      => 'required|string|max:10',
             'direction' => 'nullable|in:ltr,rtl',
             'status'    => 'nullable|in:0,1',
+            'icon'      => 'nullable|image|max:2048',
         ]);
 
         $lang = new Language();
@@ -42,7 +61,11 @@ class LanguagesAdminController extends Controller
         $lang->code      = $request->code;
         $lang->direction = $request->input('direction', 'ltr');
         $lang->status    = (string) $request->input('status', '0');
-        if ($request->filled('icon')) $lang->icon = $request->icon;
+
+        if ($request->hasFile('icon')) {
+            $lang->icon = Helpers::fileUpload($request->file('icon'), 'images/languages/icon');
+        }
+
         $lang->save();
 
         return ResponseHelper::sendResponse([
@@ -50,7 +73,7 @@ class LanguagesAdminController extends Controller
             'name'      => $lang->title,
             'code'      => $lang->code,
             'direction' => $lang->direction,
-            'icon'      => Helpers::mediaUrl($lang->icon),
+            'icon'      => $this->iconUrl($lang->icon ?? null),
             'active'    => $lang->status === '1',
         ], 'Language created.', true, 201);
     }
@@ -58,10 +81,12 @@ class LanguagesAdminController extends Controller
     public function update(Request $request, string $id)
     {
         $request->validate([
-            'name'      => 'required|string|max:255',
-            'code'      => 'required|string|max:10',
-            'direction' => 'nullable|in:ltr,rtl',
-            'status'    => 'nullable|in:0,1',
+            'name'       => 'required|string|max:255',
+            'code'       => 'required|string|max:10',
+            'direction'  => 'nullable|in:ltr,rtl',
+            'status'     => 'nullable|in:0,1',
+            'icon'       => 'nullable|image|max:2048',
+            'clear_icon' => 'nullable|in:0,1,true,false',
         ]);
 
         $lang = Language::find($id);
@@ -74,7 +99,14 @@ class LanguagesAdminController extends Controller
         $lang->code      = $request->code;
         $lang->direction = $request->input('direction', $lang->direction ?? 'ltr');
         $lang->status    = (string) $request->input('status', $lang->status ?? '0');
-        if ($request->has('icon')) $lang->icon = $request->icon;
+
+        $clear = filter_var($request->input('clear_icon'), FILTER_VALIDATE_BOOLEAN);
+        if ($clear) {
+            $lang->icon = null;
+        } elseif ($request->hasFile('icon')) {
+            $lang->icon = Helpers::fileUpload($request->file('icon'), 'images/languages/icon');
+        }
+
         $lang->save();
 
         return ResponseHelper::sendResponse([
@@ -82,7 +114,7 @@ class LanguagesAdminController extends Controller
             'name'      => $lang->title,
             'code'      => $lang->code,
             'direction' => $lang->direction,
-            'icon'      => Helpers::mediaUrl($lang->icon),
+            'icon'      => $this->iconUrl($lang->icon ?? null),
             'active'    => $lang->status === '1',
         ], 'Language updated.');
     }
