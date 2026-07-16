@@ -136,7 +136,7 @@ class CmsController extends Controller
                 'id'   => $m->slot_id ?? (string) $m->_id,
                 'name' => $m->name,
                 'slot' => $m->slot,
-                'url'  => Helpers::mediaUrl($m->url),
+                'url'  => Helpers::systemAssetUrl($m->url),
             ];
         })->values();
 
@@ -147,8 +147,7 @@ class CmsController extends Controller
      * POST /admin/cms/media/upload
      * Body (multipart): { slot: string, image: file }
      *
-     * Pushes the new image to BunnyCDN, replaces the slot's URL, and returns the
-     * updated slot row so the admin can re-render without a full re-fetch.
+     * Stores the image on API public disk (device-cache asset), updates the slot URL.
      */
     public function uploadMedia(Request $request)
     {
@@ -157,21 +156,21 @@ class CmsController extends Controller
             'image' => 'required|file|image|max:10240', // 10MB — covers banner-size assets
         ]);
 
-        $url = Helpers::fileCDNUpload($request->file('image'), 'images/cms');
+        $path = Helpers::fileUpload($request->file('image'), 'images/cms');
 
         $row = CmsMedia::where('slot', $request->slot)->first() ?? new CmsMedia();
         // If the slot didn't exist yet (admin added it ad-hoc), keep a friendly name.
         $row->slot = $request->slot;
         if (empty($row->name)) $row->name = $request->input('name', $request->slot);
-        // Store the path (relative). Convert to full URL only when responding.
-        $row->url = $url;
+        // Store the relative public-disk path. Convert to full URL only when responding.
+        $row->url = $path;
         $row->save();
 
         return ResponseHelper::sendResponse([
             'id'   => $row->slot_id ?? (string) $row->_id,
             'name' => $row->name,
             'slot' => $row->slot,
-            'url'  => Helpers::mediaUrl($row->url),
+            'url'  => Helpers::systemAssetUrl($row->url),
         ], 'Media updated');
     }
 

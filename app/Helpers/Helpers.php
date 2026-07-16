@@ -113,6 +113,95 @@ class Helpers
     }
 
     /**
+     * Absolute URL for system / device-cache assets (flags, ringtones, banners, emojis…).
+     * New uploads live on the API public disk; legacy Bunny CDN paths still resolve via mediaUrl.
+     */
+    public static function systemAssetUrl($path): ?string
+    {
+        if ($path === null || $path === '') {
+            return null;
+        }
+        if (is_array($path)) {
+            $path = $path['path'] ?? $path['url'] ?? reset($path) ?: null;
+            if ($path === null || $path === '') {
+                return null;
+            }
+        }
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+        if (Str::startsWith($path, ['data:'])) {
+            return $path;
+        }
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            // Absolute CDN or storage URLs already fully qualified.
+            return $path;
+        }
+
+        $relative = ltrim($path, '/');
+        if (Str::startsWith($relative, 'storage/')) {
+            $relative = Str::after($relative, 'storage/');
+        }
+
+        $local = storage_path('app/public/' . $relative);
+        if (is_file($local)) {
+            return self::storageUrl($relative);
+        }
+
+        // Known local-only folders — always use storage URL even before the file is probed
+        // (covers race/symlink cases and freshly uploaded rows).
+        if (
+            Str::startsWith($relative, [
+                'images/languages/',
+                'images/user',
+                'images/emoji',
+                'images/cms/',
+                'images/officials/',
+                'images/surveys/',
+                'images/votings/',
+                'images/admin-activity/',
+                'ringtones/',
+                'audios/officials/',
+                'audios/surveys/',
+                'videos/officials/',
+                'videos/surveys/',
+                'notification-users/',
+                'team-members/',
+            ])
+        ) {
+            return self::storageUrl($relative);
+        }
+
+        return self::mediaUrl($path);
+    }
+
+    /**
+     * Best-effort delete for a system asset path (local public disk and/or Bunny CDN).
+     */
+    public static function systemAssetDelete(?string $path): void
+    {
+        if ($path === null || trim($path) === '') {
+            return;
+        }
+        $relative = self::cdnRelativePath($path);
+        if ($relative === null || $relative === '' || Str::startsWith($relative, ['http://', 'https://', 'data:'])) {
+            return;
+        }
+
+        $local = storage_path('app/public/' . ltrim($relative, '/'));
+        if (is_file($local)) {
+            @unlink($local);
+        }
+
+        try {
+            (new BunnyCDNService())->delete(ltrim($relative, '/'));
+        } catch (Exception $e) {
+            // Legacy CDN or already-removed object — ignore.
+        }
+    }
+
+    /**
      * Absolute URL for files on the API public disk (storage/app/public).
      * Profile avatars / banners use Helpers::fileUpload — they are NOT on Bunny CDN.
      * Absolute http(s) values pass through unchanged.

@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Models\Voting;
 use App\Models\VotingReaction;
 use App\Models\VotingViews;
-use App\Services\BunnyCDNService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -42,7 +41,7 @@ class ContentVotingsAdminController extends Controller
                 return [
                     'title' => $opt['title'] ?? "Option " . ($idx + 1),
                     'type'  => (int) $type,
-                    'image' => $image ? (Helpers::mediaUrl($image) ?? $image) : null,
+                    'image' => $image ? (Helpers::systemAssetUrl($image) ?? $image) : null,
                     'count' => (int) ($byType->get((string) $type, $byType->get($type, 0))),
                 ];
             }, $options, array_keys($options));
@@ -51,9 +50,9 @@ class ContentVotingsAdminController extends Controller
                 'id'           => $v->_id,
                 'name'         => $v->name ?? '',
                 'description'  => $v->description ?? '',
-                'banner'       => Helpers::mediaUrl($v->banner ?? $v->image ?? null) ?? '',
-                'viewBanner'   => Helpers::mediaUrl($v->view_banner ?? null),
-                'audio'        => Helpers::mediaUrl($v->audio ?? null),
+                'banner'       => Helpers::systemAssetUrl($v->banner ?? $v->image ?? null) ?? '',
+                'viewBanner'   => Helpers::systemAssetUrl($v->view_banner ?? null),
+                'audio'        => Helpers::systemAssetUrl($v->audio ?? null),
                 'status'       => (string) ($v->status ?? '0'),
                 'voteType'     => $v->vote_type ?? 'single',
                 'options'      => $optionsOut,
@@ -118,18 +117,15 @@ class ContentVotingsAdminController extends Controller
             return ResponseHelper::sendResponse(null, 'Survey not found', false, 404);
         }
 
-        $bunny = new BunnyCDNService();
-        $cdnBase = rtrim((string) env('BUNNY_CDN_URL'), '/');
-
         foreach (['banner', 'view_banner', 'audio'] as $field) {
             if (!empty($v->{$field})) {
-                $bunny->delete($this->cdnPath((string) $v->{$field}, $cdnBase));
+                Helpers::systemAssetDelete((string) $v->{$field});
             }
         }
         if (is_array($v->options)) {
             foreach ($v->options as $opt) {
                 if (!empty($opt['image'])) {
-                    $bunny->delete($this->cdnPath((string) $opt['image'], $cdnBase));
+                    Helpers::systemAssetDelete((string) $opt['image']);
                 }
             }
         }
@@ -162,7 +158,7 @@ class ContentVotingsAdminController extends Controller
             return [
                 'title' => $opt['title'] ?? 'Option ' . ($idx + 1),
                 'type'  => (int) $type,
-                'image' => $image ? (Helpers::mediaUrl($image) ?? $image) : null,
+                'image' => $image ? (Helpers::systemAssetUrl($image) ?? $image) : null,
                 'count' => (int) ($byType->get((string) $type, $byType->get($type, 0))),
             ];
         }, $options, array_keys($options));
@@ -266,13 +262,5 @@ class ContentVotingsAdminController extends Controller
                 }, $opts, array_keys($opts)));
             }
         }
-    }
-
-    private function cdnPath(string $fullUrl, string $cdnBase): string
-    {
-        if ($cdnBase !== '' && Str::startsWith($fullUrl, $cdnBase . '/')) {
-            return Str::after($fullUrl, $cdnBase . '/');
-        }
-        return ltrim($fullUrl, '/');
     }
 }

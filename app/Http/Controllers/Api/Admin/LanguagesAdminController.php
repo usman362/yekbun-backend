@@ -26,7 +26,7 @@ class LanguagesAdminController extends Controller
             return $path;
         }
 
-        return Helpers::storageUrl($path);
+        return Helpers::systemAssetUrl($path);
     }
 
     public function index()

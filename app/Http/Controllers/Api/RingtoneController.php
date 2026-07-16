@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 class RingtoneController extends Controller
 {
-    /** GET /api/ringtone — active ringtones with full CDN URLs (mobile list). */
+    /** GET /api/ringtone — active ringtones with playable URLs (mobile list). */
     public function get()
     {
         $data = Ringtone::orderBy('created_at', 'desc')->get()
@@ -17,7 +17,7 @@ class RingtoneController extends Controller
             ->map(fn($r) => [
                 'id'        => (string) $r->_id,
                 'name'      => $r->fileName ?? 'Ringtone',
-                'url'       => Helpers::mediaUrl($r->filePath) ?? '',
+                'url'       => Helpers::systemAssetUrl($r->filePath) ?? '',
                 'duration'  => $r->duration ?? '0:00',
                 'size'      => $r->fileSize ?? '',
                 'downloads' => (int) ($r->downloads ?? 0),
@@ -38,7 +38,7 @@ class RingtoneController extends Controller
 
         return response()->json([
             'success'   => true,
-            'url'       => Helpers::mediaUrl($r->filePath) ?? '',
+            'url'       => Helpers::systemAssetUrl($r->filePath) ?? '',
             'downloads' => (int) $r->downloads,
         ]);
     }

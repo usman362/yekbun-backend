@@ -11,7 +11,6 @@ use App\Models\Holiday;
 use App\Models\Ministry;
 use App\Models\PeopleTerritory;
 use App\Models\Setting;
-use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -360,13 +359,10 @@ class OfficialsAdminController extends Controller
             return ResponseHelper::sendResponse(null, $label . ' not found', false, 404);
         }
 
-        $bunny = new BunnyCDNService();
-        $cdnBase = rtrim((string) env('BUNNY_CDN_URL'), '/');
-
         foreach ($fileFields as $field) {
             $value = $row->{$field} ?? null;
             if (!empty($value)) {
-                $bunny->delete($this->cdnPath((string) $value, $cdnBase));
+                Helpers::systemAssetDelete((string) $value);
             }
         }
 
@@ -379,17 +375,9 @@ class OfficialsAdminController extends Controller
         $arr = $row->toArray();
         foreach ($fields as $field) {
             if (!empty($arr[$field])) {
-                $arr[$field] = Helpers::mediaUrl($arr[$field]);
+                $arr[$field] = Helpers::systemAssetUrl($arr[$field]);
             }
         }
         return $arr;
-    }
-
-    private function cdnPath(string $fullUrl, string $cdnBase): string
-    {
-        if ($cdnBase !== '' && Str::startsWith($fullUrl, $cdnBase . '/')) {
-            return Str::after($fullUrl, $cdnBase . '/');
-        }
-        return ltrim($fullUrl, '/');
     }
 }

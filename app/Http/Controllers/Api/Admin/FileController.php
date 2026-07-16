@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Helpers\Helpers;
 use App\Helpers\ResponseHelper;
-use App\Services\BunnyCDNService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
+/**
+ * Shared admin file uploader for device-cacheable system assets
+ * (survey banners, officials media, etc.). Stores on API public disk — not Bunny CDN.
+ */
 class FileController extends Controller
 {
     public function upload(Request $request)
@@ -19,6 +21,7 @@ class FileController extends Controller
 
         $f = $request->file('file');
         $ext = strtolower($f->getClientOriginalExtension());
+        $sizeBytes = $f->getSize();
 
         $videoExt = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
         $audioExt = ['mp3', 'wav', 'aac', 'm4a', 'flac'];
@@ -31,31 +34,19 @@ class FileController extends Controller
         $sub = trim((string) $request->input('folder', ''), '/');
         $folder = $sub ? "$base/$sub" : $base;
 
-        $safeOriginal = preg_replace('/[^A-Za-z0-9._-]/', '_', $f->getClientOriginalName());
-        $filename = Str::lower(Str::random(8)) . '_' . $safeOriginal;
-
-        $bunny = new BunnyCDNService();
-        $cdnUrl = $bunny->upload(
-            $folder,
-            $filename,
-            file_get_contents($f->getRealPath()),
-            $f->getMimeType()
-        );
-
+        // Probe A/V duration from the temp upload BEFORE storeAs moves the file.
         $duration = 0;
         if (in_array($ext, $videoExt) || in_array($ext, $audioExt)) {
             $duration = $this->probeDuration($f->getRealPath());
         }
 
-        $sizeMB = round($f->getSize() / (1024 * 1024), 2);
-
-        // Always persist/return relative path as `path`. Full CDN URL is only for preview (`url`).
-        $relative = Helpers::cdnRelativePath($cdnUrl) ?: $cdnUrl;
+        $relative = Helpers::fileUpload($f, $folder);
+        $sizeMB = round($sizeBytes / (1024 * 1024), 2);
 
         return ResponseHelper::sendResponse([
             'path'          => $relative,
             'relative_path' => $relative,
-            'url'           => Helpers::mediaUrl($relative) ?? $relative,
+            'url'           => Helpers::systemAssetUrl($relative) ?? $relative,
             'size'          => $sizeMB . ' MB',
             'duration'      => $duration,
         ], 'Uploaded');

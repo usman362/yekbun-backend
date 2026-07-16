@@ -6,10 +6,8 @@ use App\Helpers\ResponseHelper;
 use App\Helpers\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Ringtone;
-use App\Services\BunnyCDNService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class RingtoneController extends Controller
 {
@@ -42,7 +40,7 @@ class RingtoneController extends Controller
         ], 'Ringtone stats fetched.');
     }
 
-    /** POST /admin/ringtones — upload an M4A ringtone to the CDN. */
+    /** POST /admin/ringtones — upload an M4A ringtone to API public disk (device-cache asset). */
     public function store(Request $request)
     {
         $request->validate([
@@ -53,8 +51,8 @@ class RingtoneController extends Controller
         $file = $request->file('audio');
         $sizeMb   = round($file->getSize() / 1024 / 1024, 2);
         $duration = $this->extractDuration($file->getRealPath());
-        // Media goes to the CDN, never local storage.
-        $path = Helpers::fileCDNUpload($file, 'ringtones');
+        // System / cacheable assets → server disk (not Bunny CDN).
+        $path = Helpers::fileUpload($file, 'ringtones');
 
         $r = new Ringtone();
         $r->fileName  = $request->name;
@@ -81,18 +79,14 @@ class RingtoneController extends Controller
         return ResponseHelper::sendResponse($this->present($r), 'Status updated.');
     }
 
-    /** DELETE /admin/ringtones/{id} — delete row + its CDN file. */
+    /** DELETE /admin/ringtones/{id} — delete row + audio file (disk and/or legacy CDN). */
     public function destroy($id)
     {
         $r = Ringtone::find($id);
         if (!$r) return ResponseHelper::sendResponse(null, 'Ringtone not found.', false, 404);
 
         if (!empty($r->filePath)) {
-            try {
-                $bunny = new BunnyCDNService();
-                $rel = ltrim(Str::after($r->filePath, (string) env('BUNNY_CDN_URL')), '/');
-                if ($rel !== '' && !Str::startsWith($rel, ['http://', 'https://'])) $bunny->delete($rel);
-            } catch (\Throwable $e) {}
+            Helpers::systemAssetDelete((string) $r->filePath);
         }
         $r->delete();
 
@@ -118,7 +112,7 @@ class RingtoneController extends Controller
             'format'    => $this->getFormat($r->filePath ?? $r->fileName ?? ''),
             'status'    => $active ? 'active' : 'inactive',
             'downloads' => (int) ($r->downloads ?? 0),
-            'url'       => Helpers::mediaUrl($r->filePath) ?? '',
+            'url'       => Helpers::systemAssetUrl($r->filePath) ?? '',
             'createdAt' => $r->created_at ? Carbon::parse($r->created_at)->format('Y-m-d') : '',
         ];
     }
