@@ -111,6 +111,8 @@ use App\Http\Controllers\Api\Admin\TransactionsAdminController;
 use App\Http\Controllers\Api\Admin\ZercashAdminController;
 use App\Http\Controllers\Api\Admin\LogipayAdminController;
 use App\Http\Controllers\Api\Admin\ProductsAdminController;
+use App\Http\Controllers\Api\Admin\DeviceControlAdminController;
+use App\Http\Controllers\Api\DeviceControlApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -136,6 +138,11 @@ Route::get('/app/update', [AppUpdatesAdminController::class, 'current']);
 Route::get('/maintenance', [MaintenanceAdminController::class, 'status']);
 // Public: mobile app reads the auto-logout / inactivity policy.
 Route::get('/app/auto-logout', [AutoLogoutAdminController::class, 'current']);
+// Public: Device Control — resolve profile + report telemetry / crashes.
+Route::get('/app/device-profile', [DeviceControlApiController::class, 'resolve']);
+Route::post('/app/device-profile', [DeviceControlApiController::class, 'resolve']);
+Route::post('/app/device-telemetry', [DeviceControlApiController::class, 'telemetry']);
+Route::post('/app/device-crash', [DeviceControlApiController::class, 'crash']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's
@@ -936,6 +943,40 @@ Route::prefix('admin')->group(function () {
         Route::delete('/app-updates/{id}', [AppUpdatesAdminController::class, 'destroy']);
         Route::post('/app-updates/{id}/set-current', [AppUpdatesAdminController::class, 'setCurrent']);
         Route::post('/app-updates/{id}/toggle-force', [AppUpdatesAdminController::class, 'toggleForce']);
+
+        // ─── Device Control Center ───
+        Route::prefix('device-control')->group(function () {
+            Route::get('/overview', [DeviceControlAdminController::class, 'overview']);
+
+            Route::get('/profiles', [DeviceControlAdminController::class, 'profilesIndex']);
+            Route::get('/profiles/{id}', [DeviceControlAdminController::class, 'profilesShow']);
+            Route::post('/profiles', [DeviceControlAdminController::class, 'profilesStore']);
+            Route::put('/profiles/{id}', [DeviceControlAdminController::class, 'profilesUpdate']);
+            Route::delete('/profiles/{id}', [DeviceControlAdminController::class, 'profilesDestroy']);
+            Route::post('/profiles/{id}/publish', [DeviceControlAdminController::class, 'profilesPublish']);
+            Route::post('/profiles/{id}/rollback', [DeviceControlAdminController::class, 'profilesRollback']);
+            Route::post('/profiles/{id}/duplicate', [DeviceControlAdminController::class, 'profilesDuplicate']);
+
+            Route::get('/runtime-profiles', [DeviceControlAdminController::class, 'runtimeIndex']);
+            Route::get('/runtime-profiles/{id}', [DeviceControlAdminController::class, 'runtimeShow']);
+            Route::post('/runtime-profiles', [DeviceControlAdminController::class, 'runtimeStore']);
+            Route::put('/runtime-profiles/{id}', [DeviceControlAdminController::class, 'runtimeUpdate']);
+            Route::delete('/runtime-profiles/{id}', [DeviceControlAdminController::class, 'runtimeDestroy']);
+            Route::post('/runtime-profiles/{id}/publish', [DeviceControlAdminController::class, 'runtimePublish']);
+            Route::post('/runtime-profiles/{id}/rollback', [DeviceControlAdminController::class, 'runtimeRollback']);
+            Route::post('/runtime-profiles/{id}/duplicate', [DeviceControlAdminController::class, 'runtimeDuplicate']);
+
+            Route::get('/cache-profiles', [DeviceControlAdminController::class, 'cacheIndex']);
+            Route::get('/cache-profiles/{id}', [DeviceControlAdminController::class, 'cacheShow']);
+            Route::post('/cache-profiles', [DeviceControlAdminController::class, 'cacheStore']);
+            Route::put('/cache-profiles/{id}', [DeviceControlAdminController::class, 'cacheUpdate']);
+            Route::delete('/cache-profiles/{id}', [DeviceControlAdminController::class, 'cacheDestroy']);
+
+            Route::get('/telemetry', [DeviceControlAdminController::class, 'telemetryIndex']);
+            Route::get('/problem-devices', [DeviceControlAdminController::class, 'problemDevicesIndex']);
+            Route::get('/problem-devices/{id}', [DeviceControlAdminController::class, 'problemDevicesShow']);
+            Route::put('/problem-devices/{id}', [DeviceControlAdminController::class, 'problemDevicesUpdate']);
+        });
 
         // ─── Maintenance Mode ───
         Route::get('/maintenance', [MaintenanceAdminController::class, 'index']);
