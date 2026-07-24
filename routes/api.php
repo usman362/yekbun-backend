@@ -971,6 +971,9 @@ Route::prefix('admin')->group(function () {
             Route::post('/cache-profiles', [DeviceControlAdminController::class, 'cacheStore']);
             Route::put('/cache-profiles/{id}', [DeviceControlAdminController::class, 'cacheUpdate']);
             Route::delete('/cache-profiles/{id}', [DeviceControlAdminController::class, 'cacheDestroy']);
+            Route::post('/cache-profiles/{id}/publish', [DeviceControlAdminController::class, 'cachePublish']);
+            Route::post('/cache-profiles/{id}/rollback', [DeviceControlAdminController::class, 'cacheRollback']);
+            Route::post('/cache-profiles/{id}/duplicate', [DeviceControlAdminController::class, 'cacheDuplicate']);
 
             Route::get('/telemetry', [DeviceControlAdminController::class, 'telemetryIndex']);
             Route::get('/problem-devices', [DeviceControlAdminController::class, 'problemDevicesIndex']);

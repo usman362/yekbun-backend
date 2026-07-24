@@ -399,6 +399,73 @@ class DeviceControlAdminController extends Controller
         return ResponseHelper::sendResponse(null, 'Cache profile deleted.');
     }
 
+    /** POST /admin/device-control/cache-profiles/{id}/publish */
+    public function cachePublish($id)
+    {
+        $p = $this->findByIdOrKey(CacheProfile::class, $id);
+        if (!$p) {
+            return ResponseHelper::sendResponse(null, 'Cache profile not found.', false, 404);
+        }
+
+        $p->status = 'published';
+        $p->published_at = now();
+        $p->history = $this->appendHistory($p->history ?? [], 'Published cache profile', $p->version);
+        $p->save();
+
+        return ResponseHelper::sendResponse($this->presentCacheProfile($p), 'Cache profile published.');
+    }
+
+    /** POST /admin/device-control/cache-profiles/{id}/rollback */
+    public function cacheRollback($id)
+    {
+        $p = $this->findByIdOrKey(CacheProfile::class, $id);
+        if (!$p) {
+            return ResponseHelper::sendResponse(null, 'Cache profile not found.', false, 404);
+        }
+
+        $p->status = 'draft';
+        $p->history = $this->appendHistory($p->history ?? [], 'Rolled back to draft', $p->version);
+        $p->save();
+
+        return ResponseHelper::sendResponse($this->presentCacheProfile($p), 'Cache profile rolled back to draft.');
+    }
+
+    /** POST /admin/device-control/cache-profiles/{id}/duplicate */
+    public function cacheDuplicate(Request $request, $id)
+    {
+        $src = $this->findByIdOrKey(CacheProfile::class, $id);
+        if (!$src) {
+            return ResponseHelper::sendResponse(null, 'Cache profile not found.', false, 404);
+        }
+
+        $baseKey = $request->input('key') ?: ($src->key . '_copy');
+        $key = Str::slug($baseKey, '_');
+        $n = 1;
+        $candidate = $key;
+        while (CacheProfile::where('key', $candidate)->exists()) {
+            $candidate = $key . '_' . $n++;
+        }
+
+        $attrs = collect($src->getAttributes())
+            ->except(['_id', 'id', 'created_at', 'updated_at'])
+            ->all();
+        $attrs['key'] = $candidate;
+        $attrs['name'] = $request->input('name') ?: ($src->name . ' Copy');
+        $attrs['status'] = 'draft';
+        $attrs['published_at'] = null;
+        $attrs['affected_devices'] = 0;
+        $attrs['history'] = [[
+            'at'      => now()->toIso8601String(),
+            'by'      => $this->adminName(),
+            'version' => $src->version,
+            'note'    => 'Duplicated from ' . $src->key,
+        ]];
+
+        $p = CacheProfile::create($attrs);
+
+        return ResponseHelper::sendResponse($this->presentCacheProfile($p), 'Cache profile duplicated.', true, 201);
+    }
+
     /* ═══════════════════════════════════════════════════════════
      * Telemetry + Problem Devices
      * ═══════════════════════════════════════════════════════════ */
@@ -444,6 +511,17 @@ class DeviceControlAdminController extends Controller
         }
         if ($request->filled('problem_type')) {
             $q->where('problem_type', $request->input('problem_type'));
+        }
+        if ($request->filled('search')) {
+            $s = $request->input('search');
+            $q->where(function ($w) use ($s) {
+                $w->where('device_group', 'like', "%{$s}%")
+                    ->orWhere('crash_signature', 'like', "%{$s}%")
+                    ->orWhere('crash_cause', 'like', "%{$s}%")
+                    ->orWhere('group_id', 'like', "%{$s}%")
+                    ->orWhere('affected_screen', 'like', "%{$s}%")
+                    ->orWhere('manufacturer', 'like', "%{$s}%");
+            });
         }
 
         $rows = $q->limit((int) $request->input('limit', 100))->get()

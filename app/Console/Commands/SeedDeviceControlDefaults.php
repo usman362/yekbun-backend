@@ -190,97 +190,235 @@ class SeedDeviceControlDefaults extends Command
 
     private function cacheDefs(): array
     {
-        $meta = [
-            'entry'    => ['Entry Cache',    'Ultra-light cache for ≤4 GB devices.',     0.4],
-            'low'      => ['Low Cache',      'Reduced footprint for 4 GB devices.',      0.7],
-            'balanced' => ['Balanced Cache', 'Default cache profile for 6–8 GB devices.', 1.0],
-            'high'     => ['High Cache',     'Premium cache for 8–12 GB devices.',       1.8],
-            'ultra'    => ['Ultra Cache',    'Maximum cache for flagship devices.',      3.0],
+        /**
+         * Explicit MB budgets by RAM class (not a flat multiplier).
+         * Entry/Low keep video+reels small to avoid OOM on ≤4 GB phones.
+         */
+        $tiers = [
+            'entry' => [
+                'name' => 'Entry Cache',
+                'description' => 'Ultra-light cache for ≤4 GB devices. Minimal video/reels disk budget; aggressive cleanup.',
+                'version' => 'v1.15.0',
+                'reserved_system' => 24,
+                'expandable' => false,
+                'cleanup_mode' => 'automatic',
+                'triggers' => ['Low Storage', 'App Start', 'App Close', 'Cache Limit Reached'],
+                'wifi_only_sync' => true,
+                'mobile_data' => false,
+                'max_sync_ratio' => 0.35,
+                'cats' => [
+                    // id => [max_mb, priority, auto_cleanup, preload, enabled]
+                    'system'       => [16, 'critical', false, true,  true],
+                    'feed'         => [20, 'high',     true,  true,  true],
+                    'video'        => [28, 'high',     true,  false, true],
+                    'reels'        => [20, 'high',     true,  true,  true],
+                    'image'        => [14, 'medium',   true,  false, true],
+                    'music'        => [6,  'medium',   true,  false, true],
+                    'chat'         => [10, 'high',     true,  false, true],
+                    'maps'         => [4,  'low',      true,  false, false],
+                    'notification' => [3,  'medium',   true,  false, true],
+                    'offline'      => [12, 'high',     false, true,  true],
+                    'downloads'    => [8,  'medium',   false, false, true],
+                    'fonts'        => [6,  'critical', false, true,  true],
+                    'emoji'        => [3,  'medium',   false, true,  true],
+                    'languages'    => [6,  'critical', false, true,  true],
+                    'policy'       => [4,  'critical', false, true,  true],
+                    'profile'      => [5,  'medium',   true,  false, true],
+                    'temp'         => [4,  'low',      true,  false, true],
+                ],
+            ],
+            'low' => [
+                'name' => 'Low Cache',
+                'description' => 'Reduced footprint for 4 GB devices. Video/reels capped; safe for continuous feed scroll.',
+                'version' => 'v1.15.0',
+                'reserved_system' => 28,
+                'expandable' => true,
+                'cleanup_mode' => 'automatic',
+                'triggers' => ['Low Storage', 'App Close', 'Cache Limit Reached', 'Background'],
+                'wifi_only_sync' => false,
+                'mobile_data' => true,
+                'max_sync_ratio' => 0.4,
+                'cats' => [
+                    'system'       => [20, 'critical', false, true,  true],
+                    'feed'         => [32, 'high',     true,  true,  true],
+                    'video'        => [48, 'high',     true,  false, true],
+                    'reels'        => [36, 'high',     true,  true,  true],
+                    'image'        => [24, 'medium',   true,  false, true],
+                    'music'        => [12, 'medium',   true,  false, true],
+                    'chat'         => [14, 'high',     true,  false, true],
+                    'maps'         => [8,  'low',      true,  false, true],
+                    'notification' => [4,  'medium',   true,  false, true],
+                    'offline'      => [20, 'high',     false, true,  true],
+                    'downloads'    => [16, 'medium',   false, false, true],
+                    'fonts'        => [6,  'critical', false, true,  true],
+                    'emoji'        => [4,  'medium',   false, true,  true],
+                    'languages'    => [6,  'critical', false, true,  true],
+                    'policy'       => [4,  'critical', false, true,  true],
+                    'profile'      => [6,  'medium',   true,  false, true],
+                    'temp'         => [6,  'low',      true,  false, true],
+                ],
+            ],
+            'balanced' => [
+                'name' => 'Balanced Cache',
+                'description' => 'Default cache profile for 6–8 GB mid-tier smartphones.',
+                'version' => 'v1.15.0',
+                'reserved_system' => 32,
+                'expandable' => true,
+                'cleanup_mode' => 'automatic',
+                'triggers' => ['Low Storage', 'App Close', 'Cache Limit Reached'],
+                'wifi_only_sync' => false,
+                'mobile_data' => true,
+                'max_sync_ratio' => 0.5,
+                'cats' => [
+                    'system'       => [32, 'critical', false, true,  true],
+                    'feed'         => [48, 'high',     true,  true,  true],
+                    'video'        => [96, 'high',     true,  false, true],
+                    'reels'        => [64, 'high',     true,  true,  true],
+                    'image'        => [48, 'medium',   true,  false, true],
+                    'music'        => [24, 'medium',   true,  false, true],
+                    'chat'         => [16, 'high',     true,  false, true],
+                    'maps'         => [12, 'low',      true,  false, true],
+                    'notification' => [8,  'medium',   true,  false, true],
+                    'offline'      => [32, 'high',     false, true,  true],
+                    'downloads'    => [48, 'medium',   false, false, true],
+                    'fonts'        => [8,  'critical', false, true,  true],
+                    'emoji'        => [8,  'medium',   false, true,  true],
+                    'languages'    => [8,  'critical', false, true,  true],
+                    'policy'       => [8,  'critical', false, true,  true],
+                    'profile'      => [8,  'medium',   true,  false, true],
+                    'temp'         => [8,  'low',      true,  false, true],
+                ],
+            ],
+            'high' => [
+                'name' => 'High Cache',
+                'description' => 'Premium cache for 8–12 GB devices. Larger video/reels/offline budgets.',
+                'version' => 'v1.15.0',
+                'reserved_system' => 40,
+                'expandable' => true,
+                'cleanup_mode' => 'hybrid',
+                'triggers' => ['Low Storage', 'Cache Limit Reached'],
+                'wifi_only_sync' => false,
+                'mobile_data' => true,
+                'max_sync_ratio' => 0.55,
+                'cats' => [
+                    'system'       => [40, 'critical', false, true,  true],
+                    'feed'         => [80, 'high',     true,  true,  true],
+                    'video'        => [180,'high',     true,  false, true],
+                    'reels'        => [120,'high',     true,  true,  true],
+                    'image'        => [72, 'medium',   true,  false, true],
+                    'music'        => [40, 'medium',   true,  false, true],
+                    'chat'         => [24, 'high',     true,  false, true],
+                    'maps'         => [20, 'low',      true,  false, true],
+                    'notification' => [10, 'medium',   true,  false, true],
+                    'offline'      => [56, 'high',     false, true,  true],
+                    'downloads'    => [80, 'medium',   false, false, true],
+                    'fonts'        => [10, 'critical', false, true,  true],
+                    'emoji'        => [10, 'medium',   false, true,  true],
+                    'languages'    => [10, 'critical', false, true,  true],
+                    'policy'       => [8,  'critical', false, true,  true],
+                    'profile'      => [12, 'medium',   true,  false, true],
+                    'temp'         => [12, 'low',      true,  false, true],
+                ],
+            ],
+            'ultra' => [
+                'name' => 'Ultra Cache',
+                'description' => 'Maximum cache for flagship / 12 GB+ devices. Prefetch-friendly.',
+                'version' => 'v1.15.0',
+                'reserved_system' => 48,
+                'expandable' => true,
+                'cleanup_mode' => 'hybrid',
+                'triggers' => ['Low Storage', 'Cache Limit Reached'],
+                'wifi_only_sync' => false,
+                'mobile_data' => true,
+                'max_sync_ratio' => 0.6,
+                'cats' => [
+                    'system'       => [48, 'critical', false, true,  true],
+                    'feed'         => [120,'high',     true,  true,  true],
+                    'video'        => [320,'high',     true,  false, true],
+                    'reels'        => [200,'high',     true,  true,  true],
+                    'image'        => [120,'medium',   true,  false, true],
+                    'music'        => [64, 'medium',   true,  false, true],
+                    'chat'         => [32, 'high',     true,  false, true],
+                    'maps'         => [32, 'low',      true,  false, true],
+                    'notification' => [12, 'medium',   true,  false, true],
+                    'offline'      => [96, 'high',     false, true,  true],
+                    'downloads'    => [128,'medium',   false, false, true],
+                    'fonts'        => [12, 'critical', false, true,  true],
+                    'emoji'        => [12, 'medium',   false, true,  true],
+                    'languages'    => [12, 'critical', false, true,  true],
+                    'policy'       => [8,  'critical', false, true,  true],
+                    'profile'      => [16, 'medium',   true,  false, true],
+                    'temp'         => [16, 'low',      true,  false, true],
+                ],
+            ],
+        ];
+
+        $names = [
+            'system' => 'System Cache', 'feed' => 'Feed Cache', 'video' => 'Video Cache',
+            'reels' => 'Reels Cache', 'image' => 'Image Cache', 'music' => 'Music Cache',
+            'chat' => 'Chat Cache', 'maps' => 'Maps Cache', 'notification' => 'Notification Cache',
+            'offline' => 'Offline Cache', 'downloads' => 'Downloads', 'fonts' => 'Fonts',
+            'emoji' => 'Emoji', 'languages' => 'Languages', 'policy' => 'Policy',
+            'profile' => 'Profile Images', 'temp' => 'Temporary Files',
         ];
 
         $out = [];
-        foreach ($meta as $key => [$name, $desc, $mult]) {
-            $cats = $this->buildCacheCategories($mult);
-            $total = array_sum(array_column($cats, 'max_size'));
+        foreach ($tiers as $key => $t) {
+            $cats = [];
+            $total = 0;
+            foreach ($t['cats'] as $id => [$max, $priority, $auto, $preload, $enabled]) {
+                $total += (int) $max;
+                $cats[] = [
+                    'id'           => $id,
+                    'name'         => $names[$id] ?? $id,
+                    'enabled'      => (bool) $enabled,
+                    'current_size' => (int) round($max * 0.55),
+                    'max_size'     => (int) $max,
+                    'priority'     => $priority,
+                    'auto_cleanup' => (bool) $auto,
+                    'preload'      => (bool) $preload,
+                ];
+            }
+
             $out[] = [
                 'key'                    => $key,
-                'name'                   => $name,
-                'description'            => $desc,
-                'version'                => 'v1.14.2',
+                'name'                   => $t['name'],
+                'description'            => $t['description'],
+                'version'                => $t['version'],
                 'status'                 => 'published',
                 'linked_device_profiles' => [$key],
                 'affected_devices'       => self::AFFECTED[$key],
                 'published_at'           => now(),
                 'allocation' => [
-                    'total_size'       => $total,
-                    'mode'             => 'hybrid',
-                    'max_size'         => (int) round($total * 1.2),
-                    'reserved_system'  => 32,
-                    'expandable'       => true,
+                    'total_size'      => $total,
+                    'mode'            => 'hybrid',
+                    'max_size'        => (int) round($total * 1.2),
+                    'reserved_system' => $t['reserved_system'],
+                    'expandable'      => $t['expandable'],
                 ],
                 'categories' => $cats,
                 'cleanup' => [
-                    'mode'                  => 'automatic',
-                    'triggers'              => ['Low Storage', 'App Close', 'Cache Limit Reached'],
-                    'order'                 => 'priority',
-                    'protected_categories'  => ['system', 'fonts', 'languages', 'policy'],
+                    'mode'                 => $t['cleanup_mode'],
+                    'triggers'             => $t['triggers'],
+                    'order'                => 'priority',
+                    'protected_categories' => ['system', 'fonts', 'languages', 'policy'],
                 ],
                 'sync' => [
                     'on_login'      => true,
                     'on_app_start'  => true,
-                    'background'    => true,
-                    'wifi_only'     => false,
-                    'mobile_data'   => true,
+                    'background'    => $key !== 'entry',
+                    'wifi_only'     => $t['wifi_only_sync'],
+                    'mobile_data'   => $t['mobile_data'],
                     'only_changed'  => true,
                     'full_refresh'  => false,
-                    'max_sync_size' => (int) round($total * 0.5),
+                    'max_sync_size' => (int) round($total * $t['max_sync_ratio']),
                 ],
                 'history' => [[
-                    'at' => now()->toIso8601String(),
-                    'by' => 'System',
-                    'version' => 'v1.14.2',
-                    'note' => 'Seeded default cache profile',
+                    'at'      => now()->toIso8601String(),
+                    'by'      => 'System',
+                    'version' => $t['version'],
+                    'note'    => 'Memory-tier cache budgets v1.15.0 (Entry→Ultra)',
                 ]],
-            ];
-        }
-
-        return $out;
-    }
-
-    private function buildCacheCategories(float $multiplier): array
-    {
-        $defs = [
-            ['system',       'System Cache',       'critical', false, true,  32],
-            ['feed',         'Feed Cache',         'high',     true,  true,  48],
-            ['video',        'Video Cache',        'high',     true,  false, 96],
-            ['reels',        'Reels Cache',        'high',     true,  true,  64],
-            ['image',        'Image Cache',        'medium',   true,  false, 48],
-            ['music',        'Music Cache',        'medium',   true,  false, 24],
-            ['chat',         'Chat Cache',         'high',     true,  false, 16],
-            ['maps',         'Maps Cache',         'low',      true,  false, 12],
-            ['notification', 'Notification Cache', 'medium',   true,  false, 8],
-            ['offline',      'Offline Cache',      'high',     false, true,  32],
-            ['downloads',    'Downloads',          'medium',   false, false, 48],
-            ['fonts',        'Fonts',              'critical', false, true,  8],
-            ['emoji',        'Emoji',              'medium',   false, true,  8],
-            ['languages',    'Languages',          'critical', false, true,  8],
-            ['policy',       'Policy',             'critical', false, true,  8],
-            ['profile',      'Profile Images',     'medium',   true,  false, 8],
-            ['temp',         'Temporary Files',    'low',      true,  false, 8],
-        ];
-
-        $out = [];
-        foreach ($defs as [$id, $name, $priority, $auto, $preload, $base]) {
-            $max = (int) round($base * $multiplier);
-            $out[] = [
-                'id'            => $id,
-                'name'          => $name,
-                'enabled'       => true,
-                'current_size'  => (int) round($max * 0.6),
-                'max_size'      => $max,
-                'priority'      => $priority,
-                'auto_cleanup'  => $auto,
-                'preload'       => $preload,
             ];
         }
 
