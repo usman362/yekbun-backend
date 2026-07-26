@@ -28,18 +28,28 @@ class DeviceControlAdminController extends Controller
     {
         $profiles = DeviceProfile::orderBy('priority')->get();
         $totalDevices = (int) $profiles->sum('assigned_devices');
-        $critical = ProblemDevice::where('severity', 'Critical')
+        if ($totalDevices <= 0) {
+            $totalDevices = (int) DeviceTelemetry::count();
+        }
+
+        $critical = (int) ProblemDevice::where('severity', 'Critical')
             ->whereIn('status', ['Open', 'Under Review'])
             ->sum('affected_devices');
         $openProblems = ProblemDevice::whereIn('status', ['Open', 'Under Review'])->count();
 
+        $telCount = (int) DeviceTelemetry::count();
+        $crashDevices = (int) DeviceTelemetry::where('crash_count', '>', 0)->count();
+        $crashFree = $telCount > 0
+            ? round((($telCount - $crashDevices) / $telCount) * 100, 1) . '%'
+            : '—';
+
         return ResponseHelper::sendResponse([
             'stats' => [
-                'total_devices'        => $totalDevices ?: 12480,
+                'total_devices'        => $totalDevices,
                 'active_profiles'      => $profiles->where('status', 'published')->count(),
-                'stable_devices'       => max(0, ($totalDevices ?: 12480) - (int) $critical),
-                'critical_devices'     => (int) $critical,
-                'crash_free_sessions'  => '98.6%',
+                'stable_devices'       => max(0, $totalDevices - $critical),
+                'critical_devices'     => $critical,
+                'crash_free_sessions'  => $crashFree,
                 'pending_profiles'     => $profiles->where('status', 'draft')->count(),
                 'open_problem_groups'  => $openProblems,
             ],
@@ -481,13 +491,17 @@ class DeviceControlAdminController extends Controller
         if ($request->filled('profile_key')) {
             $q->where('profile_key', $request->input('profile_key'));
         }
+        if ($request->filled('manufacturer')) {
+            $q->where('manufacturer', $request->input('manufacturer'));
+        }
         if ($request->filled('search')) {
             $s = $request->input('search');
             $q->where(function ($w) use ($s) {
                 $w->where('name', 'like', "%{$s}%")
                     ->orWhere('model', 'like', "%{$s}%")
                     ->orWhere('device_id', 'like', "%{$s}%")
-                    ->orWhere('user_id', 'like', "%{$s}%");
+                    ->orWhere('user_id', 'like', "%{$s}%")
+                    ->orWhere('manufacturer', 'like', "%{$s}%");
             });
         }
 
