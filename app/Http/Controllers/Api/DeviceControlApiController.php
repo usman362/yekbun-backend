@@ -44,6 +44,10 @@ class DeviceControlApiController extends Controller
             $platform = strtolower($request->input('os')) === 'ios' ? 'ios' : 'android';
         }
 
+        // On app use: ensure a device profile exists for this hardware (create if missing).
+        $ensured = $this->ensureDeviceProfileForHardware($request, $ramClass, $cpuTier);
+        $profileCreated = $ensured['created'];
+
         $profiles = DeviceProfile::where('status', 'published')
             ->orderBy('priority', 'desc')
             ->get();
@@ -56,6 +60,11 @@ class DeviceControlApiController extends Controller
             }
         }
 
+        // Prefer the ensured profile (may be newly created / draft) when no published match.
+        if (!$matched && $ensured['profile']) {
+            $matched = $ensured['profile'];
+        }
+
         // Fallback: lowest priority published (usually Entry), else any Entry key.
         if (!$matched) {
             $matched = DeviceProfile::where('status', 'published')->orderBy('priority')->first()
@@ -64,6 +73,16 @@ class DeviceControlApiController extends Controller
 
         if (!$matched) {
             return ResponseHelper::sendResponse(null, 'No device profile configured.', false, 404);
+        }
+
+        // Touch usage counters so dashboard sees live activity.
+        $matched->assigned_devices = (int) ($matched->assigned_devices ?? 0) + ($request->filled('device_id') ? 0 : 0);
+        // Upsert telemetry when device_id sent on resolve (app open = record device).
+        if ($request->filled('device_id')) {
+            $this->upsertTelemetryFromRequest($request, $matched->key, $ramClass, $cpuTier);
+            // Count unique devices on this profile approximately via telemetry.
+            $matched->assigned_devices = (int) DeviceTelemetry::where('profile_key', $matched->key)->count();
+            $matched->save();
         }
 
         $runtime = RuntimeProfile::where('key', $matched->runtime_profile_key)
@@ -82,21 +101,36 @@ class DeviceControlApiController extends Controller
                 'cpu_tier'  => $cpuTier,
                 'platform'  => $platform ?: 'shared',
             ],
+            'profile_created' => $profileCreated,
             'profile' => $this->presentDevice($matched),
             'runtime' => $runtime ? $this->presentRuntime($runtime) : null,
             'cache'   => $cache ? $this->presentCache($cache) : null,
-        ], 'Device profile resolved.');
+        ], $profileCreated
+            ? 'Device profile created from app use and resolved.'
+            : 'Device profile resolved.');
     }
 
     /**
      * Mobile heartbeat — upsert by device_id.
      * Auth optional; if JWT present, user_id is taken from auth when not sent.
+     * Also ensures a device profile exists for this hardware (app use → record).
      */
     public function telemetry(Request $request)
     {
         $request->validate([
             'device_id' => 'required|string|max:120',
         ]);
+
+        $ramClass = $this->normalizeRamClass(
+            $request->input('ram_class') ?: $request->input('ram')
+        );
+        $cpuTier = strtolower((string) ($request->input('cpu_tier') ?: $request->input('cpu') ?: 'mid'));
+
+        $ensured = $this->ensureDeviceProfileForHardware($request, $ramClass, $cpuTier);
+        $profile = $ensured['profile'];
+        $profileKey = $request->input('profile_key')
+            ?: ($profile?->key)
+            ?: $this->inferTierKey($ramClass, $cpuTier);
 
         $deviceId = $request->input('device_id');
         $userId = $request->input('user_id')
@@ -111,9 +145,9 @@ class DeviceControlApiController extends Controller
             'os'                 => $request->input('os', $row->os),
             'os_version'         => $request->input('os_version', $row->os_version),
             'ram'                => $request->input('ram', $row->ram),
-            'ram_class'          => $this->normalizeRamClass($request->input('ram_class') ?: $request->input('ram')) ?: $row->ram_class,
-            'cpu_tier'           => $request->input('cpu_tier', $row->cpu_tier),
-            'profile_key'        => $request->input('profile_key', $row->profile_key),
+            'ram_class'          => $ramClass ?: $row->ram_class,
+            'cpu_tier'           => $request->input('cpu_tier', $row->cpu_tier) ?: $cpuTier,
+            'profile_key'        => $profileKey,
             'cache_used_pct'     => (int) $request->input('cache_used_pct', $row->cache_used_pct ?? 0),
             'memory_usage_pct'   => (int) $request->input('memory_usage_pct', $row->memory_usage_pct ?? 0),
             'fps'                => (int) $request->input('fps', $row->fps ?? 0),
@@ -129,18 +163,25 @@ class DeviceControlApiController extends Controller
         ]);
         $row->save();
 
+        if ($profile) {
+            $profile->assigned_devices = (int) DeviceTelemetry::where('profile_key', $profile->key)->count();
+            $profile->save();
+        }
+
         return ResponseHelper::sendResponse([
-            'device_id'   => $row->device_id,
-            'profile_key' => $row->profile_key,
-            'status'      => $row->status,
-            'reported_at' => optional($row->reported_at)->toIso8601String(),
-        ], 'Telemetry saved.');
+            'device_id'        => $row->device_id,
+            'profile_key'      => $row->profile_key,
+            'profile_created'  => $ensured['created'],
+            'status'           => $row->status,
+            'reported_at'      => optional($row->reported_at)->toIso8601String(),
+        ], $ensured['created']
+            ? 'Telemetry saved. Device profile created from app use.'
+            : 'Telemetry saved.');
     }
 
     /**
      * Lightweight crash / ANR report — upserts or bumps a problem group.
-     * Also ensures a Device Profile exists for this hardware (create draft if missing)
-     * and links the problem group to that profile.
+     * Links to an existing device profile (does NOT create profiles — that happens on app use / resolve).
      */
     public function crash(Request $request)
     {
@@ -156,11 +197,11 @@ class DeviceControlApiController extends Controller
             $request->input('ram_class') ?: $request->input('ram')
         );
         $cpuTier = strtolower((string) ($request->input('cpu_tier') ?: $request->input('cpu') ?: 'mid'));
+        $tierKey = $this->inferTierKey($ramClass, $cpuTier);
 
-        // Ensure a device profile exists for this hardware (create draft if needed).
-        $ensured = $this->ensureDeviceProfileForHardware($request, $ramClass, $cpuTier);
-        $profile = $ensured['profile'];
-        $profileCreated = $ensured['created'];
+        // Link only — do not create profiles from crashes.
+        $profile = DeviceProfile::where('key', $request->input('profile_key') ?: $tierKey)->first()
+            ?? DeviceProfile::where('status', 'published')->orderBy('priority')->first();
 
         $group = ProblemDevice::where('crash_signature', $signature)->first();
         $isNewGroup = !$group;
@@ -180,7 +221,7 @@ class DeviceControlApiController extends Controller
         $profileKey = $request->input('profile_key')
             ?: ($profile?->key)
             ?: $group->profile_key
-            ?: $this->inferTierKey($ramClass, $cpuTier);
+            ?: $tierKey;
 
         $group->fill([
             'device_group'        => $request->input('device_group', $request->input('name', $group->device_group)),
@@ -215,7 +256,6 @@ class DeviceControlApiController extends Controller
         ]);
         $group->save();
 
-        // Bump device telemetry crash counters when device_id known.
         if ($request->filled('device_id')) {
             $tel = DeviceTelemetry::firstOrNew(['device_id' => $request->input('device_id')]);
             $tel->fill([
@@ -238,22 +278,45 @@ class DeviceControlApiController extends Controller
         }
 
         return ResponseHelper::sendResponse([
-            'group_id'           => $group->group_id,
-            'affected_devices'   => (int) $group->affected_devices,
-            'status'             => $group->status,
-            'is_new_group'       => $isNewGroup,
-            'profile_key'        => $profileKey,
-            'profile_created'    => $profileCreated,
-            'profile_status'     => $profile?->status,
-            'cache_profile_key'  => $group->cache_profile_key,
-            'runtime_profile_key'=> $group->runtime_profile_key,
-        ], $profileCreated
-            ? 'Crash report accepted. Draft device profile created and linked.'
-            : 'Crash report accepted. Linked to existing device profile.', true, 201);
+            'group_id'            => $group->group_id,
+            'affected_devices'    => (int) $group->affected_devices,
+            'status'              => $group->status,
+            'is_new_group'        => $isNewGroup,
+            'profile_key'         => $profileKey,
+            'cache_profile_key'   => $group->cache_profile_key,
+            'runtime_profile_key' => $group->runtime_profile_key,
+        ], 'Crash report accepted.', true, 201);
+    }
+
+    private function upsertTelemetryFromRequest(
+        Request $request,
+        string $profileKey,
+        ?string $ramClass,
+        string $cpuTier
+    ): void {
+        $tel = DeviceTelemetry::firstOrNew(['device_id' => $request->input('device_id')]);
+        $tel->fill([
+            'user_id'          => $request->input('user_id', $tel->user_id),
+            'name'             => $request->input('name', $tel->name),
+            'model'            => $request->input('model', $tel->model),
+            'manufacturer'     => $request->input('manufacturer', $tel->manufacturer),
+            'os'               => $request->input('os', $tel->os),
+            'os_version'       => $request->input('os_version', $tel->os_version),
+            'ram'              => $request->input('ram', $tel->ram),
+            'ram_class'        => $ramClass ?: $tel->ram_class,
+            'cpu_tier'         => $request->input('cpu_tier', $tel->cpu_tier) ?: $cpuTier,
+            'profile_key'      => $profileKey,
+            'status'           => $tel->status ?: 'healthy',
+            'last_seen_bucket' => 'online',
+            'last_seen_at'     => now(),
+            'reported_at'      => now(),
+        ]);
+        $tel->save();
     }
 
     /**
-     * Find matching published profile, else tier key profile, else create a draft.
+     * On mobile app use (resolve / telemetry): find matching profile or create one
+     * so it appears in Device Control records.
      *
      * @return array{profile: ?DeviceProfile, created: bool}
      */
@@ -261,7 +324,7 @@ class DeviceControlApiController extends Controller
     {
         $tierKey = $this->inferTierKey($ramClass, $cpuTier);
 
-        // 1) Prefer an existing published hardware match (same as resolve).
+        // 1) Prefer existing published hardware match.
         $published = DeviceProfile::where('status', 'published')->orderBy('priority', 'desc')->get();
         foreach ($published as $p) {
             if ($this->matchesHardware($p, $ramClass, $cpuTier, '', $request)) {
@@ -269,16 +332,15 @@ class DeviceControlApiController extends Controller
             }
         }
 
-        // 2) Existing profile by inferred tier key (draft or published).
+        // 2) Existing profile by tier key (any status).
         $existing = DeviceProfile::where('key', $tierKey)->first();
         if ($existing) {
             return ['profile' => $existing, 'created' => false];
         }
 
-        // 3) Create draft device profile for this hardware tier.
-        $safeKey = $tierKey;
-        $cacheKey = CacheProfile::where('key', $safeKey)->exists() ? $safeKey : 'entry';
-        $runtimeKey = RuntimeProfile::where('key', $safeKey)->exists() ? $safeKey : 'entry';
+        // 3) Create published profile so app works + dashboard shows the record.
+        $cacheKey = CacheProfile::where('key', $tierKey)->exists() ? $tierKey : 'entry';
+        $runtimeKey = RuntimeProfile::where('key', $tierKey)->exists() ? $tierKey : 'entry';
         if (! CacheProfile::where('key', $cacheKey)->exists()) {
             $cacheKey = CacheProfile::where('status', 'published')->value('key') ?: $cacheKey;
         }
@@ -286,25 +348,25 @@ class DeviceControlApiController extends Controller
             $runtimeKey = RuntimeProfile::where('status', 'published')->value('key') ?: $runtimeKey;
         }
 
-        $name = ucfirst($tierKey);
         $colors = [
             'entry' => '#94a3b8', 'low' => '#f97316', 'balanced' => '#6366f1',
             'high' => '#22c55e', 'ultra' => '#a855f7',
         ];
         $priorities = ['entry' => 1, 'low' => 2, 'balanced' => 3, 'high' => 4, 'ultra' => 5];
         $rams = $ramClass ? [$ramClass] : ['4'];
-        $cpus = array_values(array_unique(array_filter([$cpuTier, $cpuTier === 'entry' ? 'low' : null])));
+        $cpus = array_values(array_unique(array_filter([$cpuTier])));
 
         $p = new DeviceProfile();
         $p->fill([
             'key'                     => $tierKey,
-            'name'                    => $name,
-            'description'             => "Auto-created from problem device / crash report ({$rams[0]} GB · {$cpuTier}). Review and publish in Device Control.",
+            'name'                    => ucfirst($tierKey),
+            'description'             => "Auto-created from mobile app use ({$rams[0]} GB · {$cpuTier}).",
             'priority'                => $priorities[$tierKey] ?? 2,
             'color'                   => $colors[$tierKey] ?? '#6366f1',
             'version'                 => 'v1.0.0-auto',
             'platform'                => 'shared',
-            'status'                  => 'draft',
+            'status'                  => 'published',
+            'published_at'            => now(),
             'hardware'                => [
                 'ram'      => $rams,
                 'cpu_tier' => $cpus ?: ['mid'],
@@ -315,8 +377,8 @@ class DeviceControlApiController extends Controller
             'runtime_dependency_mode' => 'latest',
             'assigned_devices'        => 0,
             'assignment'              => [
-                'mode' => 'automatic',
-                'rule_priority' => $priorities[$tierKey] ?? 2,
+                'mode'           => 'automatic',
+                'rule_priority'  => $priorities[$tierKey] ?? 2,
                 'match_strategy' => 'all',
             ],
             'fallback'                => [
@@ -328,9 +390,9 @@ class DeviceControlApiController extends Controller
             'memory'                  => ['max' => 900, 'warn' => 700, 'critical' => 820],
             'history'                 => [[
                 'at'      => now()->toIso8601String(),
-                'by'      => 'Mobile Crash API',
+                'by'      => 'Mobile App',
                 'version' => 'v1.0.0-auto',
-                'note'    => 'Auto-created from problem device report',
+                'note'    => 'Auto-created from mobile app use (resolve/telemetry)',
             ]],
         ]);
         $p->save();
