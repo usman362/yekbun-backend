@@ -74,7 +74,8 @@ class AuthController extends Controller
                 'method' => 'password',
             ],
             $request,
-            $user
+            $user,
+            ['module' => 'Auth', 'page' => 'Login', 'action' => 'Admin Login']
         );
 
         return ResponseHelper::sendResponse([
@@ -253,8 +254,13 @@ class AuthController extends Controller
             'auth',
             ['role' => $user?->is_superadmin ? 'super_admin' : 'admin'],
             $request,
-            $user
+            $user,
+            ['module' => 'Auth', 'page' => 'Logout', 'action' => 'Admin Logout']
         );
+
+        if ($user) {
+            SystemAdminController::clearPresenceForUser((string) $user->_id);
+        }
 
         return ResponseHelper::sendResponse([], 'Logged out successfully.');
     }

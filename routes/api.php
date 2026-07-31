@@ -724,7 +724,7 @@ Route::middleware('jwt.custom')->group(function () {
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login']);
 
-    Route::middleware(['jwt.custom', 'admin.user'])->group(function () {
+    Route::middleware(['jwt.custom', 'admin.user', 'admin.activity'])->group(function () {
         Route::get('/me', [AdminAuthController::class, 'me']);
         Route::put('/profile', [AdminAuthController::class, 'updateProfile']);
         Route::post('/profile', [AdminAuthController::class, 'updateProfile']); // multipart fields
@@ -1003,6 +1003,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/system/health', [SystemAdminController::class, 'health']);
         Route::get('/system/backups', [SystemAdminController::class, 'backups']);
         Route::get('/system/api-status', [SystemAdminController::class, 'apiStatus']);
+        Route::get('/system/activity-overview', [SystemAdminController::class, 'activityOverview']);
+        Route::post('/system/presence', [SystemAdminController::class, 'presence']);
 
         // ─── App settings document ───
         Route::get('/settings/document', [SettingsAdminController::class, 'show']);
