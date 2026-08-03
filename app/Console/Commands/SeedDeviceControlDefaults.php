@@ -67,110 +67,221 @@ class SeedDeviceControlDefaults extends Command
 
     private function runtimeDefs(): array
     {
+        /**
+         * Explicit memory-tier runtime (v1.15.0) — aligned with Cache budgets.
+         * Entry/Low: few concurrent videos, lazy feed/reels, conservative network.
+         * Numbers match ChatGPT handoff baseline (video start / buffer / max_active).
+         */
         $tiers = [
-            'entry'    => ['p' => 2,  'q' => '240p',  'feed' => 5,  'video' => 1, 'r' => 'minimal',  'net' => 'conservative', 'dec' => 'hardware', 'ba' => 128, 'va' => 256,  'image' => 'low',      'anim' => 'off'],
-            'low'      => ['p' => 3,  'q' => '480p',  'feed' => 8,  'video' => 2, 'r' => 'minimal',  'net' => 'conservative', 'dec' => 'hardware', 'ba' => 192, 'va' => 384,  'image' => 'medium',   'anim' => 'reduced'],
-            'balanced' => ['p' => 6,  'q' => '720p',  'feed' => 12, 'video' => 3, 'r' => 'balanced', 'net' => 'balanced',     'dec' => 'hybrid',   'ba' => 256, 'va' => 512,  'image' => 'high',     'anim' => 'standard'],
-            'high'     => ['p' => 10, 'q' => '1080p', 'feed' => 20, 'video' => 4, 'r' => 'rich',     'net' => 'aggressive',   'dec' => 'hybrid',   'ba' => 384, 'va' => 768,  'image' => 'high',     'anim' => 'rich'],
-            'ultra'    => ['p' => 16, 'q' => 'auto',  'feed' => 30, 'video' => 6, 'r' => 'rich',     'net' => 'aggressive',   'dec' => 'hybrid',   'ba' => 512, 'va' => 1024, 'image' => 'original', 'anim' => 'rich'],
-        ];
-
-        $meta = [
-            'entry'    => ['Entry Runtime',    'Ultra-light runtime for low-end devices.'],
-            'low'      => ['Low Runtime',      'Reduced runtime footprint for 4 GB devices.'],
-            'balanced' => ['Balanced Runtime', 'Default runtime for 6–8 GB devices.'],
-            'high'     => ['High Runtime',     'Premium runtime for 8–12 GB devices.'],
-            'ultra'    => ['Ultra Runtime',    'Maximum runtime fidelity for flagship devices.'],
+            'entry' => [
+                'name' => 'Entry Runtime',
+                'description' => 'Ultra-light runtime for ≤4 GB. No autoplay; 1 active video; lazy feed/reels — avoid OOM on scroll.',
+                'api' => [
+                    'max_parallel' => 2, 'background' => false, 'retry' => 'smart', 'queue_size' => 8,
+                    'timeout_ms' => 12000, 'connection_pool' => 2, 'priority' => 'critical-first',
+                    'prefetch' => false, 'lazy_loading' => true, 'offline' => 'cache-first',
+                ],
+                'feed' => [
+                    'batch_size' => 5, 'preload' => 1, 'render_distance' => 1, 'refresh_policy' => 'pull',
+                    'api_strategy' => 'cache-first', 'cache_usage' => 40, 'lazy_rendering' => true,
+                    'memory_budget' => 128, 'strategy' => 'lazy',
+                ],
+                'video' => [
+                    'autoplay' => false, 'preload' => 2, 'buffer' => 4, 'decoder' => 'hardware',
+                    'hardware_decoder' => true, 'software_decoder' => false, 'quality' => '240p',
+                    'max_active' => 1, 'pause_strategy' => 'off-screen', 'resume_strategy' => 'manual',
+                    'memory_budget' => 256,
+                ],
+                'reels' => [
+                    'initial' => 1, 'next_preload' => 1, 'unseen_pct' => 45, 'new_pct' => 25,
+                    'popular_pct' => 20, 'following_pct' => 5, 'watched_pct' => 5,
+                    'scroll_cache' => 2, 'video_queue' => 2, 'recommendation_refresh' => 45,
+                    'strategy' => 'lazy',
+                ],
+                'rendering' => [
+                    'image_quality' => 'low', 'image_compression' => 80, 'animation' => 'off',
+                    'blur' => false, 'shadows' => false, 'transition_quality' => 'minimal',
+                    'virtualization' => true, 'flat_list_optimization' => true,
+                    'window_size' => 5, 'strategy' => 'minimal',
+                ],
+                'network' => [
+                    'wifi' => true, 'mobile' => true, 'weak_network_mode' => true, 'offline_mode' => true,
+                    'background_sync' => false, 'adaptive_download' => true, 'bandwidth_saver' => true,
+                    'mode' => 'conservative',
+                ],
+            ],
+            'low' => [
+                'name' => 'Low Runtime',
+                'description' => 'Safe continuous scroll for 4 GB. Max 2 videos; lazy reels; bandwidth saver on.',
+                'api' => [
+                    'max_parallel' => 3, 'background' => false, 'retry' => 'smart', 'queue_size' => 12,
+                    'timeout_ms' => 14000, 'connection_pool' => 3, 'priority' => 'balanced',
+                    'prefetch' => false, 'lazy_loading' => true, 'offline' => 'cache-first',
+                ],
+                'feed' => [
+                    'batch_size' => 8, 'preload' => 2, 'render_distance' => 2, 'refresh_policy' => 'pull',
+                    'api_strategy' => 'hybrid', 'cache_usage' => 50, 'lazy_rendering' => true,
+                    'memory_budget' => 192, 'strategy' => 'lazy',
+                ],
+                'video' => [
+                    'autoplay' => true, 'preload' => 4, 'buffer' => 8, 'decoder' => 'hardware',
+                    'hardware_decoder' => true, 'software_decoder' => false, 'quality' => '480p',
+                    'max_active' => 2, 'pause_strategy' => 'off-screen', 'resume_strategy' => 'smart',
+                    'memory_budget' => 384,
+                ],
+                'reels' => [
+                    'initial' => 1, 'next_preload' => 1, 'unseen_pct' => 40, 'new_pct' => 25,
+                    'popular_pct' => 20, 'following_pct' => 10, 'watched_pct' => 5,
+                    'scroll_cache' => 3, 'video_queue' => 4, 'recommendation_refresh' => 30,
+                    'strategy' => 'lazy',
+                ],
+                'rendering' => [
+                    'image_quality' => 'medium', 'image_compression' => 70, 'animation' => 'reduced',
+                    'blur' => false, 'shadows' => false, 'transition_quality' => 'minimal',
+                    'virtualization' => true, 'flat_list_optimization' => true,
+                    'window_size' => 7, 'strategy' => 'minimal',
+                ],
+                'network' => [
+                    'wifi' => true, 'mobile' => true, 'weak_network_mode' => true, 'offline_mode' => true,
+                    'background_sync' => false, 'adaptive_download' => true, 'bandwidth_saver' => true,
+                    'mode' => 'conservative',
+                ],
+            ],
+            'balanced' => [
+                'name' => 'Balanced Runtime',
+                'description' => 'Default for 6–8 GB. 720p, 3 active videos, adaptive feed/reels.',
+                'api' => [
+                    'max_parallel' => 6, 'background' => true, 'retry' => 'smart', 'queue_size' => 24,
+                    'timeout_ms' => 15000, 'connection_pool' => 6, 'priority' => 'balanced',
+                    'prefetch' => true, 'lazy_loading' => false, 'offline' => 'cache-first',
+                ],
+                'feed' => [
+                    'batch_size' => 12, 'preload' => 3, 'render_distance' => 3, 'refresh_policy' => 'pull',
+                    'api_strategy' => 'hybrid', 'cache_usage' => 60, 'lazy_rendering' => true,
+                    'memory_budget' => 256, 'strategy' => 'adaptive',
+                ],
+                'video' => [
+                    'autoplay' => true, 'preload' => 6, 'buffer' => 12, 'decoder' => 'hybrid',
+                    'hardware_decoder' => true, 'software_decoder' => true, 'quality' => '720p',
+                    'max_active' => 3, 'pause_strategy' => 'off-screen', 'resume_strategy' => 'smart',
+                    'memory_budget' => 512,
+                ],
+                'reels' => [
+                    'initial' => 2, 'next_preload' => 2, 'unseen_pct' => 40, 'new_pct' => 25,
+                    'popular_pct' => 20, 'following_pct' => 10, 'watched_pct' => 5,
+                    'scroll_cache' => 5, 'video_queue' => 6, 'recommendation_refresh' => 15,
+                    'strategy' => 'adaptive',
+                ],
+                'rendering' => [
+                    'image_quality' => 'high', 'image_compression' => 60, 'animation' => 'standard',
+                    'blur' => true, 'shadows' => true, 'transition_quality' => 'smooth',
+                    'virtualization' => true, 'flat_list_optimization' => true,
+                    'window_size' => 11, 'strategy' => 'balanced',
+                ],
+                'network' => [
+                    'wifi' => true, 'mobile' => true, 'weak_network_mode' => false, 'offline_mode' => true,
+                    'background_sync' => true, 'adaptive_download' => true, 'bandwidth_saver' => false,
+                    'mode' => 'balanced',
+                ],
+            ],
+            'high' => [
+                'name' => 'High Runtime',
+                'description' => 'Premium for 8–12 GB. 1080p, 4 active videos, richer rendering.',
+                'api' => [
+                    'max_parallel' => 10, 'background' => true, 'retry' => 'smart', 'queue_size' => 40,
+                    'timeout_ms' => 15000, 'connection_pool' => 10, 'priority' => 'balanced',
+                    'prefetch' => true, 'lazy_loading' => false, 'offline' => 'network-first',
+                ],
+                'feed' => [
+                    'batch_size' => 20, 'preload' => 5, 'render_distance' => 5, 'refresh_policy' => 'pull',
+                    'api_strategy' => 'network-first', 'cache_usage' => 70, 'lazy_rendering' => false,
+                    'memory_budget' => 384, 'strategy' => 'eager',
+                ],
+                'video' => [
+                    'autoplay' => true, 'preload' => 8, 'buffer' => 16, 'decoder' => 'hybrid',
+                    'hardware_decoder' => true, 'software_decoder' => true, 'quality' => '1080p',
+                    'max_active' => 4, 'pause_strategy' => 'off-screen', 'resume_strategy' => 'smart',
+                    'memory_budget' => 768,
+                ],
+                'reels' => [
+                    'initial' => 3, 'next_preload' => 2, 'unseen_pct' => 35, 'new_pct' => 25,
+                    'popular_pct' => 20, 'following_pct' => 15, 'watched_pct' => 5,
+                    'scroll_cache' => 8, 'video_queue' => 8, 'recommendation_refresh' => 12,
+                    'strategy' => 'eager',
+                ],
+                'rendering' => [
+                    'image_quality' => 'high', 'image_compression' => 50, 'animation' => 'rich',
+                    'blur' => true, 'shadows' => true, 'transition_quality' => 'smooth',
+                    'virtualization' => true, 'flat_list_optimization' => true,
+                    'window_size' => 15, 'strategy' => 'rich',
+                ],
+                'network' => [
+                    'wifi' => true, 'mobile' => true, 'weak_network_mode' => false, 'offline_mode' => true,
+                    'background_sync' => true, 'adaptive_download' => true, 'bandwidth_saver' => false,
+                    'mode' => 'aggressive',
+                ],
+            ],
+            'ultra' => [
+                'name' => 'Ultra Runtime',
+                'description' => 'Flagship 12 GB+. Auto quality, 6 active videos, max prefetch.',
+                'api' => [
+                    'max_parallel' => 16, 'background' => true, 'retry' => 'smart', 'queue_size' => 64,
+                    'timeout_ms' => 15000, 'connection_pool' => 16, 'priority' => 'balanced',
+                    'prefetch' => true, 'lazy_loading' => false, 'offline' => 'network-first',
+                ],
+                'feed' => [
+                    'batch_size' => 30, 'preload' => 8, 'render_distance' => 8, 'refresh_policy' => 'pull',
+                    'api_strategy' => 'network-first', 'cache_usage' => 75, 'lazy_rendering' => false,
+                    'memory_budget' => 512, 'strategy' => 'eager',
+                ],
+                'video' => [
+                    'autoplay' => true, 'preload' => 10, 'buffer' => 24, 'decoder' => 'hybrid',
+                    'hardware_decoder' => true, 'software_decoder' => true, 'quality' => 'auto',
+                    'max_active' => 6, 'pause_strategy' => 'off-screen', 'resume_strategy' => 'smart',
+                    'memory_budget' => 1024,
+                ],
+                'reels' => [
+                    'initial' => 4, 'next_preload' => 3, 'unseen_pct' => 35, 'new_pct' => 25,
+                    'popular_pct' => 20, 'following_pct' => 15, 'watched_pct' => 5,
+                    'scroll_cache' => 12, 'video_queue' => 12, 'recommendation_refresh' => 8,
+                    'strategy' => 'eager',
+                ],
+                'rendering' => [
+                    'image_quality' => 'original', 'image_compression' => 40, 'animation' => 'rich',
+                    'blur' => true, 'shadows' => true, 'transition_quality' => 'premium',
+                    'virtualization' => true, 'flat_list_optimization' => true,
+                    'window_size' => 21, 'strategy' => 'rich',
+                ],
+                'network' => [
+                    'wifi' => true, 'mobile' => true, 'weak_network_mode' => false, 'offline_mode' => true,
+                    'background_sync' => true, 'adaptive_download' => true, 'bandwidth_saver' => false,
+                    'mode' => 'aggressive',
+                ],
+            ],
         ];
 
         $out = [];
-        foreach ($tiers as $key => $preset) {
-            $tier = $key;
+        foreach ($tiers as $key => $def) {
             $out[] = [
                 'key'                    => $key,
-                'name'                   => $meta[$key][0],
-                'description'            => $meta[$key][1],
-                'version'                => 'v1.14.2',
+                'name'                   => $def['name'],
+                'description'            => $def['description'],
+                'version'                => 'v1.15.0',
                 'status'                 => 'published',
                 'linked_device_profiles' => [$key],
                 'affected_devices'       => self::AFFECTED[$key],
                 'published_at'           => now(),
-                'api' => [
-                    'max_parallel'     => $preset['p'],
-                    'background'       => true,
-                    'retry'            => 'smart',
-                    'queue_size'       => $preset['p'] * 4,
-                    'timeout_ms'       => 15000,
-                    'connection_pool'  => $preset['p'],
-                    'priority'         => 'balanced',
-                    'prefetch'         => $tier !== 'entry',
-                    'lazy_loading'     => in_array($tier, ['entry', 'low'], true),
-                    'offline'          => 'cache-first',
-                ],
-                'feed' => [
-                    'batch_size'      => $preset['feed'],
-                    'preload'         => max(1, (int) round($preset['feed'] / 4)),
-                    'render_distance' => max(1, (int) round($preset['feed'] / 4)),
-                    'refresh_policy'  => 'pull',
-                    'api_strategy'    => 'hybrid',
-                    'cache_usage'     => 60,
-                    'lazy_rendering'  => true,
-                    'memory_budget'   => $preset['ba'],
-                    'strategy'        => in_array($tier, ['entry', 'low'], true) ? 'lazy' : (in_array($tier, ['high', 'ultra'], true) ? 'eager' : 'adaptive'),
-                ],
-                'video' => [
-                    'autoplay'          => $tier !== 'entry',
-                    'preload'           => $preset['video'] * 2,
-                    'buffer'            => $preset['video'] * 4,
-                    'decoder'           => $preset['dec'],
-                    'hardware_decoder'  => true,
-                    'software_decoder'  => $tier !== 'entry',
-                    'quality'           => $preset['q'],
-                    'max_active'        => $preset['video'],
-                    'pause_strategy'    => 'off-screen',
-                    'resume_strategy'   => 'smart',
-                    'memory_budget'     => $preset['va'],
-                ],
-                'reels' => [
-                    'initial'                  => max(1, $preset['video'] - 1),
-                    'next_preload'             => max(1, (int) round($preset['video'] / 2)),
-                    'unseen_pct'               => 40,
-                    'new_pct'                  => 25,
-                    'popular_pct'              => 20,
-                    'following_pct'            => 10,
-                    'watched_pct'              => 5,
-                    'scroll_cache'             => $preset['video'] + 2,
-                    'video_queue'              => $preset['video'] * 2,
-                    'recommendation_refresh'   => $tier === 'entry' ? 30 : 15,
-                    'strategy'                 => in_array($tier, ['entry', 'low'], true) ? 'lazy' : (in_array($tier, ['high', 'ultra'], true) ? 'eager' : 'adaptive'),
-                ],
-                'rendering' => [
-                    'image_quality'          => $preset['image'],
-                    'image_compression'      => $tier === 'entry' ? 80 : ($tier === 'ultra' ? 40 : 60),
-                    'animation'              => $preset['anim'],
-                    'blur'                   => ! in_array($tier, ['entry', 'low'], true),
-                    'shadows'                => $tier !== 'entry',
-                    'transition_quality'     => $tier === 'entry' ? 'minimal' : ($tier === 'ultra' ? 'premium' : 'smooth'),
-                    'virtualization'         => true,
-                    'flat_list_optimization' => true,
-                    'window_size'            => $tier === 'entry' ? 5 : ($tier === 'ultra' ? 21 : 11),
-                    'strategy'               => $preset['r'],
-                ],
-                'network' => [
-                    'wifi'               => true,
-                    'mobile'             => true,
-                    'weak_network_mode'  => in_array($tier, ['entry', 'low'], true),
-                    'offline_mode'       => true,
-                    'background_sync'    => $tier !== 'entry',
-                    'adaptive_download'  => true,
-                    'bandwidth_saver'    => in_array($tier, ['entry', 'low'], true),
-                    'mode'               => $preset['net'],
-                ],
+                'api'                    => $def['api'],
+                'feed'                   => $def['feed'],
+                'video'                  => $def['video'],
+                'reels'                  => $def['reels'],
+                'rendering'              => $def['rendering'],
+                'network'                => $def['network'],
                 'history' => [[
-                    'at' => now()->toIso8601String(),
-                    'by' => 'System',
-                    'version' => 'v1.14.2',
-                    'note' => 'Seeded default runtime profile',
+                    'at'      => now()->toIso8601String(),
+                    'by'      => 'System',
+                    'version' => 'v1.15.0',
+                    'note'    => 'Memory-tier runtime budgets v1.15.0 (Entry→Ultra)',
                 ]],
             ];
         }
