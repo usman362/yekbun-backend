@@ -947,6 +947,7 @@ Route::prefix('admin')->group(function () {
         // ─── Device Control Center ───
         Route::prefix('device-control')->group(function () {
             Route::get('/overview', [DeviceControlAdminController::class, 'overview']);
+            Route::post('/seed-defaults', [DeviceControlAdminController::class, 'seedDefaults']);
 
             Route::get('/profiles', [DeviceControlAdminController::class, 'profilesIndex']);
             Route::get('/profiles/{id}', [DeviceControlAdminController::class, 'profilesShow']);

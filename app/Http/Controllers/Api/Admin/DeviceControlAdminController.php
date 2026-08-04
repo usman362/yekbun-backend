@@ -10,6 +10,7 @@ use App\Models\DeviceTelemetry;
 use App\Models\ProblemDevice;
 use App\Models\RuntimeProfile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
 
 /**
@@ -62,6 +63,45 @@ class DeviceControlAdminController extends Controller
             ])->values(),
             'profiles' => $profiles->map(fn ($p) => $this->presentDeviceProfile($p))->values(),
         ], 'Device control overview fetched.');
+    }
+
+    /**
+     * POST /admin/device-control/seed-defaults
+     * Upserts Entry→Ultra device / runtime / cache profiles (safe; no wipe unless force=1).
+     */
+    public function seedDefaults(Request $request)
+    {
+        $force = $request->boolean('force');
+        $params = $force ? ['--force' => true] : [];
+
+        try {
+            Artisan::call('device-control:seed-defaults', $params);
+        } catch (\Throwable $e) {
+            return ResponseHelper::sendResponse(
+                ['error' => $e->getMessage()],
+                'Seed failed: ' . $e->getMessage(),
+                false,
+                500
+            );
+        }
+
+        $required = ['entry', 'low', 'balanced', 'high', 'ultra'];
+        $cacheKeys = CacheProfile::pluck('key')->map(fn ($k) => (string) $k)->all();
+        $runtimeKeys = RuntimeProfile::pluck('key')->map(fn ($k) => (string) $k)->all();
+        $deviceKeys = DeviceProfile::pluck('key')->map(fn ($k) => (string) $k)->all();
+
+        return ResponseHelper::sendResponse([
+            'forced'           => $force,
+            'device_profiles'  => DeviceProfile::count(),
+            'runtime_profiles' => RuntimeProfile::count(),
+            'cache_profiles'   => CacheProfile::count(),
+            'tiers'            => [
+                'device'  => collect($required)->mapWithKeys(fn ($k) => [$k => in_array($k, $deviceKeys, true)]),
+                'runtime' => collect($required)->mapWithKeys(fn ($k) => [$k => in_array($k, $runtimeKeys, true)]),
+                'cache'   => collect($required)->mapWithKeys(fn ($k) => [$k => in_array($k, $cacheKeys, true)]),
+            ],
+            'output'           => trim(Artisan::output()),
+        ], 'Entry→Ultra Device / Cache / Runtime defaults are ready.');
     }
 
     /* ═══════════════════════════════════════════════════════════
