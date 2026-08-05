@@ -23,6 +23,7 @@ class DeviceTelemetry extends Model
         'fps'               => 'integer',
         'health_score'      => 'integer',
         'crash_count'       => 'integer',
+        'cache_categories'  => 'array',
         'last_seen_at'      => 'datetime',
         'reported_at'       => 'datetime',
     ];

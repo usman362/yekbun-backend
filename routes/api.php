@@ -143,6 +143,7 @@ Route::get('/app/device-profile', [DeviceControlApiController::class, 'resolve']
 Route::post('/app/device-profile', [DeviceControlApiController::class, 'resolve']);
 Route::post('/app/device-telemetry', [DeviceControlApiController::class, 'telemetry']);
 Route::post('/app/device-crash', [DeviceControlApiController::class, 'crash']);
+Route::post('/app/device-cache-current', [DeviceControlApiController::class, 'cacheCurrent']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's

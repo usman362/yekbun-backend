@@ -14,9 +14,10 @@ use Illuminate\Http\Request;
 /**
  * Public / authenticated Device Control endpoints for the mobile app.
  *
- *  GET  /api/app/device-profile   — resolve Entry→Ultra profile from hardware
- *  POST /api/app/device-telemetry — heartbeat / health snapshot
- *  POST /api/app/device-crash     — optional crash/ANR report
+ *  GET  /api/app/device-profile        — resolve Entry→Ultra profile from hardware
+ *  POST /api/app/device-telemetry      — heartbeat / health snapshot
+ *  POST /api/app/device-crash          — optional crash/ANR report
+ *  POST /api/app/device-cache-current  — update per-category cache "current" MB for a device
  */
 class DeviceControlApiController extends Controller
 {
@@ -177,6 +178,157 @@ class DeviceControlApiController extends Controller
         ], $ensured['created']
             ? 'Telemetry saved. Device profile created from app use.'
             : 'Telemetry saved.');
+    }
+
+    /**
+     * Update per-device cache "current" size (MB) by category type.
+     *
+     * Does NOT change the shared Cache Profile max caps — only this device's usage snapshot.
+     *
+     * Single:
+     *   { "device_id": "DEV-1", "type": "video", "current": 15 }
+     *
+     * Batch:
+     *   { "device_id": "DEV-1", "categories": [
+     *       { "type": "video", "current": 15 },
+     *       { "type": "feed",  "current": 11 }
+     *   ]}
+     *
+     * Alias fields: category / id for type; current_size / value for current.
+     */
+    public function cacheCurrent(Request $request)
+    {
+        $request->validate([
+            'device_id' => 'required|string|max:120',
+            'type'      => 'nullable|string|max:64',
+            'category'  => 'nullable|string|max:64',
+            'id'        => 'nullable|string|max:64',
+            'current'   => 'nullable|numeric|min:0|max:100000',
+            'current_size' => 'nullable|numeric|min:0|max:100000',
+            'value'     => 'nullable|numeric|min:0|max:100000',
+            'categories' => 'nullable|array|max:40',
+            'categories.*.type' => 'nullable|string|max:64',
+            'categories.*.category' => 'nullable|string|max:64',
+            'categories.*.id' => 'nullable|string|max:64',
+            'categories.*.current' => 'nullable|numeric|min:0|max:100000',
+            'categories.*.current_size' => 'nullable|numeric|min:0|max:100000',
+            'categories.*.value' => 'nullable|numeric|min:0|max:100000',
+            'profile_key' => 'nullable|string|max:64',
+        ]);
+
+        $updates = [];
+        $batch = $request->input('categories');
+        if (is_array($batch) && count($batch) > 0) {
+            foreach ($batch as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $parsed = $this->parseCacheCurrentItem($item);
+                if ($parsed) {
+                    $updates[] = $parsed;
+                }
+            }
+        } else {
+            $parsed = $this->parseCacheCurrentItem($request->all());
+            if ($parsed) {
+                $updates[] = $parsed;
+            }
+        }
+
+        if (empty($updates)) {
+            return ResponseHelper::sendResponse(null, 'Provide type + current, or categories[].', false, 422);
+        }
+
+        $allowed = $this->allowedCacheCategoryTypes();
+        foreach ($updates as $u) {
+            if (!in_array($u['type'], $allowed, true)) {
+                return ResponseHelper::sendResponse(
+                    ['allowed_types' => $allowed],
+                    "Unknown category type: {$u['type']}",
+                    false,
+                    422
+                );
+            }
+        }
+
+        $deviceId = (string) $request->input('device_id');
+        $row = DeviceTelemetry::firstOrNew(['device_id' => $deviceId]);
+
+        if ($request->filled('profile_key')) {
+            $row->profile_key = (string) $request->input('profile_key');
+        } elseif (!$row->profile_key) {
+            $ramClass = $this->normalizeRamClass($request->input('ram_class') ?: $request->input('ram'));
+            $cpuTier = strtolower((string) ($request->input('cpu_tier') ?: 'mid'));
+            $row->profile_key = $this->inferTierKey($ramClass, $cpuTier);
+        }
+
+        $map = is_array($row->cache_categories) ? $row->cache_categories : [];
+        $now = now()->toIso8601String();
+        $applied = [];
+
+        foreach ($updates as $u) {
+            $type = $u['type'];
+            $current = $u['current'];
+            $prev = is_array($map[$type] ?? null) ? $map[$type] : [];
+            $map[$type] = [
+                'current'    => $current,
+                'updated_at' => $now,
+            ];
+            $applied[] = [
+                'type'         => $type,
+                'current'      => $current,
+                'previous'     => isset($prev['current']) ? (float) $prev['current'] : null,
+                'updated_at'   => $now,
+            ];
+        }
+
+        $row->cache_categories = $map;
+        $row->last_seen_at = now();
+        $row->reported_at = now();
+        if (!$row->status) {
+            $row->status = 'healthy';
+        }
+        $row->save();
+
+        // Attach max_size from published cache profile when available (read-only hint).
+        $maxByType = [];
+        $cacheKey = $row->profile_key
+            ?: $request->input('cache_profile_key')
+            ?: $request->input('profile_key');
+        if ($cacheKey) {
+            $cache = CacheProfile::where('key', $cacheKey)->first();
+            if ($cache && is_array($cache->categories)) {
+                foreach ($cache->categories as $cat) {
+                    if (!is_array($cat)) {
+                        continue;
+                    }
+                    $cid = (string) ($cat['id'] ?? $cat['type'] ?? '');
+                    if ($cid !== '') {
+                        $maxByType[$cid] = (int) ($cat['max_size'] ?? $cat['maxSize'] ?? 0);
+                    }
+                }
+            }
+        }
+
+        foreach ($applied as &$a) {
+            $a['max_size'] = $maxByType[$a['type']] ?? null;
+        }
+        unset($a);
+
+        $totalCurrent = 0;
+        foreach ($map as $entry) {
+            if (is_array($entry) && isset($entry['current'])) {
+                $totalCurrent += (float) $entry['current'];
+            }
+        }
+
+        return ResponseHelper::sendResponse([
+            'device_id'         => $row->device_id,
+            'profile_key'       => $row->profile_key,
+            'updated'           => $applied,
+            'cache_categories'  => $map,
+            'total_current_mb'  => round($totalCurrent, 2),
+        ], 'Cache current updated.');
     }
 
     /**
@@ -536,6 +688,42 @@ class DeviceControlApiController extends Controller
             'categories'  => $p->categories ?? [],
             'cleanup'     => $p->cleanup ?? [],
             'sync'        => $p->sync ?? [],
+        ];
+    }
+
+    /**
+     * @return array{type:string,current:float}|null
+     */
+    private function parseCacheCurrentItem(array $item): ?array
+    {
+        $type = strtolower(trim((string) (
+            $item['type']
+            ?? $item['category']
+            ?? $item['id']
+            ?? ''
+        )));
+        if ($type === '') {
+            return null;
+        }
+
+        $raw = $item['current'] ?? $item['current_size'] ?? $item['value'] ?? null;
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        return [
+            'type'    => $type,
+            'current' => round((float) $raw, 2),
+        ];
+    }
+
+    /** @return list<string> */
+    private function allowedCacheCategoryTypes(): array
+    {
+        return [
+            'system', 'feed', 'video', 'reels', 'image', 'music', 'chat', 'maps',
+            'notification', 'offline', 'downloads', 'fonts', 'emoji', 'languages',
+            'policy', 'profile', 'temp',
         ];
     }
 }
