@@ -11,7 +11,8 @@ class RegionController extends Controller
 {
     public function index()
     {
-        $regions = Region::orderBy('name', 'ASC')->with('cities')->get();
+        // Registration order: Bakur → Başûr → Rojava → Rojhilat (sort_order)
+        $regions = Region::orderBy('sort_order', 'ASC')->orderBy('name', 'ASC')->with('cities')->get();
         $countries = Country::orderBy('name', 'ASC')->get();
         return response()->json(['regions' => $regions, 'countries' => $countries]);
     }

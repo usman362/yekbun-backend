@@ -11,7 +11,7 @@ class Region extends Model
     protected $connection = 'mongodb';
     protected $table = 'regions';
 
-    protected $fillable = ['name', 'country_id', 'shortcode', 'status'];
+    protected $fillable = ['name', 'country_id', 'shortcode', 'status', 'sort_order'];
 
     public function country() { return $this->belongsTo(Country::class); }
     public function cities() { return $this->hasMany(City::class); }

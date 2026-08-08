@@ -1,0 +1,2026 @@
+[
+  {
+    "province": "Bakur",
+    "sort_order": 1,
+    "cities": [
+      {
+        "zipcode": "10100",
+        "name": "Afşîn"
+      },
+      {
+        "zipcode": "10200",
+        "name": "Agirî"
+      },
+      {
+        "zipcode": "10300",
+        "name": "Aldûş"
+      },
+      {
+        "zipcode": "10400",
+        "name": "Andirin"
+      },
+      {
+        "zipcode": "10500",
+        "name": "Arende"
+      },
+      {
+        "zipcode": "10600",
+        "name": "Arga (Arxa)"
+      },
+      {
+        "zipcode": "10700",
+        "name": "Arguwan"
+      },
+      {
+        "zipcode": "10800",
+        "name": "Artemêt"
+      },
+      {
+        "zipcode": "10900",
+        "name": "Arxa"
+      },
+      {
+        "zipcode": "11000",
+        "name": "Aşqele"
+      },
+      {
+        "zipcode": "11100",
+        "name": "Avkevir"
+      },
+      {
+        "zipcode": "11200",
+        "name": "Avnîk"
+      },
+      {
+        "zipcode": "11300",
+        "name": "Avşîn"
+      },
+      {
+        "zipcode": "11400",
+        "name": "Axin"
+      },
+      {
+        "zipcode": "11500",
+        "name": "Axvanîs"
+      },
+      {
+        "zipcode": "11600",
+        "name": "Aywalî"
+      },
+      {
+        "zipcode": "11700",
+        "name": "Azarpêrt"
+      },
+      {
+        "zipcode": "11800",
+        "name": "Azort"
+      },
+      {
+        "zipcode": "11900",
+        "name": "Bajêrgeh"
+      },
+      {
+        "zipcode": "12000",
+        "name": "Bardîz"
+      },
+      {
+        "zipcode": "12100",
+        "name": "Basan"
+      },
+      {
+        "zipcode": "12200",
+        "name": "Basê"
+      },
+      {
+        "zipcode": "12300",
+        "name": "Baskîl"
+      },
+      {
+        "zipcode": "12400",
+        "name": "Başan"
+      },
+      {
+        "zipcode": "12500",
+        "name": "Bazarcix"
+      },
+      {
+        "zipcode": "12600",
+        "name": "Bazîd"
+      },
+      {
+        "zipcode": "12700",
+        "name": "Bazîdaxa"
+      },
+      {
+        "zipcode": "12800",
+        "name": "Berwarî"
+      },
+      {
+        "zipcode": "12900",
+        "name": "Bêgirî"
+      },
+      {
+        "zipcode": "13000",
+        "name": "Bêhiştî"
+      },
+      {
+        "zipcode": "13100",
+        "name": "Bêlqis"
+      },
+      {
+        "zipcode": "13200",
+        "name": "Bêrecûk"
+      },
+      {
+        "zipcode": "13300",
+        "name": "Bêsnî"
+      },
+      {
+        "zipcode": "13400",
+        "name": "Bidlîs"
+      },
+      {
+        "zipcode": "13500",
+        "name": "Bilekan"
+      },
+      {
+        "zipcode": "13600",
+        "name": "Bismîl"
+      },
+      {
+        "zipcode": "13700",
+        "name": "Bongilan"
+      },
+      {
+        "zipcode": "13800",
+        "name": "Cela"
+      },
+      {
+        "zipcode": "13900",
+        "name": "Cerîd"
+      },
+      {
+        "zipcode": "14000",
+        "name": "Cilawûz"
+      },
+      {
+        "zipcode": "14100",
+        "name": "Ciminî"
+      },
+      {
+        "zipcode": "14200",
+        "name": "Cizîr"
+      },
+      {
+        "zipcode": "14300",
+        "name": "Colemêrg"
+      },
+      {
+        "zipcode": "14400",
+        "name": "Curnê Reş"
+      },
+      {
+        "zipcode": "14500",
+        "name": "Çat"
+      },
+      {
+        "zipcode": "14600",
+        "name": "Çelê"
+      },
+      {
+        "zipcode": "14700",
+        "name": "Çemişgezek"
+      },
+      {
+        "zipcode": "14800",
+        "name": "Çermiktî"
+      },
+      {
+        "zipcode": "14900",
+        "name": "Çewlîg"
+      },
+      {
+        "zipcode": "15000",
+        "name": "Çêlikan"
+      },
+      {
+        "zipcode": "15100",
+        "name": "Çêrme"
+      },
+      {
+        "zipcode": "15200",
+        "name": "Çêrmik"
+      },
+      {
+        "zipcode": "15300",
+        "name": "Çêrmûg"
+      },
+      {
+        "zipcode": "15400",
+        "name": "Çildar"
+      },
+      {
+        "zipcode": "15500",
+        "name": "Çinar"
+      },
+      {
+        "zipcode": "15600",
+        "name": "Çinçin"
+      },
+      {
+        "zipcode": "15700",
+        "name": "Çirmik"
+      },
+      {
+        "zipcode": "15800",
+        "name": "Çîlikan"
+      },
+      {
+        "zipcode": "15900",
+        "name": "Dara Hênî"
+      },
+      {
+        "zipcode": "16000",
+        "name": "Darende"
+      },
+      {
+        "zipcode": "16100",
+        "name": "Dep"
+      },
+      {
+        "zipcode": "16200",
+        "name": "Dêmal"
+      },
+      {
+        "zipcode": "16300",
+        "name": "Dêrgûl"
+      },
+      {
+        "zipcode": "16400",
+        "name": "Dêrik"
+      },
+      {
+        "zipcode": "16500",
+        "name": "Dêrsim"
+      },
+      {
+        "zipcode": "16600",
+        "name": "Dêrxas"
+      },
+      {
+        "zipcode": "16700",
+        "name": "Dihê"
+      },
+      {
+        "zipcode": "16800",
+        "name": "Dinêser (Qosar)"
+      },
+      {
+        "zipcode": "16900",
+        "name": "Dîgor"
+      },
+      {
+        "zipcode": "17000",
+        "name": "Dîlok (Entab)"
+      },
+      {
+        "zipcode": "17100",
+        "name": "Dîvrîgî"
+      },
+      {
+        "zipcode": "17200",
+        "name": "Dîyarbekir (Amed)"
+      },
+      {
+        "zipcode": "17300",
+        "name": "Dutax"
+      },
+      {
+        "zipcode": "17400",
+        "name": "Duxur"
+      },
+      {
+        "zipcode": "17500",
+        "name": "Edene"
+      },
+      {
+        "zipcode": "17600",
+        "name": "Elbak"
+      },
+      {
+        "zipcode": "17700",
+        "name": "Elbistan"
+      },
+      {
+        "zipcode": "17800",
+        "name": "Elcewaz"
+      },
+      {
+        "zipcode": "17900",
+        "name": "Elezîz (Xarpêt)"
+      },
+      {
+        "zipcode": "18000",
+        "name": "Elîyê Mentarê"
+      },
+      {
+        "zipcode": "18100",
+        "name": "Elkê"
+      },
+      {
+        "zipcode": "18200",
+        "name": "Erdêxan"
+      },
+      {
+        "zipcode": "18300",
+        "name": "Erdîş"
+      },
+      {
+        "zipcode": "18400",
+        "name": "Ereban"
+      },
+      {
+        "zipcode": "18500",
+        "name": "Erebgir"
+      },
+      {
+        "zipcode": "18600",
+        "name": "Erxenî"
+      },
+      {
+        "zipcode": "18700",
+        "name": "Erxevan"
+      },
+      {
+        "zipcode": "18800",
+        "name": "Erzingan"
+      },
+      {
+        "zipcode": "18900",
+        "name": "Erzirom"
+      },
+      {
+        "zipcode": "19000",
+        "name": "Erzîn"
+      },
+      {
+        "zipcode": "19100",
+        "name": "Ezbider"
+      },
+      {
+        "zipcode": "19200",
+        "name": "Êgin"
+      },
+      {
+        "zipcode": "19300",
+        "name": "Êlih (Batman)"
+      },
+      {
+        "zipcode": "19400",
+        "name": "Farqîn"
+      },
+      {
+        "zipcode": "19500",
+        "name": "Gemerek"
+      },
+      {
+        "zipcode": "19600",
+        "name": "Gercan"
+      },
+      {
+        "zipcode": "19700",
+        "name": "Gever"
+      },
+      {
+        "zipcode": "19800",
+        "name": "Gêl"
+      },
+      {
+        "zipcode": "19900",
+        "name": "Gêxî"
+      },
+      {
+        "zipcode": "20000",
+        "name": "Gimgim"
+      },
+      {
+        "zipcode": "20100",
+        "name": "Girê Mirad"
+      },
+      {
+        "zipcode": "20200",
+        "name": "Girê Sor"
+      },
+      {
+        "zipcode": "20300",
+        "name": "Girkê Amo"
+      },
+      {
+        "zipcode": "20400",
+        "name": "Gîyadîn"
+      },
+      {
+        "zipcode": "20500",
+        "name": "Gogsî"
+      },
+      {
+        "zipcode": "20600",
+        "name": "Goksun"
+      },
+      {
+        "zipcode": "20700",
+        "name": "Golan"
+      },
+      {
+        "zipcode": "20800",
+        "name": "Golbaşî"
+      },
+      {
+        "zipcode": "20900",
+        "name": "Gurgum"
+      },
+      {
+        "zipcode": "21000",
+        "name": "Gurin"
+      },
+      {
+        "zipcode": "21100",
+        "name": "Hafik"
+      },
+      {
+        "zipcode": "21200",
+        "name": "Harûniye"
+      },
+      {
+        "zipcode": "21300",
+        "name": "Hawêl"
+      },
+      {
+        "zipcode": "21400",
+        "name": "Hekîmxan"
+      },
+      {
+        "zipcode": "21500",
+        "name": "Heran"
+      },
+      {
+        "zipcode": "21600",
+        "name": "Hesenqela"
+      },
+      {
+        "zipcode": "21700",
+        "name": "Heskîf"
+      },
+      {
+        "zipcode": "21800",
+        "name": "Hewag"
+      },
+      {
+        "zipcode": "21900",
+        "name": "Heweng"
+      },
+      {
+        "zipcode": "22000",
+        "name": "Hewêl"
+      },
+      {
+        "zipcode": "22100",
+        "name": "Hezex"
+      },
+      {
+        "zipcode": "22200",
+        "name": "Hezo"
+      },
+      {
+        "zipcode": "22300",
+        "name": "Hezro"
+      },
+      {
+        "zipcode": "22400",
+        "name": "Hênê"
+      },
+      {
+        "zipcode": "22500",
+        "name": "Hîzan"
+      },
+      {
+        "zipcode": "22600",
+        "name": "Ispenaq"
+      },
+      {
+        "zipcode": "22700",
+        "name": "Îd"
+      },
+      {
+        "zipcode": "22800",
+        "name": "Îdir"
+      },
+      {
+        "zipcode": "22900",
+        "name": "Îliç"
+      },
+      {
+        "zipcode": "23000",
+        "name": "Îslahîye"
+      },
+      {
+        "zipcode": "23100",
+        "name": "Îspîr"
+      },
+      {
+        "zipcode": "23200",
+        "name": "Kamîlava"
+      },
+      {
+        "zipcode": "23300",
+        "name": "Kangal"
+      },
+      {
+        "zipcode": "23400",
+        "name": "Kanîreş"
+      },
+      {
+        "zipcode": "23500",
+        "name": "Kanîya Xezalan"
+      },
+      {
+        "zipcode": "23600",
+        "name": "Karaz"
+      },
+      {
+        "zipcode": "23700",
+        "name": "Karkamiş"
+      },
+      {
+        "zipcode": "23800",
+        "name": "Keban"
+      },
+      {
+        "zipcode": "23900",
+        "name": "Keferdîz"
+      },
+      {
+        "zipcode": "24000",
+        "name": "Kele"
+      },
+      {
+        "zipcode": "24100",
+        "name": "Kemax"
+      },
+      {
+        "zipcode": "24200",
+        "name": "Kerboran"
+      },
+      {
+        "zipcode": "24300",
+        "name": "Kercews"
+      },
+      {
+        "zipcode": "24400",
+        "name": "Kilîs"
+      },
+      {
+        "zipcode": "24500",
+        "name": "Koçgirî"
+      },
+      {
+        "zipcode": "24600",
+        "name": "Koksen"
+      },
+      {
+        "zipcode": "24700",
+        "name": "Kolik"
+      },
+      {
+        "zipcode": "24800",
+        "name": "Komirlî"
+      },
+      {
+        "zipcode": "24900",
+        "name": "Kop"
+      },
+      {
+        "zipcode": "25000",
+        "name": "Korxol"
+      },
+      {
+        "zipcode": "25100",
+        "name": "Koyûlhîsar"
+      },
+      {
+        "zipcode": "25200",
+        "name": "Kozan"
+      },
+      {
+        "zipcode": "25300",
+        "name": "Kurdoxlî"
+      },
+      {
+        "zipcode": "25400",
+        "name": "Kurudere"
+      },
+      {
+        "zipcode": "25500",
+        "name": "Licê"
+      },
+      {
+        "zipcode": "25600",
+        "name": "Macîran"
+      },
+      {
+        "zipcode": "25700",
+        "name": "Maden"
+      },
+      {
+        "zipcode": "25800",
+        "name": "Mansî"
+      },
+      {
+        "zipcode": "25900",
+        "name": "Matkî"
+      },
+      {
+        "zipcode": "26000",
+        "name": "Mazgêrd"
+      },
+      {
+        "zipcode": "26100",
+        "name": "Mehsert"
+      },
+      {
+        "zipcode": "26200",
+        "name": "Meletî"
+      },
+      {
+        "zipcode": "26300",
+        "name": "Meletîya Kevn"
+      },
+      {
+        "zipcode": "26400",
+        "name": "Mereş (Gurgum)"
+      },
+      {
+        "zipcode": "26500",
+        "name": "Mezmaxor"
+      },
+      {
+        "zipcode": "26600",
+        "name": "Mêrdîn"
+      },
+      {
+        "zipcode": "26700",
+        "name": "Mêrdînik"
+      },
+      {
+        "zipcode": "26800",
+        "name": "Mêrsîn"
+      },
+      {
+        "zipcode": "26900",
+        "name": "Mêzgir"
+      },
+      {
+        "zipcode": "27000",
+        "name": "Midyad"
+      },
+      {
+        "zipcode": "27100",
+        "name": "Miks"
+      },
+      {
+        "zipcode": "27200",
+        "name": "Milazgir"
+      },
+      {
+        "zipcode": "27300",
+        "name": "Misirc"
+      },
+      {
+        "zipcode": "27400",
+        "name": "Misrîç"
+      },
+      {
+        "zipcode": "27500",
+        "name": "Mîyaran"
+      },
+      {
+        "zipcode": "27600",
+        "name": "Mose"
+      },
+      {
+        "zipcode": "27700",
+        "name": "Motkan"
+      },
+      {
+        "zipcode": "27800",
+        "name": "Mûş"
+      },
+      {
+        "zipcode": "27900",
+        "name": "Nisêbîn"
+      },
+      {
+        "zipcode": "28000",
+        "name": "Norgeh"
+      },
+      {
+        "zipcode": "28100",
+        "name": "Norşîn"
+      },
+      {
+        "zipcode": "28200",
+        "name": "Norxan"
+      },
+      {
+        "zipcode": "28300",
+        "name": "Nûrheq"
+      },
+      {
+        "zipcode": "28400",
+        "name": "Olîlî"
+      },
+      {
+        "zipcode": "28500",
+        "name": "Oltî"
+      },
+      {
+        "zipcode": "28600",
+        "name": "Olûr"
+      },
+      {
+        "zipcode": "28700",
+        "name": "Palo"
+      },
+      {
+        "zipcode": "28800",
+        "name": "Panos"
+      },
+      {
+        "zipcode": "28900",
+        "name": "Pasûr"
+      },
+      {
+        "zipcode": "29000",
+        "name": "Payîzava"
+      },
+      {
+        "zipcode": "29100",
+        "name": "Pêrtag Qisle"
+      },
+      {
+        "zipcode": "29200",
+        "name": "Pilemurîye"
+      },
+      {
+        "zipcode": "29300",
+        "name": "Pirsûs"
+      },
+      {
+        "zipcode": "29400",
+        "name": "Pîran"
+      },
+      {
+        "zipcode": "29500",
+        "name": "Posof"
+      },
+      {
+        "zipcode": "29600",
+        "name": "Pulur"
+      },
+      {
+        "zipcode": "29700",
+        "name": "Qabilcewz"
+      },
+      {
+        "zipcode": "29800",
+        "name": "Qamuşan"
+      },
+      {
+        "zipcode": "29900",
+        "name": "Qaxizman"
+      },
+      {
+        "zipcode": "30000",
+        "name": "Qela"
+      },
+      {
+        "zipcode": "30100",
+        "name": "Qelqelî"
+      },
+      {
+        "zipcode": "30200",
+        "name": "Qenxal"
+      },
+      {
+        "zipcode": "30300",
+        "name": "Qereçoban"
+      },
+      {
+        "zipcode": "30400",
+        "name": "Qerequlax"
+      },
+      {
+        "zipcode": "30500",
+        "name": "Qers"
+      },
+      {
+        "zipcode": "30600",
+        "name": "Qilaban Silopîya"
+      },
+      {
+        "zipcode": "30700",
+        "name": "Qisle"
+      },
+      {
+        "zipcode": "30800",
+        "name": "Qoçgîrî"
+      },
+      {
+        "zipcode": "30900",
+        "name": "Qolhîsar"
+      },
+      {
+        "zipcode": "31000",
+        "name": "Qoser"
+      },
+      {
+        "zipcode": "31100",
+        "name": "Qowancîyan"
+      },
+      {
+        "zipcode": "31200",
+        "name": "Qubîn"
+      },
+      {
+        "zipcode": "31300",
+        "name": "Qulp"
+      },
+      {
+        "zipcode": "31400",
+        "name": "Riha"
+      },
+      {
+        "zipcode": "31500",
+        "name": "Rişmil"
+      },
+      {
+        "zipcode": "31600",
+        "name": "Sarîqamîş"
+      },
+      {
+        "zipcode": "31700",
+        "name": "Sarqişla"
+      },
+      {
+        "zipcode": "31800",
+        "name": "Sason"
+      },
+      {
+        "zipcode": "31900",
+        "name": "Selîm"
+      },
+      {
+        "zipcode": "32000",
+        "name": "Semsat"
+      },
+      {
+        "zipcode": "32100",
+        "name": "Semsûr"
+      },
+      {
+        "zipcode": "32200",
+        "name": "Serê Kanîyê"
+      },
+      {
+        "zipcode": "32300",
+        "name": "Sergolan"
+      },
+      {
+        "zipcode": "32400",
+        "name": "Sêrt"
+      },
+      {
+        "zipcode": "32500",
+        "name": "Sêwaz"
+      },
+      {
+        "zipcode": "32600",
+        "name": "Sêwreg"
+      },
+      {
+        "zipcode": "32700",
+        "name": "Silopî"
+      },
+      {
+        "zipcode": "32800",
+        "name": "Sincik"
+      },
+      {
+        "zipcode": "32900",
+        "name": "Sîvrîce"
+      },
+      {
+        "zipcode": "33000",
+        "name": "Stewr"
+      },
+      {
+        "zipcode": "33100",
+        "name": "Sûşehrî"
+      },
+      {
+        "zipcode": "33200",
+        "name": "Şankuş"
+      },
+      {
+        "zipcode": "33300",
+        "name": "Şax"
+      },
+      {
+        "zipcode": "33400",
+        "name": "Şemîzînan"
+      },
+      {
+        "zipcode": "33500",
+        "name": "Şemrex"
+      },
+      {
+        "zipcode": "33600",
+        "name": "Şemzînan"
+      },
+      {
+        "zipcode": "33700",
+        "name": "Şernex"
+      },
+      {
+        "zipcode": "33800",
+        "name": "Şêrwan"
+      },
+      {
+        "zipcode": "33900",
+        "name": "Şirnex"
+      },
+      {
+        "zipcode": "34000",
+        "name": "Şîro"
+      },
+      {
+        "zipcode": "34100",
+        "name": "Şûrêgel"
+      },
+      {
+        "zipcode": "34200",
+        "name": "Tatos"
+      },
+      {
+        "zipcode": "34300",
+        "name": "Tawûsker"
+      },
+      {
+        "zipcode": "34400",
+        "name": "Tecer"
+      },
+      {
+        "zipcode": "34500",
+        "name": "Tetwan"
+      },
+      {
+        "zipcode": "34600",
+        "name": "Têkor"
+      },
+      {
+        "zipcode": "34700",
+        "name": "Têlî"
+      },
+      {
+        "zipcode": "34800",
+        "name": "Têrcan"
+      },
+      {
+        "zipcode": "34900",
+        "name": "Têşberûn"
+      },
+      {
+        "zipcode": "35000",
+        "name": "Tilo"
+      },
+      {
+        "zipcode": "35100",
+        "name": "Tixbişar"
+      },
+      {
+        "zipcode": "35200",
+        "name": "Tîlbîşar"
+      },
+      {
+        "zipcode": "35300",
+        "name": "Tonus"
+      },
+      {
+        "zipcode": "35400",
+        "name": "Tortim"
+      },
+      {
+        "zipcode": "35500",
+        "name": "Tozanî"
+      },
+      {
+        "zipcode": "35600",
+        "name": "Tût"
+      },
+      {
+        "zipcode": "35700",
+        "name": "Wan"
+      },
+      {
+        "zipcode": "35800",
+        "name": "Westan"
+      },
+      {
+        "zipcode": "35900",
+        "name": "Wêranşar"
+      },
+      {
+        "zipcode": "36000",
+        "name": "Xamûr"
+      },
+      {
+        "zipcode": "36100",
+        "name": "Xana Hewêl"
+      },
+      {
+        "zipcode": "36200",
+        "name": "Xanek"
+      },
+      {
+        "zipcode": "36300",
+        "name": "Xarpêt"
+      },
+      {
+        "zipcode": "36400",
+        "name": "Xawesor"
+      },
+      {
+        "zipcode": "36500",
+        "name": "Xelat"
+      },
+      {
+        "zipcode": "36600",
+        "name": "Xelfetî"
+      },
+      {
+        "zipcode": "36700",
+        "name": "Xemûr"
+      },
+      {
+        "zipcode": "36800",
+        "name": "Xenêk"
+      },
+      {
+        "zipcode": "36900",
+        "name": "Xinûs (Kela)"
+      },
+      {
+        "zipcode": "37000",
+        "name": "Xisxêr"
+      },
+      {
+        "zipcode": "37100",
+        "name": "Xîzan"
+      },
+      {
+        "zipcode": "37200",
+        "name": "Xorasan"
+      },
+      {
+        "zipcode": "37300",
+        "name": "Xorxol"
+      },
+      {
+        "zipcode": "37400",
+        "name": "Xoşab"
+      },
+      {
+        "zipcode": "37500",
+        "name": "Xozat"
+      },
+      {
+        "zipcode": "37600",
+        "name": "Xulaman"
+      },
+      {
+        "zipcode": "37700",
+        "name": "Xûx"
+      },
+      {
+        "zipcode": "37800",
+        "name": "Yildizelî"
+      },
+      {
+        "zipcode": "37900",
+        "name": "Zarûşad"
+      },
+      {
+        "zipcode": "38000",
+        "name": "Zêdikan"
+      },
+      {
+        "zipcode": "38100",
+        "name": "Zêtka"
+      },
+      {
+        "zipcode": "38200",
+        "name": "Zûrzûnan"
+      }
+    ]
+  },
+  {
+    "province": "Başûr",
+    "sort_order": 2,
+    "cities": [
+      {
+        "zipcode": "50100",
+        "name": "Akrê"
+      },
+      {
+        "zipcode": "50200",
+        "name": "Amêdî"
+      },
+      {
+        "zipcode": "50300",
+        "name": "Axçeler"
+      },
+      {
+        "zipcode": "50400",
+        "name": "Baedrê"
+      },
+      {
+        "zipcode": "50500",
+        "name": "Baej"
+      },
+      {
+        "zipcode": "50600",
+        "name": "Bamernê"
+      },
+      {
+        "zipcode": "50700",
+        "name": "Baqûbe"
+      },
+      {
+        "zipcode": "50800",
+        "name": "Bartella"
+      },
+      {
+        "zipcode": "50900",
+        "name": "Başîqa"
+      },
+      {
+        "zipcode": "51000",
+        "name": "Batûfa"
+      },
+      {
+        "zipcode": "51100",
+        "name": "Bazyan"
+      },
+      {
+        "zipcode": "51200",
+        "name": "Bekreco"
+      },
+      {
+        "zipcode": "51300",
+        "name": "Bemû"
+      },
+      {
+        "zipcode": "51400",
+        "name": "Berdereş"
+      },
+      {
+        "zipcode": "51500",
+        "name": "Binesilawe"
+      },
+      {
+        "zipcode": "51600",
+        "name": "Celewla"
+      },
+      {
+        "zipcode": "51700",
+        "name": "Çemçemal"
+      },
+      {
+        "zipcode": "51800",
+        "name": "Çire"
+      },
+      {
+        "zipcode": "51900",
+        "name": "Çiwarqurne"
+      },
+      {
+        "zipcode": "52000",
+        "name": "Çoman"
+      },
+      {
+        "zipcode": "52100",
+        "name": "Çuwarta"
+      },
+      {
+        "zipcode": "52200",
+        "name": "Daqoq"
+      },
+      {
+        "zipcode": "52300",
+        "name": "Darbandîçan"
+      },
+      {
+        "zipcode": "52400",
+        "name": "Darmanawa"
+      },
+      {
+        "zipcode": "52500",
+        "name": "Derbendîxan"
+      },
+      {
+        "zipcode": "52600",
+        "name": "Dêrelûk"
+      },
+      {
+        "zipcode": "52700",
+        "name": "Dibs"
+      },
+      {
+        "zipcode": "52800",
+        "name": "Dihok"
+      },
+      {
+        "zipcode": "52900",
+        "name": "Dîyale"
+      },
+      {
+        "zipcode": "53000",
+        "name": "Dîyana"
+      },
+      {
+        "zipcode": "53100",
+        "name": "Dokan"
+      },
+      {
+        "zipcode": "53200",
+        "name": "Dûz"
+      },
+      {
+        "zipcode": "53300",
+        "name": "Elkîş"
+      },
+      {
+        "zipcode": "53400",
+        "name": "Erbet"
+      },
+      {
+        "zipcode": "53500",
+        "name": "Esker"
+      },
+      {
+        "zipcode": "53600",
+        "name": "Etrûş"
+      },
+      {
+        "zipcode": "53700",
+        "name": "Fayde"
+      },
+      {
+        "zipcode": "53800",
+        "name": "Gilale"
+      },
+      {
+        "zipcode": "53900",
+        "name": "Harîr"
+      },
+      {
+        "zipcode": "54000",
+        "name": "Hecî Umeran"
+      },
+      {
+        "zipcode": "54100",
+        "name": "Hecîler"
+      },
+      {
+        "zipcode": "54200",
+        "name": "Helebçe"
+      },
+      {
+        "zipcode": "54300",
+        "name": "Hemzekor"
+      },
+      {
+        "zipcode": "54400",
+        "name": "Hewîce"
+      },
+      {
+        "zipcode": "54500",
+        "name": "Hewlêr"
+      },
+      {
+        "zipcode": "54600",
+        "name": "Kanîmasê"
+      },
+      {
+        "zipcode": "54700",
+        "name": "Kelar"
+      },
+      {
+        "zipcode": "54800",
+        "name": "Kerkûk"
+      },
+      {
+        "zipcode": "54900",
+        "name": "Kesnezan"
+      },
+      {
+        "zipcode": "55000",
+        "name": "Kifrî"
+      },
+      {
+        "zipcode": "55100",
+        "name": "Koye"
+      },
+      {
+        "zipcode": "55200",
+        "name": "Leylan"
+      },
+      {
+        "zipcode": "55300",
+        "name": "Mangêş"
+      },
+      {
+        "zipcode": "55400",
+        "name": "Mawet"
+      },
+      {
+        "zipcode": "55500",
+        "name": "Mendelî"
+      },
+      {
+        "zipcode": "55600",
+        "name": "Mexmûr"
+      },
+      {
+        "zipcode": "55700",
+        "name": "Mêrgesor"
+      },
+      {
+        "zipcode": "55800",
+        "name": "Mûsil"
+      },
+      {
+        "zipcode": "55900",
+        "name": "Neftxane"
+      },
+      {
+        "zipcode": "56000",
+        "name": "Pêncwên"
+      },
+      {
+        "zipcode": "56100",
+        "name": "Pirdê (Altûnkoprî)"
+      },
+      {
+        "zipcode": "56200",
+        "name": "Pişder"
+      },
+      {
+        "zipcode": "56300",
+        "name": "Pîre Megrun"
+      },
+      {
+        "zipcode": "56400",
+        "name": "Qadirkerem"
+      },
+      {
+        "zipcode": "56500",
+        "name": "Qeladizê"
+      },
+      {
+        "zipcode": "56600",
+        "name": "Qeredax"
+      },
+      {
+        "zipcode": "56700",
+        "name": "Qereqûş"
+      },
+      {
+        "zipcode": "56800",
+        "name": "Qeretû"
+      },
+      {
+        "zipcode": "56900",
+        "name": "Qesir"
+      },
+      {
+        "zipcode": "57000",
+        "name": "Qesrok"
+      },
+      {
+        "zipcode": "57100",
+        "name": "Ranîye"
+      },
+      {
+        "zipcode": "57200",
+        "name": "Rewandiz"
+      },
+      {
+        "zipcode": "57300",
+        "name": "Rizgarî"
+      },
+      {
+        "zipcode": "57400",
+        "name": "Selahedîn"
+      },
+      {
+        "zipcode": "57500",
+        "name": "Sengaw"
+      },
+      {
+        "zipcode": "57600",
+        "name": "Sersing"
+      },
+      {
+        "zipcode": "57700",
+        "name": "Seyîd Sadiq"
+      },
+      {
+        "zipcode": "57800",
+        "name": "Sêmêl"
+      },
+      {
+        "zipcode": "57900",
+        "name": "Silêmanî"
+      },
+      {
+        "zipcode": "58000",
+        "name": "Soran"
+      },
+      {
+        "zipcode": "58100",
+        "name": "Sordaş"
+      },
+      {
+        "zipcode": "58200",
+        "name": "Şakil"
+      },
+      {
+        "zipcode": "58300",
+        "name": "Şarbajêr"
+      },
+      {
+        "zipcode": "58400",
+        "name": "Şarezûr"
+      },
+      {
+        "zipcode": "58500",
+        "name": "Şeqlawe"
+      },
+      {
+        "zipcode": "58600",
+        "name": "Şêxan"
+      },
+      {
+        "zipcode": "58700",
+        "name": "Şingal"
+      },
+      {
+        "zipcode": "58800",
+        "name": "Şûwan"
+      },
+      {
+        "zipcode": "58900",
+        "name": "Tawûq"
+      },
+      {
+        "zipcode": "59000",
+        "name": "Teqteq"
+      },
+      {
+        "zipcode": "59100",
+        "name": "Tesqopa"
+      },
+      {
+        "zipcode": "59200",
+        "name": "Tewêle"
+      },
+      {
+        "zipcode": "59300",
+        "name": "Til Ezer"
+      },
+      {
+        "zipcode": "59400",
+        "name": "Tilehfer"
+      },
+      {
+        "zipcode": "59500",
+        "name": "Tilkêf"
+      },
+      {
+        "zipcode": "59600",
+        "name": "Xaneqîn"
+      },
+      {
+        "zipcode": "59700",
+        "name": "Xebat"
+      },
+      {
+        "zipcode": "59800",
+        "name": "Xelîfan"
+      },
+      {
+        "zipcode": "59900",
+        "name": "Xurmal"
+      },
+      {
+        "zipcode": "60000",
+        "name": "Xurmatû"
+      },
+      {
+        "zipcode": "60100",
+        "name": "Xuylên (Hewîce)"
+      },
+      {
+        "zipcode": "60200",
+        "name": "Zawîte"
+      },
+      {
+        "zipcode": "60300",
+        "name": "Zaxo"
+      }
+    ]
+  },
+  {
+    "province": "Rojava",
+    "sort_order": 3,
+    "cities": [
+      {
+        "zipcode": "70100",
+        "name": "Amûd"
+      },
+      {
+        "zipcode": "70200",
+        "name": "Arfêtê"
+      },
+      {
+        "zipcode": "70300",
+        "name": "Bab"
+      },
+      {
+        "zipcode": "70400",
+        "name": "Bajarê Firat"
+      },
+      {
+        "zipcode": "70500",
+        "name": "Baxoz"
+      },
+      {
+        "zipcode": "70600",
+        "name": "Bozanê"
+      },
+      {
+        "zipcode": "70700",
+        "name": "Cerablûs"
+      },
+      {
+        "zipcode": "70800",
+        "name": "Cindirêsê"
+      },
+      {
+        "zipcode": "70900",
+        "name": "Çilaxa"
+      },
+      {
+        "zipcode": "71000",
+        "name": "Dêre Zor"
+      },
+      {
+        "zipcode": "71100",
+        "name": "Dêrik"
+      },
+      {
+        "zipcode": "71200",
+        "name": "Dêrika Hemko"
+      },
+      {
+        "zipcode": "71300",
+        "name": "Dirbêsî"
+      },
+      {
+        "zipcode": "71400",
+        "name": "Efrîn"
+      },
+      {
+        "zipcode": "71500",
+        "name": "Elbû-kemal"
+      },
+      {
+        "zipcode": "71600",
+        "name": "Erefêt"
+      },
+      {
+        "zipcode": "71700",
+        "name": "Eyndîwer"
+      },
+      {
+        "zipcode": "71800",
+        "name": "Ezaz"
+      },
+      {
+        "zipcode": "71900",
+        "name": "Êndîwer"
+      },
+      {
+        "zipcode": "72000",
+        "name": "Girê Spî"
+      },
+      {
+        "zipcode": "72100",
+        "name": "Girê Xurma (Til Temir)"
+      },
+      {
+        "zipcode": "72200",
+        "name": "Girkê Legê"
+      },
+      {
+        "zipcode": "72300",
+        "name": "Girzîro"
+      },
+      {
+        "zipcode": "72400",
+        "name": "Hecîn"
+      },
+      {
+        "zipcode": "72500",
+        "name": "Heleb"
+      },
+      {
+        "zipcode": "72600",
+        "name": "Heseke (Hesîçe)"
+      },
+      {
+        "zipcode": "72700",
+        "name": "Hisîça"
+      },
+      {
+        "zipcode": "72800",
+        "name": "Hol"
+      },
+      {
+        "zipcode": "72900",
+        "name": "Îdlîb"
+      },
+      {
+        "zipcode": "73000",
+        "name": "Kobanî"
+      },
+      {
+        "zipcode": "73100",
+        "name": "Mabuk"
+      },
+      {
+        "zipcode": "73200",
+        "name": "Meyadîn"
+      },
+      {
+        "zipcode": "73300",
+        "name": "Minbic (Membic, Mabuk)"
+      },
+      {
+        "zipcode": "73400",
+        "name": "Nibil"
+      },
+      {
+        "zipcode": "73500",
+        "name": "Qamîşlo"
+      },
+      {
+        "zipcode": "73600",
+        "name": "Qere qozaq"
+      },
+      {
+        "zipcode": "73700",
+        "name": "Raco"
+      },
+      {
+        "zipcode": "73800",
+        "name": "Reqa"
+      },
+      {
+        "zipcode": "73900",
+        "name": "Rimêlan"
+      },
+      {
+        "zipcode": "74000",
+        "name": "Serê Kanîyê"
+      },
+      {
+        "zipcode": "74100",
+        "name": "Silûk"
+      },
+      {
+        "zipcode": "74200",
+        "name": "Sirîn"
+      },
+      {
+        "zipcode": "74300",
+        "name": "Şedadê"
+      },
+      {
+        "zipcode": "74400",
+        "name": "Şehba"
+      },
+      {
+        "zipcode": "74500",
+        "name": "Tebqa"
+      },
+      {
+        "zipcode": "74600",
+        "name": "Til Birak"
+      },
+      {
+        "zipcode": "74700",
+        "name": "Til Hemîs"
+      },
+      {
+        "zipcode": "74800",
+        "name": "Til Koçer"
+      },
+      {
+        "zipcode": "74900",
+        "name": "Til Rifat"
+      },
+      {
+        "zipcode": "75000",
+        "name": "Til Tişrîn"
+      },
+      {
+        "zipcode": "75100",
+        "name": "Tirbespî"
+      },
+      {
+        "zipcode": "75200",
+        "name": "Xemilîn (Laziqiye)"
+      }
+    ]
+  },
+  {
+    "province": "Rojhilat",
+    "sort_order": 4,
+    "cities": [
+      {
+        "zipcode": "90100",
+        "name": "Abdanan"
+      },
+      {
+        "zipcode": "90200",
+        "name": "Arwînawa"
+      },
+      {
+        "zipcode": "90300",
+        "name": "Bane"
+      },
+      {
+        "zipcode": "90400",
+        "name": "Biradost"
+      },
+      {
+        "zipcode": "90500",
+        "name": "Bîcar"
+      },
+      {
+        "zipcode": "90600",
+        "name": "Bokan"
+      },
+      {
+        "zipcode": "90700",
+        "name": "Ciwanro"
+      },
+      {
+        "zipcode": "90800",
+        "name": "Dehgulan (Dêwlan)"
+      },
+      {
+        "zipcode": "90900",
+        "name": "Dereşar"
+      },
+      {
+        "zipcode": "91000",
+        "name": "Deştebêl"
+      },
+      {
+        "zipcode": "91100",
+        "name": "Dêhloran"
+      },
+      {
+        "zipcode": "91200",
+        "name": "Dîlmeqan"
+      },
+      {
+        "zipcode": "91300",
+        "name": "Dîwandere"
+      },
+      {
+        "zipcode": "91400",
+        "name": "Enzil"
+      },
+      {
+        "zipcode": "91500",
+        "name": "Eywan"
+      },
+      {
+        "zipcode": "91600",
+        "name": "Gêlan"
+      },
+      {
+        "zipcode": "91700",
+        "name": "Gîyelan"
+      },
+      {
+        "zipcode": "91800",
+        "name": "Hamedan"
+      },
+      {
+        "zipcode": "91900",
+        "name": "Hersîn"
+      },
+      {
+        "zipcode": "92000",
+        "name": "Îlam"
+      },
+      {
+        "zipcode": "92100",
+        "name": "Kamyaran"
+      },
+      {
+        "zipcode": "92200",
+        "name": "Kengawer"
+      },
+      {
+        "zipcode": "92300",
+        "name": "Kirind"
+      },
+      {
+        "zipcode": "92400",
+        "name": "Kirmanşan"
+      },
+      {
+        "zipcode": "92500",
+        "name": "Mako"
+      },
+      {
+        "zipcode": "92600",
+        "name": "Malayer"
+      },
+      {
+        "zipcode": "92700",
+        "name": "Mehabad"
+      },
+      {
+        "zipcode": "92800",
+        "name": "Merîwan"
+      },
+      {
+        "zipcode": "92900",
+        "name": "Mêrgever"
+      },
+      {
+        "zipcode": "93000",
+        "name": "Miyanduaw"
+      },
+      {
+        "zipcode": "93100",
+        "name": "Nazlû"
+      },
+      {
+        "zipcode": "93200",
+        "name": "Nehawand"
+      },
+      {
+        "zipcode": "93300",
+        "name": "Nexede"
+      },
+      {
+        "zipcode": "93400",
+        "name": "Pawe"
+      },
+      {
+        "zipcode": "93500",
+        "name": "Pîranşar"
+      },
+      {
+        "zipcode": "93600",
+        "name": "Qereziyadîn"
+      },
+      {
+        "zipcode": "93700",
+        "name": "Qesirşîrîn"
+      },
+      {
+        "zipcode": "93800",
+        "name": "Qurwe"
+      },
+      {
+        "zipcode": "93900",
+        "name": "Qutûr"
+      },
+      {
+        "zipcode": "94000",
+        "name": "Ruwanser"
+      },
+      {
+        "zipcode": "94100",
+        "name": "Sehne"
+      },
+      {
+        "zipcode": "94200",
+        "name": "Selmas"
+      },
+      {
+        "zipcode": "94300",
+        "name": "Senendej"
+      },
+      {
+        "zipcode": "94400",
+        "name": "Seqiz"
+      },
+      {
+        "zipcode": "94500",
+        "name": "Serawlê"
+      },
+      {
+        "zipcode": "94600",
+        "name": "Serdeşt"
+      },
+      {
+        "zipcode": "94700",
+        "name": "Serpêlzahaw"
+      },
+      {
+        "zipcode": "94800",
+        "name": "Serpil"
+      },
+      {
+        "zipcode": "94900",
+        "name": "Sine"
+      },
+      {
+        "zipcode": "95000",
+        "name": "Soma"
+      },
+      {
+        "zipcode": "95100",
+        "name": "Sunqur"
+      },
+      {
+        "zipcode": "95200",
+        "name": "Şahîndij"
+      },
+      {
+        "zipcode": "95300",
+        "name": "Şarîkurd"
+      },
+      {
+        "zipcode": "95400",
+        "name": "Şêrava (Asadabad)"
+      },
+      {
+        "zipcode": "95500",
+        "name": "Şêrwan"
+      },
+      {
+        "zipcode": "95600",
+        "name": "Şino"
+      },
+      {
+        "zipcode": "95700",
+        "name": "Şot"
+      },
+      {
+        "zipcode": "95800",
+        "name": "Tazeabad"
+      },
+      {
+        "zipcode": "95900",
+        "name": "Tekab"
+      },
+      {
+        "zipcode": "96000",
+        "name": "Tirgever"
+      },
+      {
+        "zipcode": "96100",
+        "name": "Tuyserkan"
+      },
+      {
+        "zipcode": "96200",
+        "name": "Urmîye"
+      },
+      {
+        "zipcode": "96300",
+        "name": "Xoy"
+      }
+    ]
+  }
+]

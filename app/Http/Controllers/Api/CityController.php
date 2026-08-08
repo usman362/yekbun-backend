@@ -16,7 +16,7 @@ class CityController extends Controller
     public function index()
     {
         $cities = City::orderBy('name', 'ASC')->get();
-        $regions = Region::orderBy('name', 'ASC')->get();
+        $regions = Region::orderBy('sort_order', 'ASC')->orderBy('name', 'ASC')->get();
         $countries = Country::orderBy('name', 'ASC')->get();
         return response()->json(['regions' => $regions, 'countries' => $countries, 'cities' => $cities]);
     }

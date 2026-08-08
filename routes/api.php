@@ -112,6 +112,8 @@ use App\Http\Controllers\Api\Admin\ZercashAdminController;
 use App\Http\Controllers\Api\Admin\LogipayAdminController;
 use App\Http\Controllers\Api\Admin\ProductsAdminController;
 use App\Http\Controllers\Api\Admin\DeviceControlAdminController;
+use App\Http\Controllers\Api\Admin\LoconetAdminController;
+use App\Http\Controllers\Api\Admin\SecurityCenterAdminController;
 use App\Http\Controllers\Api\DeviceControlApiController;
 
 /*
@@ -1066,5 +1068,38 @@ Route::prefix('admin')->group(function () {
         Route::post('/sale-managers', [ProductsAdminController::class, 'storeSaleManager']);
         Route::put('/sale-managers/{id}', [ProductsAdminController::class, 'updateSaleManager']);
         Route::delete('/sale-managers/{id}', [ProductsAdminController::class, 'destroySaleManager']);
+
+        // ─── LoCoNet Chat ───
+        Route::prefix('loconet')->group(function () {
+            Route::get('/', [LoconetAdminController::class, 'show']);
+            Route::post('/seed', [LoconetAdminController::class, 'seed']);
+            Route::put('/settings', [LoconetAdminController::class, 'updateSettings']);
+            Route::put('/integration', [LoconetAdminController::class, 'updateIntegration']);
+            Route::post('/test-connection', [LoconetAdminController::class, 'testConnection']);
+            Route::post('/chats/{id}/status', [LoconetAdminController::class, 'chatStatus']);
+            Route::post('/chats/{id}/audit', [LoconetAdminController::class, 'chatAudit']);
+            Route::post('/reports/{id}/action', [LoconetAdminController::class, 'reportAction']);
+            Route::post('/streams/{id}/action', [LoconetAdminController::class, 'streamAction']);
+            Route::post('/scheduled/{id}/action', [LoconetAdminController::class, 'scheduledAction']);
+            Route::post('/streamers/{id}/action', [LoconetAdminController::class, 'streamerAction']);
+            Route::post('/purchases', [LoconetAdminController::class, 'createPurchase']);
+            Route::post('/purchases/{id}/status', [LoconetAdminController::class, 'purchaseStatus']);
+        });
+
+        // ─── Security Center ───
+        Route::prefix('security-center')->group(function () {
+            Route::get('/', [SecurityCenterAdminController::class, 'show']);
+            Route::get('/secrets', [SecurityCenterAdminController::class, 'secrets']);
+            Route::put('/methods', [SecurityCenterAdminController::class, 'updateMethods']);
+            Route::post('/devices', [SecurityCenterAdminController::class, 'addDevice']);
+            Route::put('/devices/{id}', [SecurityCenterAdminController::class, 'renameDevice']);
+            Route::delete('/devices/{id}', [SecurityCenterAdminController::class, 'removeDevice']);
+            Route::post('/sessions/{id}/terminate', [SecurityCenterAdminController::class, 'terminateSession']);
+            Route::post('/sessions/terminate-others', [SecurityCenterAdminController::class, 'terminateOthers']);
+            Route::post('/totp/regenerate', [SecurityCenterAdminController::class, 'regenerateTotp']);
+            Route::post('/recovery-codes', [SecurityCenterAdminController::class, 'regenerateCodes']);
+            Route::put('/recovery-contact', [SecurityCenterAdminController::class, 'updateContact']);
+            Route::post('/history', [SecurityCenterAdminController::class, 'addHistory']);
+        });
     });
 });

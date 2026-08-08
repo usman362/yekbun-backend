@@ -14,7 +14,7 @@ class LocationAdminController extends Controller
 {
     public function regionsList()
     {
-        $regions = Region::orderBy('name')->get()->map(function ($r) {
+        $regions = Region::orderBy('sort_order')->orderBy('name')->get()->map(function ($r) {
             return [
                 'id'   => (string) $r->_id,
                 'name' => $r->name ?? '',
@@ -28,7 +28,7 @@ class LocationAdminController extends Controller
     {
         $countries = Country::orderBy('name')->get();
         $data = $countries->map(function ($c) {
-            $regions = Region::where('country_id', $c->_id)->orderBy('name')->get();
+            $regions = Region::where('country_id', $c->_id)->orderBy('sort_order')->orderBy('name')->get();
             return [
                 'id' => (string) $c->_id,
                 'name' => $c->name,

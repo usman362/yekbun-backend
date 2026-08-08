@@ -333,7 +333,7 @@ class AuthController extends Controller
                 $prV = '';
                 if ($user->province === 'Rojava') {
                     $prV = 'RA';
-                } elseif ($user->province === 'Bakûr') {
+                } elseif ($user->province === 'Bakur' || $user->province === 'Bakûr') {
                     $prV = 'BK';
                 } elseif ($user->province === 'Başûr') {
                     $prV = 'BŞ';
