@@ -404,4 +404,276 @@ class SecurityCenterAdminController extends Controller
         $row->save();
         return ResponseHelper::sendResponse($this->present($row), 'History updated.');
     }
+
+    private function b64urlEncode(string $bin): string
+    {
+        return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
+    }
+
+    private function b64urlDecode(string $str): string
+    {
+        $str = strtr($str, '-_', '+/');
+        $pad = strlen($str) % 4;
+        if ($pad) {
+            $str .= str_repeat('=', 4 - $pad);
+        }
+        $decoded = base64_decode($str, true);
+        return $decoded === false ? '' : $decoded;
+    }
+
+    private function rpFromRequest(Request $request): array
+    {
+        $origin = (string) $request->headers->get('Origin', '');
+        if ($origin === '') {
+            $referer = (string) $request->headers->get('Referer', '');
+            if ($referer !== '') {
+                $scheme = parse_url($referer, PHP_URL_SCHEME) ?: 'https';
+                $host = parse_url($referer, PHP_URL_HOST) ?: '';
+                $port = parse_url($referer, PHP_URL_PORT);
+                $origin = $scheme . '://' . $host . ($port ? ':' . $port : '');
+            }
+        }
+        $host = (string) (parse_url($origin, PHP_URL_HOST) ?: '');
+        $allowed = in_array($host, ['localhost', '127.0.0.1', 'appdash.yekbun.org', 'yekbun.app', 'www.yekbun.app'], true)
+            || str_ends_with($host, '.yekbun.org');
+        if ($host === '' || !$allowed) {
+            return ['ok' => false, 'origin' => $origin, 'rpId' => '', 'host' => $host];
+        }
+        return ['ok' => true, 'origin' => $origin, 'rpId' => $host, 'host' => $host];
+    }
+
+    private function issueChallenge(SecurityCenterState $row, string $purpose): string
+    {
+        $challenge = $this->b64urlEncode(random_bytes(32));
+        $row->webauthn_challenge = $challenge;
+        $row->webauthn_challenge_exp = now()->addMinutes(5)->toIso8601String();
+        $row->webauthn_purpose = $purpose;
+        $row->save();
+        return $challenge;
+    }
+
+    private function consumeChallenge(SecurityCenterState $row, string $clientDataJsonB64, string $expectedType, string $expectedOrigin, string $purpose): ?string
+    {
+        $raw = $this->b64urlDecode($clientDataJsonB64);
+        $client = json_decode($raw, true);
+        if (!is_array($client)) {
+            return 'Invalid clientDataJSON.';
+        }
+        if (($client['type'] ?? '') !== $expectedType) {
+            return 'Unexpected WebAuthn ceremony type.';
+        }
+        $challenge = rtrim((string) ($client['challenge'] ?? ''), '=');
+        $stored = rtrim((string) $row->webauthn_challenge, '=');
+        if ($stored === '' || !hash_equals($stored, $challenge)) {
+            return 'Passkey challenge mismatch or expired. Try again.';
+        }
+        if ((string) $row->webauthn_purpose !== $purpose) {
+            return 'Passkey challenge purpose mismatch. Try again.';
+        }
+        $exp = $row->webauthn_challenge_exp ? strtotime((string) $row->webauthn_challenge_exp) : 0;
+        if ($exp && $exp < time()) {
+            return 'Passkey challenge expired. Try again.';
+        }
+        $origin = (string) ($client['origin'] ?? '');
+        if ($origin !== $expectedOrigin) {
+            return 'Passkey origin mismatch.';
+        }
+        $row->webauthn_challenge = null;
+        $row->webauthn_challenge_exp = null;
+        $row->webauthn_purpose = null;
+        return null;
+    }
+
+    /** POST /admin/security-center/passkey/options */
+    public function passkeyOptions(Request $request)
+    {
+        $rp = $this->rpFromRequest($request);
+        if (!$rp['ok']) {
+            return ResponseHelper::sendResponse(null, 'Passkeys are only available from the YekBûn dashboard origin.', false, 422);
+        }
+        $row = $this->snapshot();
+        $user = auth()->user();
+        $adminId = $this->adminId();
+        $email = (string) ($user->email ?? ('admin-' . $adminId . '@yekbun.app'));
+        $name = trim((string) ($user->name ?? $user->username ?? 'YekBûn Admin')) ?: 'YekBûn Admin';
+        $challenge = $this->issueChallenge($row, 'register');
+
+        $exclude = [];
+        foreach (is_array($row->devices) ? $row->devices : [] as $device) {
+            $cid = $device['credential_id'] ?? null;
+            if (is_string($cid) && $cid !== '') {
+                $exclude[] = ['type' => 'public-key', 'id' => $cid];
+            }
+        }
+
+        return ResponseHelper::sendResponse([
+            'rp' => ['name' => 'YekBûn', 'id' => $rp['rpId']],
+            'user' => [
+                'id' => $this->b64urlEncode(substr($adminId, 0, 64)),
+                'name' => $email,
+                'displayName' => $name,
+            ],
+            'challenge' => $challenge,
+            'pubKeyCredParams' => [
+                ['type' => 'public-key', 'alg' => -7],
+                ['type' => 'public-key', 'alg' => -257],
+            ],
+            'timeout' => 60000,
+            'authenticatorSelection' => [
+                'residentKey' => 'preferred',
+                'userVerification' => 'preferred',
+            ],
+            'attestation' => 'none',
+            'excludeCredentials' => $exclude,
+        ], 'Passkey registration options ready.');
+    }
+
+    /** POST /admin/security-center/passkey/register */
+    public function passkeyRegister(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|string',
+            'clientDataJSON' => 'required|string',
+            'name' => 'required|string|max:80',
+            'os' => 'nullable|string|max:80',
+            'browser' => 'nullable|string|max:80',
+            'type' => 'nullable|string|max:40',
+        ]);
+        $rp = $this->rpFromRequest($request);
+        if (!$rp['ok']) {
+            return ResponseHelper::sendResponse(null, 'Passkeys are only available from the YekBûn dashboard origin.', false, 422);
+        }
+        $row = $this->snapshot();
+        $err = $this->consumeChallenge($row, (string) $request->input('clientDataJSON'), 'webauthn.create', $rp['origin'], 'register');
+        if ($err) {
+            $row->save();
+            return ResponseHelper::sendResponse(null, $err, false, 422);
+        }
+
+        $credentialId = (string) $request->input('id');
+        $devices = is_array($row->devices) ? $row->devices : [];
+        foreach ($devices as $existing) {
+            if (($existing['credential_id'] ?? '') === $credentialId) {
+                return ResponseHelper::sendResponse(null, 'This passkey is already registered.', false, 422);
+            }
+        }
+
+        $device = [
+            'id' => 'd-' . Str::random(8),
+            'name' => $request->input('name'),
+            'os' => $request->input('os', 'Unknown'),
+            'browser' => $request->input('browser', 'Unknown'),
+            'type' => $request->input('type', 'Desktop'),
+            'created' => now()->format('d M Y'),
+            'lastUsed' => 'Just now',
+            'current' => $request->boolean('current', true) || empty($devices),
+            'credential_id' => $credentialId,
+        ];
+        if (!empty($device['current'])) {
+            $devices = array_map(function ($d) {
+                $d['current'] = false;
+                return $d;
+            }, $devices);
+        }
+        array_unshift($devices, $device);
+        $row->devices = $devices;
+        $row->passkey_registered = true;
+        $row->passkey = true;
+        $this->pushAlert($row, 'Passkey registered', $device['name'] . ' can now sign in with WebAuthn');
+        $this->pushHistory($row, [
+            'type' => 'Passkey Registered',
+            'device' => $device['name'],
+            'os' => $device['os'],
+            'browser' => $device['browser'],
+            'method' => 'Passkey (WebAuthn)',
+        ]);
+        $row->save();
+        return ResponseHelper::sendResponse($this->present($row), 'Passkey registered.');
+    }
+
+    /** POST /admin/security-center/passkey/assert-options */
+    public function passkeyAssertOptions(Request $request)
+    {
+        $rp = $this->rpFromRequest($request);
+        if (!$rp['ok']) {
+            return ResponseHelper::sendResponse(null, 'Passkeys are only available from the YekBûn dashboard origin.', false, 422);
+        }
+        $row = $this->snapshot();
+        $allow = [];
+        foreach (is_array($row->devices) ? $row->devices : [] as $device) {
+            $cid = $device['credential_id'] ?? null;
+            if (is_string($cid) && $cid !== '') {
+                $allow[] = ['type' => 'public-key', 'id' => $cid];
+            }
+        }
+        if (!$row->passkey_registered && empty($allow)) {
+            return ResponseHelper::sendResponse(null, 'No passkey is registered yet.', false, 422);
+        }
+        $challenge = $this->issueChallenge($row, 'assert');
+        return ResponseHelper::sendResponse([
+            'challenge' => $challenge,
+            'timeout' => 60000,
+            'rpId' => $rp['rpId'],
+            'userVerification' => 'preferred',
+            'allowCredentials' => $allow,
+        ], 'Passkey assertion options ready.');
+    }
+
+    /** POST /admin/security-center/passkey/assert */
+    public function passkeyAssert(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|string',
+            'clientDataJSON' => 'required|string',
+        ]);
+        $rp = $this->rpFromRequest($request);
+        if (!$rp['ok']) {
+            return ResponseHelper::sendResponse(null, 'Passkeys are only available from the YekBûn dashboard origin.', false, 422);
+        }
+        $row = $this->snapshot();
+        $err = $this->consumeChallenge($row, (string) $request->input('clientDataJSON'), 'webauthn.get', $rp['origin'], 'assert');
+        if ($err) {
+            $this->pushHistory($row, [
+                'type' => 'Authentication Test',
+                'method' => 'Passkey (WebAuthn)',
+                'ok' => false,
+            ]);
+            $row->save();
+            return ResponseHelper::sendResponse(null, $err, false, 422);
+        }
+
+        $credentialId = (string) $request->input('id');
+        $devices = is_array($row->devices) ? $row->devices : [];
+        $matched = null;
+        foreach ($devices as $i => $device) {
+            $cid = $device['credential_id'] ?? null;
+            if ($cid && hash_equals((string) $cid, $credentialId)) {
+                $devices[$i]['lastUsed'] = 'Just now';
+                $matched = $devices[$i];
+                break;
+            }
+        }
+        if (!$matched && !empty(array_filter($devices, fn ($d) => !empty($d['credential_id'])))) {
+            $this->pushHistory($row, [
+                'type' => 'Authentication Test',
+                'method' => 'Passkey (WebAuthn)',
+                'ok' => false,
+            ]);
+            $row->save();
+            return ResponseHelper::sendResponse(null, 'This passkey is not registered on your account.', false, 422);
+        }
+        if ($matched) {
+            $row->devices = $devices;
+        }
+        $this->pushHistory($row, [
+            'type' => 'Authentication Test',
+            'device' => $matched['name'] ?? 'This device',
+            'os' => $matched['os'] ?? PHP_OS_FAMILY,
+            'browser' => $matched['browser'] ?? 'Chrome',
+            'method' => 'Passkey (WebAuthn)',
+            'ok' => true,
+        ]);
+        $row->save();
+        return ResponseHelper::sendResponse($this->present($row), 'Passkey verified.');
+    }
 }

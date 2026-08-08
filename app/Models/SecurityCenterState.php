@@ -35,5 +35,8 @@ class SecurityCenterState extends Model
         'totp_secret',
         'backup_key',
         'recovery_codes',
+        'webauthn_challenge',
+        'webauthn_challenge_exp',
+        'webauthn_purpose',
     ];
 }

@@ -1100,6 +1100,10 @@ Route::prefix('admin')->group(function () {
             Route::post('/recovery-codes', [SecurityCenterAdminController::class, 'regenerateCodes']);
             Route::put('/recovery-contact', [SecurityCenterAdminController::class, 'updateContact']);
             Route::post('/history', [SecurityCenterAdminController::class, 'addHistory']);
+            Route::post('/passkey/options', [SecurityCenterAdminController::class, 'passkeyOptions']);
+            Route::post('/passkey/register', [SecurityCenterAdminController::class, 'passkeyRegister']);
+            Route::post('/passkey/assert-options', [SecurityCenterAdminController::class, 'passkeyAssertOptions']);
+            Route::post('/passkey/assert', [SecurityCenterAdminController::class, 'passkeyAssert']);
         });
     });
 });
