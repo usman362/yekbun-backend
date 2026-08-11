@@ -114,6 +114,7 @@ use App\Http\Controllers\Api\Admin\ProductsAdminController;
 use App\Http\Controllers\Api\Admin\DeviceControlAdminController;
 use App\Http\Controllers\Api\Admin\LoconetAdminController;
 use App\Http\Controllers\Api\Admin\SecurityCenterAdminController;
+use App\Http\Controllers\Api\Admin\EventCenterAdminController;
 use App\Http\Controllers\Api\DeviceControlApiController;
 
 /*
@@ -1104,6 +1105,20 @@ Route::prefix('admin')->group(function () {
             Route::post('/passkey/register', [SecurityCenterAdminController::class, 'passkeyRegister']);
             Route::post('/passkey/assert-options', [SecurityCenterAdminController::class, 'passkeyAssertOptions']);
             Route::post('/passkey/assert', [SecurityCenterAdminController::class, 'passkeyAssert']);
+        });
+
+        // ─── Agent Event Center ───
+        Route::prefix('event-center')->group(function () {
+            Route::get('/events', [EventCenterAdminController::class, 'index']);
+            Route::get('/events/{id}', [EventCenterAdminController::class, 'show']);
+            Route::post('/events/{id}/claim', [EventCenterAdminController::class, 'claim']);
+            Route::post('/events/{id}/process', [EventCenterAdminController::class, 'process']);
+            Route::post('/events/{id}/run', [EventCenterAdminController::class, 'run']);
+            Route::post('/events/{id}/reply', [EventCenterAdminController::class, 'reply']);
+            Route::post('/events/{id}/status', [EventCenterAdminController::class, 'updateStatus']);
+            Route::delete('/events/{id}', [EventCenterAdminController::class, 'destroy']);
+            Route::post('/seed', [EventCenterAdminController::class, 'seed']);
+            Route::get('/queues/{agent}', [EventCenterAdminController::class, 'queue']);
         });
     });
 });
