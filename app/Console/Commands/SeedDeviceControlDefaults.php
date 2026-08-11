@@ -10,19 +10,20 @@ use App\Models\RuntimeProfile;
 use Illuminate\Console\Command;
 
 /**
- * Seed Device Control defaults (Entry / Low / Balanced / High / Ultra) plus
- * sample telemetry + problem-device rows for admin UI scaffolding.
- *
- * Idempotent by `key` / `device_id` / `group_id`.
+ * Seed Device Control defaults (Entry / Low / Balanced / High / Ultra).
+ * Sample telemetry / problem devices are OFF by default — use --with-samples for local UI demos only.
  *
  *   php artisan device-control:seed-defaults
- *   php artisan device-control:seed-defaults --force   # wipe + reseed
+ *   php artisan device-control:seed-defaults --force          # wipe profiles + reseed (also clears telemetry/problems)
+ *   php artisan device-control:seed-defaults --with-samples   # also insert dummy D-01… / PG-00x rows
  */
 class SeedDeviceControlDefaults extends Command
 {
-    protected $signature = 'device-control:seed-defaults {--force : Delete existing Device Control docs before seeding}';
+    protected $signature = 'device-control:seed-defaults
+                            {--force : Delete existing Device Control docs before seeding}
+                            {--with-samples : Also seed dummy telemetry + problem devices}';
 
-    protected $description = 'Seed Device Control profiles (Entry→Ultra), sample telemetry and problem devices.';
+    protected $description = 'Seed Device Control profiles (Entry→Ultra). Optional --with-samples for demo telemetry.';
 
     private const AFFECTED = [
         'entry' => 742, 'low' => 2640, 'balanced' => 5310, 'high' => 2918, 'ultra' => 870,
@@ -42,8 +43,13 @@ class SeedDeviceControlDefaults extends Command
         $this->seedRuntimeProfiles();
         $this->seedCacheProfiles();
         $this->seedDeviceProfiles();
-        $this->seedTelemetry();
-        $this->seedProblemDevices();
+
+        if ($this->option('with-samples')) {
+            $this->seedTelemetry();
+            $this->seedProblemDevices();
+        } else {
+            $this->line('Skipped sample telemetry / problem devices (pass --with-samples to include).');
+        }
 
         $this->info('Device Control defaults ready.');
         $this->line('  device_profiles:   ' . DeviceProfile::count());
