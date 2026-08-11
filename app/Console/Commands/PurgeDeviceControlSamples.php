@@ -2,13 +2,17 @@
 
 namespace App\Console\Commands;
 
+use App\Models\CacheProfile;
+use App\Models\DeviceProfile;
 use App\Models\DeviceTelemetry;
 use App\Models\ProblemDevice;
+use App\Models\RuntimeProfile;
 use Illuminate\Console\Command;
 
 /**
  * Remove Device Control scaffolding / dummy rows (seeded telemetry + problem groups).
  * Keeps Entry→Ultra device / runtime / cache profiles intact.
+ * Also zeroes stored assigned/affected counts (UI now uses live telemetry).
  *
  *   php artisan device-control:purge-samples
  *   php artisan device-control:purge-samples --all   # wipe every telemetry + problem row
@@ -19,7 +23,7 @@ class PurgeDeviceControlSamples extends Command
                             {--all : Delete ALL device_telemetry and problem_devices (not only known seed ids)}
                             {--force : Required confirmation for destructive delete}';
 
-    protected $description = 'Delete Device Control dummy telemetry / problem-device rows (profiles stay).';
+    protected $description = 'Delete Device Control dummy telemetry / problem-device rows; zero seed fleet counts (profiles stay).';
 
     /** Seeded sample telemetry ids from SeedDeviceControlDefaults. */
     private const SAMPLE_DEVICE_IDS = [
@@ -45,7 +49,8 @@ class PurgeDeviceControlSamples extends Command
         if ($this->option('all')) {
             $t = DeviceTelemetry::query()->delete();
             $p = ProblemDevice::query()->delete();
-            $this->warn("Deleted ALL telemetry={$t}, problems={$p}. Profiles kept.");
+            $this->zeroProfileFleetCounts();
+            $this->warn("Deleted ALL telemetry={$t}, problems={$p}. Profiles kept; fleet counts zeroed.");
             return self::SUCCESS;
         }
 
@@ -82,12 +87,23 @@ class PurgeDeviceControlSamples extends Command
             }
         }
 
+        $this->zeroProfileFleetCounts();
+
         $this->info('Dummy Device Control rows removed (profiles kept).');
         $this->line('  telemetry deleted: ' . ($telemetryDeleted + $extraTelemetry));
         $this->line('  problems deleted:  ' . ($problemsDeleted + $extraProblems));
         $this->line('  telemetry left:    ' . DeviceTelemetry::count());
         $this->line('  problems left:     ' . ProblemDevice::count());
+        $this->line('  profile fleet counts zeroed (live counts come from telemetry).');
 
         return self::SUCCESS;
+    }
+
+    /** Clear seeded placeholder fleet sizes stored on profile docs. */
+    private function zeroProfileFleetCounts(): void
+    {
+        DeviceProfile::query()->update(['assigned_devices' => 0]);
+        RuntimeProfile::query()->update(['affected_devices' => 0]);
+        CacheProfile::query()->update(['affected_devices' => 0]);
     }
 }

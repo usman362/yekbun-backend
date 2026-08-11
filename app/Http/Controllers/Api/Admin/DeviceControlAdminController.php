@@ -20,6 +20,9 @@ use Illuminate\Support\Str;
  */
 class DeviceControlAdminController extends Controller
 {
+    /** Request-scoped live telemetry counts keyed by profile_key. */
+    private ?array $telemetryCountCache = null;
+
     /* ═══════════════════════════════════════════════════════════
      * Overview
      * ═══════════════════════════════════════════════════════════ */
@@ -28,20 +31,19 @@ class DeviceControlAdminController extends Controller
     public function overview()
     {
         $profiles = DeviceProfile::orderBy('priority')->get();
-        $totalDevices = (int) $profiles->sum('assigned_devices');
-        if ($totalDevices <= 0) {
-            $totalDevices = (int) DeviceTelemetry::count();
-        }
+        $counts = $this->telemetryCountsByProfileKey();
+        $totalDevices = (int) array_sum($counts);
 
-        $critical = (int) ProblemDevice::where('severity', 'Critical')
-            ->whereIn('status', ['Open', 'Under Review'])
-            ->sum('affected_devices');
+        // Critical = devices reporting critical health / crashes (live telemetry).
+        $critical = (int) DeviceTelemetry::where(function ($q) {
+            $q->whereIn('status', ['critical', 'Critical', 'unhealthy', 'Unhealthy'])
+                ->orWhere('crash_count', '>', 0);
+        })->count();
         $openProblems = ProblemDevice::whereIn('status', ['Open', 'Under Review'])->count();
 
-        $telCount = (int) DeviceTelemetry::count();
         $crashDevices = (int) DeviceTelemetry::where('crash_count', '>', 0)->count();
-        $crashFree = $telCount > 0
-            ? round((($telCount - $crashDevices) / $telCount) * 100, 1) . '%'
+        $crashFree = $totalDevices > 0
+            ? round((($totalDevices - $crashDevices) / $totalDevices) * 100, 1) . '%'
             : '—';
 
         return ResponseHelper::sendResponse([
@@ -58,7 +60,7 @@ class DeviceControlAdminController extends Controller
                 'key'              => $p->key,
                 'name'             => $p->name,
                 'color'            => $p->color,
-                'assigned_devices' => (int) ($p->assigned_devices ?? 0),
+                'assigned_devices' => (int) ($counts[(string) $p->key] ?? 0),
                 'status'           => $p->status,
             ])->values(),
             'profiles' => $profiles->map(fn ($p) => $this->presentDeviceProfile($p))->values(),
@@ -720,6 +722,54 @@ class DeviceControlAdminController extends Controller
         }
     }
 
+    /**
+     * Live fleet size per device profile_key from device_telemetry.
+     * Empty / missing keys count as 0 — never fall back to seeded assigned_devices.
+     *
+     * @return array<string, int>
+     */
+    private function telemetryCountsByProfileKey(): array
+    {
+        if ($this->telemetryCountCache !== null) {
+            return $this->telemetryCountCache;
+        }
+
+        $counts = [];
+        foreach (DeviceTelemetry::query()->get(['profile_key']) as $row) {
+            $key = (string) ($row->profile_key ?? '');
+            if ($key === '') {
+                $key = '_unassigned';
+            }
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+        }
+
+        $this->telemetryCountCache = $counts;
+
+        return $counts;
+    }
+
+    private function liveAssignedDevices(?string $profileKey): int
+    {
+        if ($profileKey === null || $profileKey === '') {
+            return 0;
+        }
+
+        return (int) ($this->telemetryCountsByProfileKey()[$profileKey] ?? 0);
+    }
+
+    /** Sum of live telemetry for linked device-profile keys. */
+    private function liveAffectedForLinked($linked): int
+    {
+        $keys = is_array($linked) ? $linked : [];
+        $counts = $this->telemetryCountsByProfileKey();
+        $sum = 0;
+        foreach ($keys as $k) {
+            $sum += (int) ($counts[(string) $k] ?? 0);
+        }
+
+        return $sum;
+    }
+
     private function presentDeviceProfile(DeviceProfile $p): array
     {
         return [
@@ -747,7 +797,7 @@ class DeviceControlAdminController extends Controller
             'reels'                    => $p->reels ?? [],
             'rendering'                => $p->rendering ?? [],
             'network'                  => $p->network ?? [],
-            'assigned_devices'         => (int) ($p->assigned_devices ?? 0),
+            'assigned_devices'         => $this->liveAssignedDevices((string) $p->key),
             'published_by'             => $p->published_by,
             'published_at'             => optional($p->published_at)->toIso8601String(),
             'history'                  => $p->history ?? [],
@@ -758,6 +808,8 @@ class DeviceControlAdminController extends Controller
 
     private function presentRuntimeProfile(RuntimeProfile $p): array
     {
+        $linked = $p->linked_device_profiles ?? [];
+
         return [
             'id'                     => (string) $p->_id,
             'key'                    => $p->key,
@@ -765,8 +817,8 @@ class DeviceControlAdminController extends Controller
             'description'            => $p->description,
             'version'                => $p->version,
             'status'                 => $p->status,
-            'linked_device_profiles' => $p->linked_device_profiles ?? [],
-            'affected_devices'       => (int) ($p->affected_devices ?? 0),
+            'linked_device_profiles' => $linked,
+            'affected_devices'       => $this->liveAffectedForLinked($linked),
             'api'                    => $p->api ?? [],
             'feed'                   => $p->feed ?? [],
             'video'                  => $p->video ?? [],
@@ -782,6 +834,8 @@ class DeviceControlAdminController extends Controller
 
     private function presentCacheProfile(CacheProfile $p): array
     {
+        $linked = $p->linked_device_profiles ?? [];
+
         return [
             'id'                     => (string) $p->_id,
             'key'                    => $p->key,
@@ -789,8 +843,8 @@ class DeviceControlAdminController extends Controller
             'description'            => $p->description,
             'version'                => $p->version,
             'status'                 => $p->status,
-            'linked_device_profiles' => $p->linked_device_profiles ?? [],
-            'affected_devices'       => (int) ($p->affected_devices ?? 0),
+            'linked_device_profiles' => $linked,
+            'affected_devices'       => $this->liveAffectedForLinked($linked),
             'allocation'             => $p->allocation ?? [],
             'categories'             => $p->categories ?? [],
             'cleanup'                => $p->cleanup ?? [],

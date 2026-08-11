@@ -25,8 +25,9 @@ class SeedDeviceControlDefaults extends Command
 
     protected $description = 'Seed Device Control profiles (Entry→Ultra). Optional --with-samples for demo telemetry.';
 
+    /** Always 0 — fleet size is computed live from device_telemetry, never seeded. */
     private const AFFECTED = [
-        'entry' => 742, 'low' => 2640, 'balanced' => 5310, 'high' => 2918, 'ultra' => 870,
+        'entry' => 0, 'low' => 0, 'balanced' => 0, 'high' => 0, 'ultra' => 0,
     ];
 
     public function handle(): int
@@ -557,7 +558,7 @@ class SeedDeviceControlDefaults extends Command
         return [
             $this->deviceRow('entry', 'Entry', 1, '#94a3b8',
                 'Ultra-light configuration for low-end devices with ≤4 GB RAM.',
-                'v1.14.0', ['4'], ['low'], 742, 'published',
+                'v1.14.0', ['4'], ['low'], 0, 'published',
                 ['total' => 128, 'feed' => 32, 'video' => 40, 'image' => 32, 'audio' => 12, 'chat' => 8, 'map' => 4, 'cleanup' => 'automatic'],
                 ['parallel' => 2, 'background' => false, 'retry' => 'exponential', 'queue' => 8],
                 ['batch' => 5, 'preload' => 1, 'render_distance' => 1, 'strategy' => 'lazy'],
@@ -569,7 +570,7 @@ class SeedDeviceControlDefaults extends Command
             ),
             $this->deviceRow('low', 'Low', 2, '#f97316',
                 'Reduced footprint for 4 GB devices with basic GPUs.',
-                'v1.14.1', ['4'], ['low', 'mid'], 2640, 'published',
+                'v1.14.1', ['4'], ['low', 'mid'], 0, 'published',
                 ['total' => 256, 'feed' => 64, 'video' => 80, 'image' => 64, 'audio' => 24, 'chat' => 16, 'map' => 8, 'cleanup' => 'hybrid'],
                 ['parallel' => 3, 'background' => true, 'retry' => 'smart', 'queue' => 16],
                 ['batch' => 8, 'preload' => 2, 'render_distance' => 2, 'strategy' => 'adaptive'],
@@ -581,7 +582,7 @@ class SeedDeviceControlDefaults extends Command
             ),
             $this->deviceRow('balanced', 'Balanced', 3, '#6366f1',
                 'Default profile for 6–8 GB mid-tier smartphones.',
-                'v1.14.2', ['6', '8'], ['mid', 'high'], 5310, 'published',
+                'v1.14.2', ['6', '8'], ['mid', 'high'], 0, 'published',
                 ['total' => 512, 'feed' => 128, 'video' => 160, 'image' => 128, 'audio' => 48, 'chat' => 32, 'map' => 16, 'cleanup' => 'hybrid'],
                 ['parallel' => 6, 'background' => true, 'retry' => 'smart', 'queue' => 32],
                 ['batch' => 12, 'preload' => 3, 'render_distance' => 3, 'strategy' => 'adaptive'],
@@ -593,7 +594,7 @@ class SeedDeviceControlDefaults extends Command
             ),
             $this->deviceRow('high', 'High', 4, '#10b981',
                 'Premium experience for 8–12 GB high-end devices.',
-                'v1.14.2', ['8', '12+'], ['high'], 2918, 'published',
+                'v1.14.2', ['8', '12+'], ['high'], 0, 'published',
                 ['total' => 1024, 'feed' => 256, 'video' => 320, 'image' => 256, 'audio' => 96, 'chat' => 64, 'map' => 32, 'cleanup' => 'hybrid'],
                 ['parallel' => 10, 'background' => true, 'retry' => 'smart', 'queue' => 64],
                 ['batch' => 20, 'preload' => 5, 'render_distance' => 4, 'strategy' => 'eager'],
@@ -605,7 +606,7 @@ class SeedDeviceControlDefaults extends Command
             ),
             $this->deviceRow('ultra', 'Ultra', 5, '#8b5cf6',
                 'Maximum fidelity for flagship devices (12 GB+).',
-                'v1.13.9', ['12+'], ['flagship'], 870, 'draft',
+                'v1.13.9', ['12+'], ['flagship'], 0, 'draft',
                 ['total' => 2048, 'feed' => 512, 'video' => 640, 'image' => 512, 'audio' => 192, 'chat' => 128, 'map' => 64, 'cleanup' => 'manual'],
                 ['parallel' => 16, 'background' => true, 'retry' => 'smart', 'queue' => 128],
                 ['batch' => 30, 'preload' => 8, 'render_distance' => 6, 'strategy' => 'eager'],
