@@ -90,14 +90,75 @@ class KycApiController extends Controller
         ], 'OTP verified successfully.');
     }
 
+    /**
+     * POST /api/kyc/upload-image
+     * Mobile camera / gallery upload (one file per call). Returns path + url for later
+     * POST /kyc/submit (document_front / document_back / selfie as path strings).
+     *
+     * multipart: image|file (required), type=front|back|selfie|document (optional)
+     */
+    public function uploadImage(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'image' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'file'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'type'  => 'nullable|in:front,back,selfie,document',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseHelper::sendResponse(
+                $validator->errors(),
+                'Validation error.',
+                false,
+                422
+            );
+        }
+
+        $uploaded = $request->file('image') ?? $request->file('file');
+        if (!$uploaded) {
+            return ResponseHelper::sendResponse(
+                ['image' => ['The image field is required.']],
+                'Validation error.',
+                false,
+                422
+            );
+        }
+
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return ResponseHelper::sendResponse(null, 'User not found.', false, 404);
+        }
+
+        $type = (string) ($request->input('type') ?: 'document');
+        $ext = strtolower((string) $uploaded->getClientOriginalExtension());
+        if ($ext === '') {
+            $ext = 'jpg';
+        }
+
+        $userId = (string) $user->_id;
+        $name = 'kyc_' . $type . '_' . $userId . '_' . time() . '_' . uniqid() . '.' . $ext;
+        // KYC docs stay on local public disk (same as submit) — not CDN.
+        $path = $uploaded->storeAs('kyc/' . $userId, $name, 'public');
+
+        return ResponseHelper::sendResponse([
+            'path' => $path,
+            'url'  => asset('storage/' . ltrim($path, '/')),
+            'type' => $type,
+        ], 'KYC image uploaded.');
+    }
 
     public function submit(Request $request)
     {
 
         $rules = [
             'document_type' => 'required|in:national_id,passport,driver_license,work_company_license',
-            'document_front' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            // File OR path from POST /kyc/upload-image
+            'document_front' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'document_front_path' => 'nullable|string|max:500',
+            'document_back' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'document_back_path' => 'nullable|string|max:500',
             'selfie' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'selfie_path' => 'nullable|string|max:500',
             'full_name' => 'nullable|string|max:255',
             'document_number' => 'nullable|string|max:100',
             'date_of_birth' => 'nullable|string',
@@ -107,15 +168,7 @@ class KycApiController extends Controller
 
         $docType = $request->input('document_type');
 
-        if (in_array($docType, ['national_id', 'driver_license'])) {
-            $rules['document_back'] = 'required|file|mimes:jpg,jpeg,png,pdf|max:5120';
-        } else {
-            $rules['document_back'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120';
-        }
-
-        $validator = Validator::make($request->all(), $rules, [
-            'document_back.required' => 'Back of document is required for ' . str_replace('_', ' ', $docType ?? '') . '.',
-        ]);
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return ResponseHelper::sendResponse(
@@ -136,33 +189,71 @@ class KycApiController extends Controller
             return ResponseHelper::sendResponse(null, 'Please verify OTP first.', false, 403);
         }
 
+        $userId = (string) $user->_id;
+
+        $frontPath = $this->resolveKycImage(
+            $request,
+            'document_front',
+            'document_front_path',
+            'front',
+            $userId,
+            true
+        );
+        if ($frontPath === false) {
+            return ResponseHelper::sendResponse(
+                ['document_front' => ['Document front image or path is required.']],
+                'Validation error.',
+                false,
+                422
+            );
+        }
+        if ($frontPath === null) {
+            return ResponseHelper::sendResponse(null, 'Invalid document_front path.', false, 422);
+        }
+
+        $needsBack = in_array($docType, ['national_id', 'driver_license'], true);
+        $backPath = $this->resolveKycImage(
+            $request,
+            'document_back',
+            'document_back_path',
+            'back',
+            $userId,
+            $needsBack
+        );
+        if ($backPath === false) {
+            return ResponseHelper::sendResponse(
+                ['document_back' => ['Back of document is required for ' . str_replace('_', ' ', (string) $docType) . '.']],
+                'Validation error.',
+                false,
+                422
+            );
+        }
+        if ($backPath === null && ($request->hasFile('document_back') || $request->filled('document_back_path') || $request->filled('document_back'))) {
+            return ResponseHelper::sendResponse(null, 'Invalid document_back path.', false, 422);
+        }
+
+        $selfiePath = $this->resolveKycImage(
+            $request,
+            'selfie',
+            'selfie_path',
+            'selfie',
+            $userId,
+            false
+        );
+        if ($selfiePath === null && ($request->hasFile('selfie') || $request->filled('selfie_path') || $request->filled('selfie'))) {
+            return ResponseHelper::sendResponse(null, 'Invalid selfie path.', false, 422);
+        }
+
         $kyc = new KycVerification();
 
         $kyc->user_id = $user->_id;
         $kyc->document_type = $docType;
-
-        $frontFile = $request->file('document_front');
-
-        $frontName = 'kyc_front_' . $user->_id . '_' . time() . '.' . $frontFile->getClientOriginalExtension();
-
-        $kyc->document_front = $frontFile->storeAs('kyc/' . $user->_id, $frontName, 'public');
-
-        if ($request->hasFile('document_back')) {
-
-            $backFile = $request->file('document_back');
-
-            $backName = 'kyc_back_' . $user->_id . '_' . time() . '.' . $backFile->getClientOriginalExtension();
-
-            $kyc->document_back = $backFile->storeAs('kyc/' . $user->_id, $backName, 'public');
+        $kyc->document_front = $frontPath;
+        if ($backPath) {
+            $kyc->document_back = $backPath;
         }
-
-        if ($request->hasFile('selfie')) {
-
-            $selfieFile = $request->file('selfie');
-
-            $selfieName = 'kyc_selfie_' . $user->_id . '_' . time() . '.' . $selfieFile->getClientOriginalExtension();
-
-            $kyc->selfie_with_id = $selfieFile->storeAs('kyc/' . $user->_id, $selfieName, 'public');
+        if ($selfiePath) {
+            $kyc->selfie_with_id = $selfiePath;
         }
 
         $kyc->full_name = $request->full_name;
@@ -184,6 +275,69 @@ class KycApiController extends Controller
             'status'      => 'pending',
             'userDetails' => $this->getUserDetails($user),
         ], 'KYC submitted.');
+    }
+
+    /**
+     * Resolve KYC image from multipart file or a previously uploaded path.
+     * @return string|false|null  path string | false = missing required | null = invalid path
+     */
+    private function resolveKycImage(
+        Request $request,
+        string $fileKey,
+        string $pathKey,
+        string $storeLabel,
+        string $userId,
+        bool $required
+    ) {
+        if ($request->hasFile($fileKey)) {
+            $file = $request->file($fileKey);
+            $ext = strtolower((string) $file->getClientOriginalExtension()) ?: 'jpg';
+            $name = 'kyc_' . $storeLabel . '_' . $userId . '_' . time() . '_' . uniqid() . '.' . $ext;
+
+            return $file->storeAs('kyc/' . $userId, $name, 'public');
+        }
+
+        $raw = $request->input($pathKey);
+        if ($raw === null || $raw === '') {
+            // Also allow plain field name as path string (mobile often reuses document_front).
+            $asString = $request->input($fileKey);
+            if (is_string($asString) && $asString !== '' && !$request->hasFile($fileKey)) {
+                $raw = $asString;
+            }
+        }
+
+        if ($raw === null || $raw === '') {
+            return $required ? false : '';
+        }
+
+        $path = $this->normalizeOwnedKycPath((string) $raw, $userId);
+        if ($path === null) {
+            return null;
+        }
+
+        return $path;
+    }
+
+    /** Only allow paths under kyc/{authUserId}/ (blocks traversal / other users' files). */
+    private function normalizeOwnedKycPath(string $raw, string $userId): ?string
+    {
+        $path = trim($raw);
+        // Accept full URL → strip to storage-relative path
+        if (preg_match('#/storage/(.+)$#', $path, $m)) {
+            $path = $m[1];
+        }
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        $path = preg_replace('#^storage/#', '', $path);
+
+        $prefix = 'kyc/' . $userId . '/';
+        if (!str_starts_with($path, $prefix)) {
+            return null;
+        }
+        if (str_contains($path, '..')) {
+            return null;
+        }
+
+        return $path;
     }
 
 

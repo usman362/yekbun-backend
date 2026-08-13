@@ -326,12 +326,24 @@ class AdminActivityController extends Controller
 
     public function destroyById(string $id)
     {
-        $popfeed = PopFeeds::where('_id', $id)->first();
+        // Prefer find() so string / ObjectId both resolve (where('_id', $string) often 404s).
+        $popfeed = null;
+        if (preg_match('/^[0-9a-fA-F]{24}$/', $id)) {
+            $popfeed = PopFeeds::find($id);
+        }
+        if (!$popfeed) {
+            try {
+                $popfeed = PopFeeds::where('_id', $id)->first();
+            } catch (\Throwable $e) {
+                $popfeed = null;
+            }
+        }
         if (!$popfeed) {
             return ResponseHelper::sendResponse(null, 'Popup Feed Not Found!', false, 404);
         }
+        $deletedId = (string) $popfeed->_id;
         $popfeed->delete();
-        return ResponseHelper::sendResponse(['id' => $id], 'Popup Feed deleted successfully.');
+        return ResponseHelper::sendResponse(['id' => $deletedId], 'Popup Feed deleted successfully.');
     }
 
     /** Portal Notifications — only on create, respects admin toggle in Notifications config. */

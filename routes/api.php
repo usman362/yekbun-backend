@@ -714,6 +714,7 @@ Route::middleware('jwt.custom')->group(function () {
     Route::get('kyc/document-types', [KycApiController::class, 'documentTypes']);
     Route::post('kyc/send-otp', [KycApiController::class, 'sendOtp']);
     Route::post('kyc/verify-otp', [KycApiController::class, 'verifyOtp']);
+    Route::post('kyc/upload-image', [KycApiController::class, 'uploadImage']); // camera/gallery → path for submit
     Route::post('kyc/submit', [KycApiController::class, 'submit']);
     Route::get('kyc/status', [KycApiController::class, 'status']);
     Route::post('kyc/review', [KycApiController::class, 'review']);
