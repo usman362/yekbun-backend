@@ -491,6 +491,8 @@ class Helpers
         $media = Media::where('media_id', $media_id)->first();
         if (!$media) {
             $media = new Media();
+            // Frozen at first insert — later count syncs must not bump sort position.
+            $media->posted_at = now();
         }
         $media->media_id = $media_id;
         $media->uri = $uri == 'exists' ? $media->uri : $uri;
@@ -502,6 +504,9 @@ class Helpers
         $media->text = $text;
         $media->text_properties = $text_properties;
         $media->type = $type;
+        if (empty($media->posted_at)) {
+            $media->posted_at = $media->created_at ?? now();
+        }
         $media->save();
     }
 }

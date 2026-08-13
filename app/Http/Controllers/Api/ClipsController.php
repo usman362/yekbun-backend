@@ -34,9 +34,10 @@ class ClipsController extends Controller
         $query = Clips::with(['template', 'user', 'likes' => fn($q) => $q->with('user'), 'views' => fn($q) => $q->with('user')])
             ->where(function ($query) use ($userId, $friendIds, $familyIds) {
                 $query->where('user_id', $userId)
+                    ->orWhereIn('share_with', ['public', 'Public', 'all', 'All', 'channel', 'Channel'])
                     ->orWhere(fn($q) => $q->whereIn('user_id', $friendIds)->whereIn('share_with', ['friends', 'friends & family']))
                     ->orWhere(fn($q) => $q->whereIn('user_id', $familyIds)->whereIn('share_with', ['family', 'friends & family']));
-            })->orderBy('created_at', 'desc');
+            })->orderBy('_id', 'desc');
 
         $videos = !empty($request->clip_id) ? $query->find($request->clip_id) : $query->get();
         return ResponseHelper::sendResponse($videos, 'Clips has been Fetch Successfully!');

@@ -570,33 +570,86 @@ class MultimediaController extends Controller
         return ResponseHelper::sendResponse('media/trimmed/' . $trimmedName, 'Trimmed file uploaded successfully!');
     }
 
+    /**
+     * GET /api/get-all-media-videos
+     * Global media feed. Must apply the SAME circle privacy as GET /feeds and GET /get-clips
+     * for types user_feeds / feeds / clips — otherwise private feed videos leak here while
+     * the feed list correctly hides them.
+     */
     public function allMediaRecord(Request $request)
     {
-        $perPage = (int) $request->get('per_page', 10);
+        $perPage = max(1, min((int) $request->get('per_page', 10), 50));
         $cursor = $request->get('cursor');
 
-        $query = Media::with('user')->orderBy('_id', 'desc');
-        if ($cursor) {
-            try {
-                $query->where('_id', '<', new ObjectId($cursor));
-            } catch (\Throwable $e) {
-                // Invalid cursor — ignore and return first page.
+        $userId = (string) Auth::id();
+        $user = User::with(['friends', 'family'])->find($userId);
+        $friendIds = $user
+            ? $user->friends->pluck('user_id')->map(fn ($id) => (string) $id)->all()
+            : [];
+        $familyIds = $user
+            ? $user->family->pluck('user_id')->map(fn ($id) => (string) $id)->all()
+            : [];
+
+        // Over-fetch + privacy filter, then sort by content time so the newest
+        // user feeds/clips land on top (not late Media._id from count syncs).
+        $batchSize = min(max($perPage * 4, 20), 80);
+        $poolTarget = $perPage * 3;
+        $collected = collect();
+        $scanCursor = $cursor;
+        $exhausted = false;
+        $sourceCache = [
+            'history' => [], 'ai_videos' => [], 'user_feeds' => [],
+            'feeds' => [], 'clips' => [], 'videos' => [],
+        ];
+
+        for ($round = 0; $round < 8 && $collected->count() < $poolTarget; $round++) {
+            $query = Media::with('user')->orderBy('_id', 'desc');
+            if ($scanCursor) {
+                try {
+                    $query->where('_id', '<', new ObjectId($scanCursor));
+                } catch (\Throwable $e) {
+                    // Invalid cursor on first page → ignore; later rounds should stop.
+                    if ($round > 0) {
+                        $exhausted = true;
+                        break;
+                    }
+                }
+            }
+
+            $batch = $query->limit($batchSize)->get();
+            if ($batch->isEmpty()) {
+                $exhausted = true;
+                break;
+            }
+
+            $byType = $batch->groupBy('type');
+            foreach (['history' => History::class, 'ai_videos' => AIVideo::class, 'user_feeds' => Feed::class, 'feeds' => Feed::class, 'clips' => Clips::class, 'videos' => VideoClip::class] as $type => $model) {
+                $loaded = $this->loadSources($model, $byType->get($type));
+                $sourceCache[$type] = $sourceCache[$type] + $loaded;
+            }
+
+            foreach ($batch as $row) {
+                $scanCursor = (string) $row->_id;
+                if (!$this->viewerCanSeeMediaRow($row, $userId, $friendIds, $familyIds, $sourceCache)) {
+                    continue;
+                }
+                $collected->push($row);
+                if ($collected->count() >= $poolTarget) {
+                    break;
+                }
+            }
+
+            if ($batch->count() < $batchSize) {
+                $exhausted = true;
+                break;
             }
         }
 
-        $media = $query->limit($perPage)->get();
-        $byType = $media->groupBy('type');
-
-        // Same count source as HistoryController / AIVideoController / Feeds:
-        // load the real row, then $row->comments->count() / $row->views->count().
-        $sources = [
-            'history'    => $this->loadSources(History::class, $byType->get('history')),
-            'ai_videos'  => $this->loadSources(AIVideo::class, $byType->get('ai_videos')),
-            'user_feeds' => $this->loadSources(Feed::class, $byType->get('user_feeds')),
-            'feeds'      => $this->loadSources(Feed::class, $byType->get('feeds')),
-            'clips'      => $this->loadSources(Clips::class, $byType->get('clips')),
-            'videos'     => $this->loadSources(VideoClip::class, $byType->get('videos')),
-        ];
+        $sources = $sourceCache;
+        $media = $collected
+            ->sortByDesc(fn ($m) => $this->mediaContentSortKey($m, $sources))
+            ->take($perPage)
+            ->values();
 
         $media->transform(function ($m) use ($sources) {
             $mediaId = (string) ($m->media_id ?? '');
@@ -655,15 +708,79 @@ class MultimediaController extends Controller
         });
 
         $nextCursor = optional($media->last())->_id;
+        $hasMore = !$exhausted && $media->count() === $perPage;
 
         return ResponseHelper::sendResponse([
             'media' => $media->values(),
             'pagination' => [
                 'per_page' => $perPage,
                 'next_cursor' => $nextCursor,
-                'has_more' => $media->count() === $perPage,
+                'has_more' => $hasMore,
             ]
         ], 'Media fetched successfully');
+    }
+
+    /**
+     * Sort key for media rows — prefer source Feed/Clip _id (true post time) so
+     * latest user posts float to the top ahead of late Media sync rows.
+     */
+    private function mediaContentSortKey($m, array $sources): string
+    {
+        $type = (string) ($m->type ?? '');
+        $mediaId = (string) ($m->media_id ?? '');
+        if (in_array($type, ['user_feeds', 'feeds', 'clips'], true)) {
+            $source = $sources[$type][$mediaId] ?? null;
+            if ($source) {
+                return (string) $source->_id;
+            }
+        }
+
+        return (string) ($m->_id ?? '');
+    }
+
+    /**
+     * Same circle rules as FeedsController::index / ClipsController::index.
+     * Platform types (history, ai_videos, videos, …) stay public to authenticated viewers.
+     */
+    private function viewerCanSeeMediaRow($m, string $userId, array $friendIds, array $familyIds, array $sources): bool
+    {
+        $type = (string) ($m->type ?? '');
+        if (!in_array($type, ['user_feeds', 'feeds', 'clips'], true)) {
+            return true;
+        }
+
+        $mediaId = (string) ($m->media_id ?? '');
+        $source = $sources[$type][$mediaId] ?? null;
+        if (!$source) {
+            // Orphan / deleted source — do not leak possibly-private media.
+            return false;
+        }
+
+        $ownerId = (string) ($source->user_id ?? $m->user_id ?? '');
+        if ($ownerId !== '' && $ownerId === $userId) {
+            return true;
+        }
+
+        $audience = $type === 'clips'
+            ? strtolower(trim((string) ($source->share_with ?? '')))
+            : strtolower(trim((string) ($source->user_type ?? '')));
+
+        // Open audiences (legacy case variants normalized via strtolower).
+        if (in_array($audience, ['public', 'all', 'channel'], true)) {
+            return true;
+        }
+
+        $isFriend = in_array($ownerId, $friendIds, true);
+        $isFamily = in_array($ownerId, $familyIds, true);
+
+        if ($isFriend && in_array($audience, ['friends', 'friends & family'], true)) {
+            return true;
+        }
+        if ($isFamily && in_array($audience, ['family', 'friends & family'], true)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

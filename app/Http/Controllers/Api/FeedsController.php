@@ -47,13 +47,20 @@ class FeedsController extends Controller
         $friendIds = $user->friends->pluck('user_id')->toArray();
         $familyIds = $user->family->pluck('user_id')->toArray();
 
-        // Privacy: a feed is only visible to its author + the circle it was shared with.
-        // Previously index() returned EVERY feed to EVERY user (no filter) — non-friends/
-        // non-family could see private feeds. `user_type` on a feed holds the share audience
-        // ('friends' | 'family' | 'friends & family'), same values the clip feed uses.
+        // Privacy: author + open audiences + friends/family circles.
+        // Open (public/all/channel) must appear for everyone so "any type" posts still
+        // land on the timeline; private circles stay restricted. Newest first via _id.
         $feedsQuery = Feed::with(['user', 'shareUser', 'parentFeed'])
+            ->where(function ($q) {
+                $q->whereNull('is_deleted')
+                    ->orWhere('is_deleted', false)
+                    ->orWhere('is_deleted', 0);
+            })
             ->where(function ($q) use ($userId, $friendIds, $familyIds) {
                 $q->where('user_id', $userId)
+                    ->orWhereIn('user_type', [
+                        'public', 'Public', 'all', 'All', 'channel', 'Channel',
+                    ])
                     ->orWhere(fn($sq) => $sq->whereIn('user_id', $friendIds)->whereIn('user_type', ['friends', 'friends & family']))
                     ->orWhere(fn($sq) => $sq->whereIn('user_id', $familyIds)->whereIn('user_type', ['family', 'friends & family']));
             })
