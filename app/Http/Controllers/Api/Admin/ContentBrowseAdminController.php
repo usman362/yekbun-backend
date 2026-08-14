@@ -251,13 +251,16 @@ class ContentBrowseAdminController extends Controller
 
         return $rows->map(function ($f) use ($likeCounts, $commentCounts) {
             $arr = $f->toArray();
+            $sid = (string) $f->_id;
+            $arr['_id'] = $sid;
+            $arr['id'] = $sid;
             foreach (['image', 'audio', 'video', 'icon1', 'icon2', 'icon3'] as $field) {
                 if (!empty($arr[$field])) {
                     $arr[$field] = Helpers::storageUrl($arr[$field]) ?? $arr[$field];
                 }
             }
-            $arr['likes_count']    = (int) $likeCounts->get((string) $f->_id, 0);
-            $arr['comments_count'] = (int) $commentCounts->get((string) $f->_id, 0);
+            $arr['likes_count']    = (int) $likeCounts->get($sid, 0);
+            $arr['comments_count'] = (int) $commentCounts->get($sid, 0);
             return $arr;
         });
     }

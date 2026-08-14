@@ -871,9 +871,10 @@ Route::prefix('admin')->group(function () {
         Route::get('/content/votings/{id}/statistics', [ContentVotingsAdminController::class, 'statistics']);
         Route::get('/content/complaints', [ContentBrowseAdminController::class, 'complaints']);
         Route::get('/content/posts-preview', [ContentBrowseAdminController::class, 'postsPreview']);
+        Route::delete('/content/admin-activity/feed/{id}', [ContentBrowseAdminController::class, 'adminActivityDestroy']);
+        Route::post('/content/admin-activity/feed/{id}/delete', [ContentBrowseAdminController::class, 'adminActivityDestroy']);
         Route::get('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivity']);
         Route::post('/content/admin-activity/{type}', [ContentBrowseAdminController::class, 'adminActivityStore']);
-        Route::delete('/content/admin-activity/feed/{id}', [ContentBrowseAdminController::class, 'adminActivityDestroy']);
         // Comments + likes for admin-activity posts (dashboard view modal)
         Route::get('/content/admin-activity/feed/{id}/comments', [ContentBrowseAdminController::class, 'adminActivityComments']);
         Route::post('/content/admin-activity/feed/{id}/comments', [ContentBrowseAdminController::class, 'adminActivityAddComment']);

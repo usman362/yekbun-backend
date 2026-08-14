@@ -326,17 +326,16 @@ class AdminActivityController extends Controller
 
     public function destroyById(string $id)
     {
-        // Prefer find() so string / ObjectId both resolve (where('_id', $string) often 404s).
-        $popfeed = null;
-        if (preg_match('/^[0-9a-fA-F]{24}$/', $id)) {
-            $popfeed = PopFeeds::find($id);
-        }
-        if (!$popfeed) {
+        $popfeed = PopFeeds::find($id);
+        if (!$popfeed && preg_match('/^[0-9a-fA-F]{24}$/', $id)) {
             try {
-                $popfeed = PopFeeds::where('_id', $id)->first();
+                $popfeed = PopFeeds::where('_id', new \MongoDB\BSON\ObjectId($id))->first();
             } catch (\Throwable $e) {
                 $popfeed = null;
             }
+        }
+        if (!$popfeed) {
+            $popfeed = PopFeeds::where('custom_id', $id)->first();
         }
         if (!$popfeed) {
             return ResponseHelper::sendResponse(null, 'Popup Feed Not Found!', false, 404);
