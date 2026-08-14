@@ -259,9 +259,9 @@ class UsersController extends Controller
                     ? Carbon::parse($updatedSource)->format('Y-m-d')
                     : '',
                 'documents'          => $kyc ? [
-                    'front'  => Helpers::mediaUrl($kyc->front_image) ?? null,
-                    'back'   => Helpers::mediaUrl($kyc->back_image) ?? null,
-                    'selfie' => Helpers::mediaUrl($kyc->selfie_image) ?? null,
+                    'front'  => Helpers::storageUrl($kyc->document_front ?? $kyc->front_image ?? null),
+                    'back'   => Helpers::storageUrl($kyc->document_back ?? $kyc->back_image ?? null),
+                    'selfie' => Helpers::storageUrl($kyc->selfie_with_id ?? $kyc->selfie_image ?? null),
                 ] : null,
             ];
         }
