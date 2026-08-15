@@ -40,7 +40,7 @@ class ContentHistoryAdminController extends Controller
             'title'      => 'required|string|max:255',
             'status'     => 'required|in:0,1',
             'video_path' => 'required|string',
-            'thumbnail'  => 'required|string',
+            'thumbnail'  => 'nullable|string',
         ]);
 
         $history = new History();
@@ -57,7 +57,10 @@ class ContentHistoryAdminController extends Controller
         $history->shares_count      = 0;
         $history->voice_comments_count = 0;
 
-        $history->thumbnail = Helpers::cdnRelativePath($request->thumbnail);
+        // Thumbnails optional — admin multi-upload flow does not generate them.
+        $history->thumbnail = $request->filled('thumbnail')
+            ? Helpers::cdnRelativePath($request->thumbnail)
+            : null;
         $history->video = [[
             'path'     => Helpers::cdnRelativePath($request->video_path),
             'name'     => $request->input('video_name', ''),

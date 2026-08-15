@@ -73,7 +73,7 @@ class ContentAiVideoAdminController extends Controller
             'title'      => 'required|string|max:255',
             'status'     => 'required|in:0,1',
             'video_path' => 'required|string',
-            'thumbnail'  => 'required|string',
+            'thumbnail'  => 'nullable|string',
         ]);
 
         $row = new AIVideo();
@@ -90,7 +90,10 @@ class ContentAiVideoAdminController extends Controller
         $row->shares_count      = 0;
         $row->voice_comments_count = 0;
 
-        $row->thumbnail = Helpers::cdnRelativePath($request->thumbnail);
+        // Thumbnails optional — admin multi-upload flow does not generate them.
+        $row->thumbnail = $request->filled('thumbnail')
+            ? Helpers::cdnRelativePath($request->thumbnail)
+            : null;
         $row->video = [[
             'path'     => Helpers::cdnRelativePath($request->video_path),
             'name'     => $request->input('video_name', ''),
