@@ -153,6 +153,8 @@ class LanguagesAdminController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');
+            // UTF-8 BOM so Excel / Sheets keep Arabic (and other non-Latin) intact on re-import.
+            fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, ['keyword', 'translated']);
             foreach ($rows as $r) {
                 fputcsv($out, [$r['keyword'], $r['translated']]);
@@ -161,6 +163,31 @@ class LanguagesAdminController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    /**
+     * Normalize CSV bytes to UTF-8 without altering Arabic / mixed-script text.
+     * Handles UTF-8 BOM and common Excel UTF-16 exports.
+     */
+    private function csvContentsAsUtf8(string $raw): string
+    {
+        if ($raw === '') {
+            return $raw;
+        }
+
+        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            return substr($raw, 3);
+        }
+
+        if (str_starts_with($raw, "\xFF\xFE")) {
+            return mb_convert_encoding(substr($raw, 2), 'UTF-8', 'UTF-16LE') ?: $raw;
+        }
+
+        if (str_starts_with($raw, "\xFE\xFF")) {
+            return mb_convert_encoding(substr($raw, 2), 'UTF-8', 'UTF-16BE') ?: $raw;
+        }
+
+        return $raw;
     }
 
     public function importKeywords(Request $request, string $id)
@@ -173,17 +200,32 @@ class LanguagesAdminController extends Controller
         }
 
         $path = $request->file('file')->getRealPath();
-        $handle = fopen($path, 'r');
+        if ($path === false) {
+            return ResponseHelper::sendResponse(null, 'Could not read CSV.', false, 422);
+        }
+
+        $raw = file_get_contents($path);
+        if ($raw === false) {
+            return ResponseHelper::sendResponse(null, 'Could not read CSV.', false, 422);
+        }
+
+        $utf8 = $this->csvContentsAsUtf8($raw);
+        $handle = fopen('php://temp', 'r+');
         if (!$handle) {
             return ResponseHelper::sendResponse(null, 'Could not read CSV.', false, 422);
         }
+        fwrite($handle, $utf8);
+        rewind($handle);
 
         $headers = fgetcsv($handle);
         if (!$headers) {
             fclose($handle);
             return ResponseHelper::sendResponse(null, 'CSV is empty.', false, 422);
         }
-        $headers = array_map('strtolower', array_map('trim', $headers));
+        $headers = array_map(
+            static fn ($h) => strtolower(trim((string) $h)),
+            $headers
+        );
         $keyIdx  = array_search('keyword', $headers, true);
         $valIdx  = array_search('translated', $headers, true);
 
@@ -200,8 +242,11 @@ class LanguagesAdminController extends Controller
         $created = 0;
         while (($row = fgetcsv($handle)) !== false) {
             $keyword = trim((string) ($row[$keyIdx] ?? ''));
-            $value   = (string) ($row[$valIdx] ?? '');
-            if ($keyword === '') continue;
+            // Do not trim / normalize translated text — preserve Arabic + Latin embeds (Zêr, Cashback) as imported.
+            $value = (string) ($row[$valIdx] ?? '');
+            if ($keyword === '') {
+                continue;
+            }
 
             if (isset($existing[$keyword])) {
                 $tr = $existing[$keyword];
@@ -251,7 +296,7 @@ class LanguagesAdminController extends Controller
 
     public function updateKeyword(Request $request, string $languageId, string $translationId)
     {
-        $request->validate(['translated' => 'required|string']);
+        $request->validate(['translated' => 'nullable|string']);
         $language = Language::find($languageId);
         if (!$language) {
             return ResponseHelper::sendResponse([], 'Language not found.', false, 404);
@@ -260,7 +305,8 @@ class LanguagesAdminController extends Controller
         if (!$tr || (string) $tr->language_id !== (string) $language->_id) {
             return ResponseHelper::sendResponse([], 'Translation not found.', false, 404);
         }
-        $tr->translated = $request->translated;
+        // Store exactly as sent — no trim/normalize (preserves Arabic + Latin brand terms).
+        $tr->translated = (string) $request->input('translated', '');
         $tr->save();
 
         return ResponseHelper::sendResponse($tr, 'Translation saved.');
