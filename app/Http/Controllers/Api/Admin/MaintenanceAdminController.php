@@ -31,37 +31,63 @@ class MaintenanceAdminController extends Controller
         return ResponseHelper::sendResponse($this->present($config), 'Maintenance config saved.');
     }
 
-    /** GET /api/maintenance — PUBLIC: what the mobile app checks. */
+    /**
+     * GET /api/maintenance — PUBLIC catalog for the mobile app (one-time load).
+     * Always returns every category + subcategory so the client knows the full tree,
+     * whether a section is in maintenance or not. HTTP 200 always — check `online`
+     * / `full_platform` in the body (feature APIs still return 410 via middleware).
+     */
     public function status()
     {
-        $config = Maintenance::first();
-        if (!$config) {
-            return response()->json(['full_platform' => false, 'offline' => []]);
-        }
-
+        $config = $this->configOrSeed();
+        $categories = [];
         $offline = [];
-        foreach (($config->categories ?? []) as $cat) {
+        $subTotal = 0;
+
+        foreach ($this->mergeWithDefaults($config->categories ?? []) as $cat) {
+            $subs = [];
             foreach (($cat['subcategories'] ?? []) as $sub) {
-                if (empty($sub['online'])) {
+                $subTotal++;
+                $online = !empty($sub['online']);
+                $row = [
+                    'key'     => (string) ($sub['key'] ?? ''),
+                    'name'    => (string) ($sub['name'] ?? ''),
+                    'online'  => $online,
+                    'eta'     => $sub['eta'] ?? null,
+                    'message' => $sub['message'] ?? null,
+                ];
+                $subs[] = $row;
+                if (!$online) {
                     $offline[] = [
                         'category' => $cat['name'] ?? '',
-                        'sub'      => $sub['name'] ?? '',
-                        'key'      => $sub['key'] ?? '',
-                        'eta'      => $sub['eta'] ?? null,
+                        'sub'      => $row['name'],
+                        'key'      => $row['key'],
+                        'eta'      => $row['eta'],
                     ];
                 }
             }
-        }
 
-        // HTTP 410 (Gone) whenever ANY maintenance is active — full platform OR any offline
-        // section — so the mobile app detects it straight from the status code. Only fully
-        // online returns 200. The body still says exactly what's offline.
-        $status = ($config->full_platform || count($offline) > 0) ? 410 : 200;
+            $categories[] = [
+                'key'           => (string) ($cat['key'] ?? ''),
+                'name'          => (string) ($cat['name'] ?? ''),
+                'section'       => (string) ($cat['section'] ?? ''),
+                'online'        => !empty($cat['online']),
+                'eta'           => $cat['eta'] ?? null,
+                'message'       => $cat['message'] ?? null,
+                'subcategories' => $subs,
+            ];
+        }
 
         return response()->json([
             'full_platform' => (bool) $config->full_platform,
+            'summary'       => [
+                'categories'    => count($categories),
+                'subcategories' => $subTotal,
+                'offline'       => count($offline),
+            ],
+            'categories'    => $categories,
             'offline'       => $offline,
-        ], $status);
+        ]);
     }
 
     // ── helpers ──
