@@ -509,7 +509,8 @@ class AuthController extends Controller
                 if ($notify && $notify->otp == 1) {
                     Mail::to($request['email'])->send(new SendCodeMail($details));
                 }
-                $data = ['user' => $user, 'otp' => $code];
+                // Do not return the OTP in the API body — email is the only delivery channel.
+                $data = ['user' => $user];
                 return ResponseHelper::sendResponse($data, 'Verification Code has been sent to your email!');
             } catch (\Exception $e) {
                 return ResponseHelper::sendResponse([], 'Something went wrong', false, 505);

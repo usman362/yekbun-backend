@@ -634,9 +634,10 @@ Route::middleware('jwt.custom')->group(function () {
     Route::post('store-multimedia-views', [ViewsController::class, 'store_multimedia_views']);
     Route::post('store-feeds-views', [ViewsController::class, 'store_feeds_views']);
 
-    // ─── Collections ───
+    // ─── Collections (feeds — same idea as music playlists) ───
     Route::post('/create-collection', [CollectionController::class, 'insert']);
     Route::post('/add-to-collection', [CollectionController::class, 'add_to_collection']);
+    Route::post('/edit-collection/{id}', [CollectionController::class, 'update']);
     Route::get('/list-collections', [CollectionController::class, 'get_collection']);
     Route::delete('/remove-collection/{id}', [CollectionController::class, 'destroy']);
     Route::get('/list-collection-items/{collection_id}', [CollectionController::class, 'listCollectionItems']);

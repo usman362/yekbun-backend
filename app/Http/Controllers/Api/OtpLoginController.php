@@ -88,14 +88,14 @@ class OtpLoginController extends Controller
                     'username' => $user->username ?? $user->name ?? 'there',
                 ]));
             } catch (\Throwable) {
-                // Don't 500 if the mailer is misconfigured — code still lives in DB and can be
-                // pulled from there (or surfaced via dev_code in non-prod, see below).
+                // Don't 500 if the mailer is misconfigured. Never fall back to returning the
+                // code in the API body — email is the only delivery channel.
             }
         }
 
-        // In non-production it's useful to surface the code so devs / QA can test without an
-        // SMTP server. Toggle via app.debug — strip in production so the code never leaks.
-        if (config('app.debug')) {
+        // Never return the OTP (or any alias) outside a local workstation. Production
+        // APP_DEBUG=true must not leak the code — gate on APP_ENV=local only.
+        if (config('app.env') === 'local') {
             $generic['dev_code'] = $code;
         }
 

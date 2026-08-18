@@ -20,5 +20,20 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Production/staging: never leak exception class, file, line, or stack in JSON,
+        // even if APP_DEBUG is accidentally left on. Local env keeps full traces.
+        $exceptions->respond(function ($response, \Throwable $e, $request) {
+            if (config('app.env') === 'local') {
+                return $response;
+            }
+            if (! $request->is('api/*') && ! $request->expectsJson()) {
+                return $response;
+            }
+            $payload = json_decode($response->getContent(), true);
+            if (! is_array($payload)) {
+                return $response;
+            }
+            unset($payload['exception'], $payload['file'], $payload['line'], $payload['trace']);
+            return response()->json($payload, $response->getStatusCode());
+        });
     })->create();
