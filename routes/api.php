@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // ─── Controller Imports ───
@@ -36,7 +35,6 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PayPalController;
 use App\Http\Controllers\Api\StripeController;
 use App\Http\Controllers\Api\AppVersionController;
-use App\Http\Controllers\Api\AnimationEmojiController;
 use App\Http\Controllers\Api\ZercashApiController;
 use App\Http\Controllers\Api\OfficialsApiController;
 use App\Http\Controllers\Api\ComplaintApiController;
@@ -49,37 +47,12 @@ use App\Http\Controllers\Api\PurchaseVerificationController;
 use App\Http\Controllers\Api\VotingReactionController;
 use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\UserSuggestionController;
-use App\Http\Controllers\Api\AvatarsController;
-use App\Http\Controllers\Api\TVController;
-use App\Http\Controllers\Api\NewsController;
-use App\Http\Controllers\Api\NewsCategoryController;
-use App\Http\Controllers\Api\PostController;
-use App\Http\Controllers\Api\PostGalleryController;
-use App\Http\Controllers\Api\BazarController;
-use App\Http\Controllers\Api\BazarSubCategoryController;
-use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\TicketController;
-use App\Http\Controllers\Api\FanPageController;
-use App\Http\Controllers\Api\ManageFanPageController;
-use App\Http\Controllers\Api\DonationController;
-use App\Http\Controllers\Api\DiamondUserController;
 use App\Http\Controllers\Api\FlaggedUserController;
-use App\Http\Controllers\Api\PremiumUserController;
-use App\Http\Controllers\Api\StandardUserController;
-use App\Http\Controllers\Api\OrganizationController;
-use App\Http\Controllers\Api\EventCategoryController;
-use App\Http\Controllers\Api\VotingCategoryController;
-use App\Http\Controllers\Api\HistoryCategoryController;
-use App\Http\Controllers\Api\UploadMovieController;
-use App\Http\Controllers\Api\UploadMovieCategoryController;
-use App\Http\Controllers\Api\ContactUsController;
 use App\Http\Controllers\Api\FeedBackgroundImageController;
 use App\Http\Controllers\Api\UserSettingController;
 use App\Http\Controllers\Api\UploadMediaController;
 use App\Http\Controllers\Api\UpgradeAccountController;
-use App\Http\Controllers\Api\MarketServiceContorller;
 use App\Http\Controllers\Api\ReactionController;
-use App\Http\Controllers\Api\UserRolesController;
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\Admin\UsersController as AdminUsersController;
@@ -88,7 +61,6 @@ use App\Http\Controllers\Api\Admin\FeedsController as AdminFeedsController;
 use App\Http\Controllers\Api\Admin\MusicController as AdminMusicController;
 use App\Http\Controllers\Api\Admin\RingtoneController as AdminRingtoneController;
 use App\Http\Controllers\Api\Admin\UserClipsController as AdminUserClipsController;
-use App\Http\Controllers\Api\Admin\TeamController as AdminTeamController;
 use App\Http\Controllers\Api\Admin\DepartmentController as AdminDepartmentController;
 use App\Http\Controllers\Api\Admin\LocationAdminController;
 use App\Http\Controllers\Api\Admin\CitiesAdminController;
@@ -202,9 +174,6 @@ Route::get('notifications-center/{id}', [NotificationsController::class, 'read']
 Route::delete('notifications-center/{id}/delete', [NotificationsController::class, 'delete']);
 Route::get('system-settings', [NotificationsController::class, 'getSystemSettings']);
 
-// ─── Test Notification ───
-Route::post('send-test-notification', [UsersController::class, 'testNotification']);
-
 // ─── Admin Activity (Public) ───
 Route::get("/admin-activity/system-info", [AdminActivityController::class, 'getSystemInfo']);
 Route::get("/admin-activity/donation", [AdminActivityController::class, 'getDonations']);
@@ -217,55 +186,29 @@ Route::post("/admin-activity/greetings", [AdminActivityController::class, 'store
 Route::get("/admin-activity/get-public-feeds", [AdminActivityController::class, 'getpublicpopFeeds']);
 Route::post("/admin-activity/delete-feeds", [AdminActivityController::class, 'delete_pops']);
 
-// ─── Countries ───
+// ─── Countries (read-only — writes live under /admin/locations) ───
 Route::get('countries', [CountryController::class, 'index']);
-Route::post('countries', [CountryController::class, 'store']);
-Route::put('countries/{id}', [CountryController::class, 'update']);
-Route::delete('countries/{id}', [CountryController::class, 'destroy']);
 Route::get('kurdish-peoples', [CountryController::class, 'kurdishPeoples']);
 Route::get('all-countries', [CountryController::class, 'allCountries']);
 Route::post('/searchlocation', [CountryController::class, 'search_location']);
 
-// ─── Provinces / Regions ───
+// ─── Provinces / Regions (read-only) ───
 Route::get('provinces', [RegionController::class, 'index']);
-Route::post('provinces', [RegionController::class, 'store']);
-Route::put('provinces/{id}', [RegionController::class, 'update']);
-Route::delete('provinces/{id}', [RegionController::class, 'destroy']);
 
-// ─── Cities ───
+// ─── Cities (read-only) ───
 Route::get('cities', [CityController::class, 'index']);
-Route::post('cities', [CityController::class, 'store']);
-Route::put('cities/{id}', [CityController::class, 'update']);
-Route::delete('cities/{id}', [CityController::class, 'destroy']);
 Route::get('get-cities', [CityController::class, 'getCities']);
 Route::get('all-cities', [CityController::class, 'allCities']);
 
-// ─── Emojis ───
+// ─── Emojis (read-only — writes live under /admin/feeds-settings/emojis) ───
 Route::get('emojis', [EmojiFeedController::class, 'index']);
-Route::post('emojis', [EmojiFeedController::class, 'store']);
 
-// ─── News Feeds ───
-Route::post('news-feeds', [FeedsController::class, 'news_store']);
-Route::get('news-feeds', [FeedsController::class, 'news']);
-
-// ─── Events ───
-Route::post('events', [FeedsController::class, 'store_event']);
-Route::get('events', [FeedsController::class, 'index']);
-
-// ─── Policy & Terms ───
+// ─── Policy & Terms (read-only — writes live under /admin/policy) ───
 Route::get('policy_and_terms', [PolicyAndTermsController::class, 'index']);
-Route::post('policy_and_terms', [PolicyAndTermsController::class, 'store']);
-Route::post('policy_and_terms/saveFileds', [PolicyAndTermsController::class, 'saveFileds']);
-Route::delete('policy_and_terms/{id}', [PolicyAndTermsController::class, 'destroy']);
-Route::apiResource('policy-and-terms', PolicyAndTermsController::class);
-Route::post('saveFileds', [PolicyAndTermsController::class, 'saveFileds']);
 
-// ─── Languages ───
+// ─── Languages (read-only — writes live under /admin/languages) ───
 Route::get('languages', [LanguageController::class, 'index']);
 Route::get('languages-list', [LanguageController::class, 'languagesList']);
-Route::post('languages', [LanguageController::class, 'store']);
-Route::post('languages/{id}', [LanguageController::class, 'update']);
-Route::delete('languages/{id}', [LanguageController::class, 'destroy']);
 Route::get('languages/{id}/keywords', [LanguageController::class, 'keywords']);
 Route::get('languages/{id}/keywords/{keyword}', [LanguageController::class, 'keyword']);
 
@@ -307,15 +250,8 @@ Route::get('/voting-details/{id}/{user_id?}', [VotingController::class, 'get_det
 Route::get('/voting-stats/{id}', [VotingController::class, 'get_statistics']);
 Route::get('/voting-province-stats/{id}', [VotingController::class, 'get_province_statistics']);
 
-// ─── Animation Emoji ───
-Route::get('/get-all-emoji/{userId?}/{type?}/{value?}', [AnimationEmojiController::class, 'get_all_emoji']);
-
-// ─── Payments (Public) ───
-Route::post('charge', [PaymentController::class, 'charge']);
-Route::get('success', [PaymentController::class, 'success']);
-Route::get('error', [PaymentController::class, 'error']);
+// ─── Payments (kept for web/checkout fallbacks; unused mobile wrappers removed) ───
 Route::get('/payment-details/{payment_id}', [PaymentController::class, 'payment_details']);
-Route::get('get-payment-list', [PaymentController::class, 'paymentList']);
 
 // ─── PayPal ───
 Route::prefix('paypal')->group(function () {
@@ -329,87 +265,8 @@ Route::post('/stripe/checkout', [StripeController::class, 'index']);
 Route::get('/stripe/update-transaction', [StripeController::class, 'update']);
 Route::get('/stripe/update-success', [StripeController::class, 'success']);
 
-// ─── Mobile: Avatars Feeds ───
-Route::get('/getfeeds', [AvatarsController::class, 'getfeeds']);
-Route::post('/postfeed', [AvatarsController::class, 'postfeed']);
-
-// ─── Mobile: Zarok (TV) ───
-Route::get('/getzarokstories', [TVController::class, 'zarokStories']);
-Route::get('/getzarokvideos', [TVController::class, 'zarokVideos']);
-Route::get('/getzarokmovies', [TVController::class, 'zarokMovies']);
-Route::get('/getzarokseries', [TVController::class, 'zarokSeries']);
-Route::get('/zarok-series-season/{id}', [TVController::class, 'zarokSeriesSeason']);
-Route::get('/zarok-series-episodes/{id}', [TVController::class, 'zarokSeriesEpisodes']);
-Route::post('/zarokStoriesPost', [TVController::class, 'zarokStoriesPost']);
-
-// ─── Mobile: Posts ───
-Route::resource('posts', PostController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Flagged users ───
+// Flagged users — used by admin Event Center workspace (not the mobile app).
 Route::resource('flagged-users', FlaggedUserController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Reports ───
-Route::resource('reports', ReportController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Organizations ───
-Route::resource('organizations', OrganizationController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Donations ───
-Route::resource('donations', DonationController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Event Categories ───
-Route::resource('event-categories', EventCategoryController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Tickets ───
-Route::resource('tickets', TicketController::class)->except(['create', 'edit']);
-
-// ─── Mobile: Users (classification) ───
-Route::prefix('/users')->group(function () {
-    Route::post('{id}/block/', [StandardUserController::class, 'block'])->name('block');
-    Route::post('{id}/warn/', [StandardUserController::class, 'warn'])->name('warn');
-    Route::post('{id}/upgrade/', [StandardUserController::class, 'upgrade'])->name('upgrade');
-    Route::resource('educated', StandardUserController::class);
-    Route::resource('cultivated', PremiumUserController::class);
-    Route::resource('academic', DiamondUserController::class);
-});
-
-// ─── Mobile: User Roles ───
-Route::prefix('user-roles')->group(function () {
-    Route::get('/educated', [UserRolesController::class, 'educated'])->name('educated');
-    Route::get('/cultivated', [UserRolesController::class, 'cultivated'])->name('cultivated');
-    Route::get('/academic', [UserRolesController::class, 'academic'])->name('academic');
-});
-Route::get('user-prices/{userLevel}', [UserRolesController::class, 'prices']);
-
-// ─── Mobile: News ───
-Route::resource('news', NewsController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
-Route::resource('news-category', NewsCategoryController::class)->only(['index', 'store', 'update', 'show', 'destroy']);
-Route::get('/category-news/{id}', [NewsController::class, 'category_news']);
-Route::get('/news-cover', [NewsController::class, 'cover_news']);
-Route::get('/news-category', [NewsController::class, 'categories']);
-Route::get('/news-detail/{id}', [NewsController::class, 'detail']);
-Route::post('/news-search', [NewsController::class, 'search']);
-
-// ─── Mobile: Fan Pages ───
-Route::resource('fan-page', FanPageController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-Route::resource('manage-fanpage', ManageFanPageController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-
-// ─── Mobile: Voting Category ───
-Route::resource('voting-category', VotingCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-
-// ─── Mobile: History Category ───
-Route::resource('history-category', HistoryCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-
-// ─── Mobile: Bazar ───
-Route::resource('bazar-subcategory', BazarSubCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-Route::resource('bazar', BazarController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-
-// ─── Mobile: Movies ───
-Route::resource('movie-category', UploadMovieCategoryController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-Route::resource('movie', UploadMovieController::class)->only(['index', 'store', 'show', 'destroy', 'update']);
-
-// ─── Mobile: Contact Us ───
-Route::post('/contact-us', [ContactUsController::class, 'contact_us'])->name('contact-us');
 
 // ─── Mobile: User Setting ───
 Route::post('/user-setting/{user_id}', [UserSettingController::class, 'index'])->name('user-setting');
@@ -420,8 +277,7 @@ Route::post('/user-setting/save', [UserSettingController::class, 'save'])
 // ─── Mobile: Upload Media ───
 Route::post('/upload-media', [UploadMediaController::class, 'index']);
 
-// ─── Mobile: Feed Background Image ───
-Route::post('/upload-background', [FeedBackgroundImageController::class, 'upload'])->name('upload-background');
+// ─── Mobile: Feed Background Image (read — writes live under /admin/feeds-settings) ───
 Route::get('/get-background', [FeedBackgroundImageController::class, 'get'])->name('get-background');
 
 // ─── Mobile: Upgrade Account ───
@@ -432,17 +288,6 @@ Route::post('/account-upgrade', [UpgradeAccountController::class, 'account_upgra
 
 // ─── Mobile: Reaction ───
 Route::post('/store-reaction', [ReactionController::class, 'store_reaction'])->name('store-reaction');
-
-// ─── Mobile: Market Services ───
-Route::post('/market-services', [MarketServiceContorller::class, 'market_services'])->name('market-services');
-
-// ─── Mobile: Post Gallery ───
-Route::post('/get-gallery', [PostGalleryController::class, 'get_gallery']);
-
-// ─── Mobile: Authenticated User ───
-Route::get('/user', function (Request $request) {
-    return $request->user();
-});
 
 // ─── Zercash (Public) ───
 Route::get('zercash/products', [ZercashApiController::class, 'products']);
@@ -737,7 +582,6 @@ Route::prefix('admin')->group(function () {
         Route::post('/profile/avatar', [AdminAuthController::class, 'updateAvatar']);
         Route::post('/profile/password', [AdminAuthController::class, 'changePassword']);
         Route::post('/logout', [AdminAuthController::class, 'logout']);
-        Route::post('/refresh', [AdminAuthController::class, 'refresh']);
 
         // ─── Dashboard ───
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
@@ -783,7 +627,6 @@ Route::prefix('admin')->group(function () {
         Route::post('/music/songs', [AdminMusicController::class, 'storeSong']);
         Route::match(['put', 'post'], '/music/songs/{id}', [AdminMusicController::class, 'updateSong']);
         Route::delete('/music/songs/{id}', [AdminMusicController::class, 'deleteSong']);
-        Route::get('/music/categories', [AdminMusicController::class, 'musicCategories']);
         Route::get('/music/video-clips', [AdminMusicController::class, 'videoClips']);
         Route::post('/music/video-clips/generate-thumbnails', [AdminMusicController::class, 'generateClipThumbnails']);
         Route::post('/music/video-clips', [AdminMusicController::class, 'storeClip']);
@@ -1057,9 +900,6 @@ Route::prefix('admin')->group(function () {
         Route::get('/logipay/new-requests', [LogipayAdminController::class, 'newRequests']);
         Route::get('/logipay/active-wallets', [LogipayAdminController::class, 'activeWallets']);
         Route::get('/logipay/closed-wallets', [LogipayAdminController::class, 'closedWallets']);
-        Route::get('/logipay/request/{userId}', [LogipayAdminController::class, 'showRequest']);
-        Route::post('/logipay/request/{userId}/approve', [LogipayAdminController::class, 'approveRequest']);
-        Route::post('/logipay/request/{userId}/reject', [LogipayAdminController::class, 'rejectRequest']);
 
         // ─── Zercash Products & Sale Managers ───
         Route::get('/products', [ProductsAdminController::class, 'index']);
