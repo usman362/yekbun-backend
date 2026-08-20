@@ -88,6 +88,7 @@ use App\Http\Controllers\Api\Admin\LoconetAdminController;
 use App\Http\Controllers\Api\Admin\SecurityCenterAdminController;
 use App\Http\Controllers\Api\Admin\EventCenterAdminController;
 use App\Http\Controllers\Api\DeviceControlApiController;
+use App\Http\Controllers\Api\ChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -487,6 +488,30 @@ Route::middleware('jwt.custom')->group(function () {
     Route::delete('/remove-collection/{id}', [CollectionController::class, 'destroy']);
     Route::get('/list-collection-items/{collection_id}', [CollectionController::class, 'listCollectionItems']);
     Route::delete('/collections/{collection_id}/feeds/{feed_id}', [CollectionController::class, 'destroyCollectionFeed']);
+
+    // ─── Chat (1-to-1 + Group messaging via Reverb WebSocket) ───
+    Route::prefix('chat')->group(function () {
+        Route::get('/conversations', [ChatController::class, 'conversations']);
+        Route::post('/conversations', [ChatController::class, 'createConversation']);
+        Route::get('/conversations/{id}', [ChatController::class, 'showConversation']);
+        Route::get('/conversations/{id}/messages', [ChatController::class, 'messages']);
+        Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']);
+        Route::post('/conversations/{id}/forward', [ChatController::class, 'forwardMessage']);
+        Route::post('/conversations/{id}/read', [ChatController::class, 'markRead']);
+        Route::post('/conversations/{id}/typing', [ChatController::class, 'typing']);
+        Route::post('/conversations/{id}/mute', [ChatController::class, 'muteConversation']);
+        Route::post('/conversations/{id}/pin', [ChatController::class, 'pinMessage']);
+        // Group management
+        Route::put('/conversations/{id}/group', [ChatController::class, 'updateGroup']);
+        Route::get('/conversations/{id}/members', [ChatController::class, 'members']);
+        Route::post('/conversations/{id}/members', [ChatController::class, 'addMembers']);
+        Route::delete('/conversations/{id}/members/{userId}', [ChatController::class, 'removeMember']);
+        Route::put('/conversations/{id}/members/{userId}/role', [ChatController::class, 'updateMemberRole']);
+        // Message actions
+        Route::delete('/messages/{id}', [ChatController::class, 'deleteMessage']);
+        Route::post('/messages/{id}/reactions', [ChatController::class, 'addReaction']);
+        Route::delete('/messages/{id}/reactions', [ChatController::class, 'removeReaction']);
+    });
 
     // ─── Admin Activity (Protected) ───
     Route::get("/admin-activity/get-feeds", [AdminActivityController::class, 'getpopFeeds']);
