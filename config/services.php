@@ -51,4 +51,21 @@ return [
         'project_id' => env('FCM_PROJECT_ID'),
     ],
 
+    /*
+    | LoCoNet communication provider (chat / calls / streams).
+    | Admin dashboard stores overrides in loconet_state.integration;
+    | env values are used as defaults / server-side secrets.
+    */
+    'loconet' => [
+        'project_id' => env('LOCONET_PROJECT_ID', 'yekbun-prod-01'),
+        'api_base' => env('LOCONET_API_BASE', 'https://api.loconet.io/v1'),
+        'socket_url' => env('LOCONET_SOCKET_URL', 'wss://realtime.loconet.io/socket/yekbun-prod-01'),
+        'media_url' => env('LOCONET_MEDIA_URL', 'https://media.loconet.io/v1/upload/yekbun-prod-01'),
+        'webrtc_url' => env('LOCONET_WEBRTC_URL', 'wss://rtc.loconet.io/signal/yekbun-prod-01'),
+        'health_url' => env('LOCONET_HEALTH_URL', 'https://api.loconet.io/v1/health'),
+        'webhook_url' => env('LOCONET_WEBHOOK_URL', 'https://api.appdash.yekbun.org/api/webhooks/loconet'),
+        'webhook_secret' => env('LOCONET_WEBHOOK_SECRET'),
+        'certificate' => env('LOCONET_CERTIFICATE'),
+    ],
+
 ];

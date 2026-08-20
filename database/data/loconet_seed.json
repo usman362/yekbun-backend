@@ -1519,8 +1519,20 @@
     "apiSecret": "",
     "webhookSecret": "",
     "region": "eu-central",
-    "environment": "Live",
-    "connected": true,
+    "environment": "live",
+    "authMode": "secure",
+    "enabled": false,
+    "connected": false,
+    "primaryCert": "",
+    "endpoints": {
+      "rest": { "url": "https://api.loconet.io/v1/projects/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
+      "socket": { "url": "wss://realtime.loconet.io/socket/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
+      "token": { "url": "https://api.loconet.io/v1/projects/yekbun-prod-01/auth/token", "status": "grey", "checked": "—", "latency": "—" },
+      "webhook": { "url": "https://api.appdash.yekbun.org/api/webhooks/loconet", "status": "grey", "checked": "—", "latency": "—" },
+      "media": { "url": "https://media.loconet.io/v1/upload/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
+      "webrtc": { "url": "wss://rtc.loconet.io/signal/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
+      "health": { "url": "https://api.loconet.io/v1/health", "status": "grey", "checked": "—", "latency": "—" }
+    },
     "webhooks": {
       "chatEvents": true,
       "callEvents": true,

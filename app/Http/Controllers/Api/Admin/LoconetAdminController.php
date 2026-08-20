@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
 use App\Models\LoconetState;
+use App\Services\LoconetClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 
@@ -32,7 +33,104 @@ class LoconetAdminController extends Controller
         $id = (string) ($row->_id ?? $row->id ?? '');
         $data['id'] = $id;
         $data['project_id'] = $row->project_id ?? ($data['project_id'] ?? 'yekbun-prod-01');
+
+        $integration = is_array($data['integration'] ?? null) ? $data['integration'] : [];
+        $client = app(LoconetClient::class);
+        $resolved = $client->resolve($integration);
+
+        // Fill default endpoint URLs for the admin UI when not yet saved.
+        $endpoints = is_array($integration['endpoints'] ?? null) ? $integration['endpoints'] : [];
+        foreach ($resolved['urls'] as $key => $defaultUrl) {
+            $existing = $endpoints[$key] ?? null;
+            if (!is_array($existing)) {
+                $endpoints[$key] = [
+                    'url' => $defaultUrl,
+                    'status' => 'grey',
+                    'checked' => '—',
+                    'latency' => '—',
+                ];
+                continue;
+            }
+            if (trim((string) ($existing['url'] ?? '')) === '') {
+                $endpoints[$key]['url'] = $defaultUrl;
+            }
+        }
+        $integration['endpoints'] = $endpoints;
+
+        $cert = (string) ($integration['primaryCert'] ?? $integration['apiKey'] ?? '');
+        $envCert = (string) config('services.loconet.certificate', '');
+        $hasCert = ($cert !== '' && !str_starts_with($cert, '•')) || $envCert !== '';
+        $integration['has_certificate'] = $hasCert;
+        // Never send the raw certificate to the browser.
+        $integration['primaryCert'] = $hasCert ? '••••••••••••••••' : '';
+        unset($integration['apiKey'], $integration['apiSecret']);
+
+        if (empty($integration['projectId'])) {
+            $integration['projectId'] = $resolved['projectId'];
+        }
+        if (empty($integration['apiBase'])) {
+            $integration['apiBase'] = $resolved['apiBase'];
+        }
+        if (empty($integration['webhookUrl'])) {
+            $integration['webhookUrl'] = $resolved['urls']['webhook'];
+        }
+
+        $data['integration'] = $integration;
+        $data['project_id'] = $integration['projectId'] ?? $data['project_id'];
+
         return $data;
+    }
+
+    private function toneFromStatus(string $status): string
+    {
+        return match ($status) {
+            'operational' => 'green',
+            'degraded' => 'amber',
+            default => 'red',
+        };
+    }
+
+    private function applyProbeToEndpoint(array $endpoints, string $key, array $probe): array
+    {
+        if (!isset($endpoints[$key]) || !is_array($endpoints[$key])) {
+            $endpoints[$key] = ['url' => ''];
+        }
+        $endpoints[$key]['status'] = $this->toneFromStatus($probe['status'] ?? 'offline');
+        $endpoints[$key]['checked'] = now()->format('H:i:s');
+        $endpoints[$key]['latency'] = ((int) ($probe['latency_ms'] ?? 0)) . ' ms';
+        $endpoints[$key]['last_code'] = $probe['http_code'] ?? null;
+        $endpoints[$key]['last_message'] = $probe['message'] ?? '';
+        return $endpoints;
+    }
+
+    private function syncServiceHealth(LoconetState $row, array $results): void
+    {
+        $map = [
+            'REST API' => 'rest',
+            'Socket.IO' => 'socket',
+            'WebRTC / LiveKit' => 'webrtc',
+            'Push Notifications' => 'webhook',
+        ];
+        // Prefer health for API if present
+        if (isset($results['health'])) {
+            $map['REST API'] = 'health';
+        }
+
+        $services = is_array($row->services) ? $row->services : [];
+        foreach ($services as $i => $svc) {
+            if (!is_array($svc)) {
+                continue;
+            }
+            $name = (string) ($svc['name'] ?? '');
+            $key = $map[$name] ?? null;
+            if (!$key || !isset($results[$key])) {
+                continue;
+            }
+            $probe = $results[$key];
+            $services[$i]['status'] = $probe['status'] ?? 'offline';
+            $services[$i]['latency'] = ((int) ($probe['latency_ms'] ?? 0)) . ' ms';
+        }
+        $row->services = $services;
     }
 
     private function actor(): string
@@ -108,36 +206,149 @@ class LoconetAdminController extends Controller
         if (!is_array($patch)) {
             return ResponseHelper::sendResponse(null, 'integration must be an object', false, 422);
         }
-        $row->integration = array_replace_recursive($current, $patch);
+
+        // Keep existing secret when UI sends masked / empty certificate.
+        $incomingCert = (string) ($patch['primaryCert'] ?? '');
+        if ($incomingCert === '' || str_starts_with($incomingCert, '•')) {
+            unset($patch['primaryCert']);
+        }
+
+        $merged = array_replace_recursive($current, $patch);
+
+        // Normalize camelCase keys used by the dashboard UI.
+        if (isset($patch['projectId']) && is_string($patch['projectId']) && $patch['projectId'] !== '') {
+            $merged['projectId'] = $patch['projectId'];
+            $row->project_id = $patch['projectId'];
+        }
+        if (array_key_exists('enabled', $patch)) {
+            $merged['enabled'] = (bool) $patch['enabled'];
+            $merged['connected'] = (bool) $patch['enabled'];
+        }
+
+        // Persist endpoint URLs from UI shape { rest: { url, status... } }.
+        if (isset($patch['endpoints']) && is_array($patch['endpoints'])) {
+            $eps = is_array($merged['endpoints'] ?? null) ? $merged['endpoints'] : [];
+            foreach ($patch['endpoints'] as $key => $ep) {
+                if (is_string($ep)) {
+                    $eps[$key] = array_merge(is_array($eps[$key] ?? null) ? $eps[$key] : [], ['url' => $ep]);
+                } elseif (is_array($ep)) {
+                    $eps[$key] = array_replace(is_array($eps[$key] ?? null) ? $eps[$key] : [], $ep);
+                }
+            }
+            $merged['endpoints'] = $eps;
+        }
+
+        $row->integration = $merged;
         $this->pushActivity($row, 'LoCoNet integration updated', 'blue');
         $row->save();
         return ResponseHelper::sendResponse($this->present($row), 'Integration saved.');
     }
 
     /** POST /admin/loconet/test-connection */
-    public function testConnection()
+    public function testConnection(LoconetClient $client)
     {
         $row = $this->snapshot();
         $integration = is_array($row->integration) ? $row->integration : [];
-        $integration['connected'] = true;
+        $probe = $client->probeAll($integration);
+
+        $endpoints = is_array($integration['endpoints'] ?? null) ? $integration['endpoints'] : [];
+        foreach ($probe['results'] as $key => $result) {
+            $endpoints = $this->applyProbeToEndpoint($endpoints, $key, $result);
+        }
+        $integration['endpoints'] = $endpoints;
+        $integration['connected'] = (bool) $probe['ok'];
+        $integration['enabled'] = (bool) ($integration['enabled'] ?? $probe['ok']);
         $integration['last_test_at'] = now()->toIso8601String();
+        $integration['last_test_ok'] = (bool) $probe['ok'];
+        $integration['last_test_message'] = $probe['message'];
         $row->integration = $integration;
+
+        $this->syncServiceHealth($row, $probe['results']);
+
+        $project = $probe['config']['projectId'] ?? ($row->project_id ?? 'yekbun-prod-01');
+        $level = $probe['ok'] ? 'info' : 'error';
+        $logs = is_array($row->integrationLogs) ? $row->integrationLogs : [];
+        array_unshift($logs, [
+            'time' => now()->format('H:i:s'),
+            'level' => $level,
+            'text' => sprintf(
+                'PROBE /projects/%s · %s · %d ms',
+                $project,
+                $probe['ok'] ? 'OK' : 'FAIL',
+                (int) $probe['latency_ms']
+            ),
+        ]);
+        $row->integrationLogs = array_slice($logs, 0, 40);
+        $this->pushActivity(
+            $row,
+            $probe['ok'] ? 'LoCoNet connection test succeeded' : 'LoCoNet connection test failed',
+            $probe['ok'] ? 'green' : 'red'
+        );
+        $row->save();
+
+        return ResponseHelper::sendResponse([
+            'ok' => (bool) $probe['ok'],
+            'latency_ms' => (int) $probe['latency_ms'],
+            'message' => $probe['message'],
+            'results' => $probe['results'],
+            'snapshot' => $this->present($row),
+        ], $probe['ok'] ? 'Connection OK.' : 'Connection failed.', $probe['ok']);
+    }
+
+    /** POST /admin/loconet/test-endpoint */
+    public function testEndpoint(Request $request, LoconetClient $client)
+    {
+        $key = (string) $request->input('key', '');
+        $allowed = ['rest', 'socket', 'token', 'webhook', 'media', 'webrtc', 'health'];
+        if (!in_array($key, $allowed, true)) {
+            return ResponseHelper::sendResponse(null, 'Invalid endpoint key', false, 422);
+        }
+
+        $row = $this->snapshot();
+        $integration = is_array($row->integration) ? $row->integration : [];
+        $cfg = $client->resolve($integration);
+
+        $overrideUrl = trim((string) $request->input('url', ''));
+        $url = $overrideUrl !== '' ? $overrideUrl : ($cfg['urls'][$key] ?? '');
+        $probe = $client->probe($url, $cfg['certificate']);
+
+        $endpoints = is_array($integration['endpoints'] ?? null) ? $integration['endpoints'] : [];
+        if ($overrideUrl !== '') {
+            if (!isset($endpoints[$key]) || !is_array($endpoints[$key])) {
+                $endpoints[$key] = [];
+            }
+            $endpoints[$key]['url'] = $overrideUrl;
+        }
+        $endpoints = $this->applyProbeToEndpoint($endpoints, $key, $probe);
+        $integration['endpoints'] = $endpoints;
+        $row->integration = $integration;
+
+        $this->syncServiceHealth($row, [$key => $probe]);
 
         $logs = is_array($row->integrationLogs) ? $row->integrationLogs : [];
         array_unshift($logs, [
             'time' => now()->format('H:i:s'),
-            'level' => 'info',
-            'text' => 'POST /v1/projects/' . ($row->project_id ?? 'yekbun-prod-01') . '/ping · 200 · 42 ms',
+            'level' => $probe['ok'] ? 'info' : 'error',
+            'text' => sprintf(
+                'TEST %s · %s · %d ms · %s',
+                $key,
+                $probe['ok'] ? 'OK' : 'FAIL',
+                (int) $probe['latency_ms'],
+                $probe['message'] ?? ''
+            ),
         ]);
         $row->integrationLogs = array_slice($logs, 0, 40);
-        $this->pushActivity($row, 'LoCoNet connection test succeeded', 'green');
         $row->save();
 
         return ResponseHelper::sendResponse([
-            'ok' => true,
-            'latency_ms' => 42,
+            'ok' => (bool) $probe['ok'],
+            'key' => $key,
+            'latency_ms' => (int) $probe['latency_ms'],
+            'status' => $probe['status'],
+            'message' => $probe['message'],
+            'http_code' => $probe['http_code'],
             'snapshot' => $this->present($row),
-        ], 'Connection OK.');
+        ], $probe['ok'] ? 'Endpoint OK.' : 'Endpoint failed.', $probe['ok']);
     }
 
     /** POST /admin/loconet/chats/{id}/status */

@@ -86,6 +86,7 @@ use App\Http\Controllers\Api\Admin\ProductsAdminController;
 use App\Http\Controllers\Api\Admin\DeviceControlAdminController;
 use App\Http\Controllers\Api\Admin\LoconetAdminController;
 use App\Http\Controllers\Api\Admin\SecurityCenterAdminController;
+use App\Http\Controllers\Api\LoconetWebhookController;
 use App\Http\Controllers\Api\Admin\EventCenterAdminController;
 use App\Http\Controllers\Api\DeviceControlApiController;
 use App\Http\Controllers\Api\ChatController;
@@ -121,6 +122,9 @@ Route::post('/app/device-telemetry', [DeviceControlApiController::class, 'teleme
 Route::post('/app/device-crash', [DeviceControlApiController::class, 'crash']);
 Route::post('/app/device-cache-current', [DeviceControlApiController::class, 'cacheCurrent']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// LoCoNet → YekBûn event webhooks (provider-authenticated via shared secret when set)
+Route::post('/webhooks/loconet', [LoconetWebhookController::class, 'handle']);
 
 // Passwordless OTP login (yekbun.app web app). Step 1 sends a 6-digit code to the user's
 // inbox; step 2 verifies the code and returns a JWT in the same shape as /api/login.
@@ -946,6 +950,7 @@ Route::prefix('admin')->group(function () {
             Route::put('/settings', [LoconetAdminController::class, 'updateSettings']);
             Route::put('/integration', [LoconetAdminController::class, 'updateIntegration']);
             Route::post('/test-connection', [LoconetAdminController::class, 'testConnection']);
+            Route::post('/test-endpoint', [LoconetAdminController::class, 'testEndpoint']);
             Route::post('/chats/{id}/status', [LoconetAdminController::class, 'chatStatus']);
             Route::post('/chats/{id}/audit', [LoconetAdminController::class, 'chatAudit']);
             Route::post('/reports/{id}/action', [LoconetAdminController::class, 'reportAction']);
