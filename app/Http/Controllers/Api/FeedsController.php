@@ -83,6 +83,135 @@ class FeedsController extends Controller
         ], 'Feeds fetch successfully');
     }
 
+    /**
+     * GET /api/feeds/mixed
+     *
+     * Single timeline: regular user Feed rows + admin PopFeeds (System / Donation /
+     * Surveys / Greetings / Event / SOS), merged and sorted newest-first.
+     *
+     * Privacy matches GET /feeds for user posts and GET /admin-activity/get-feeds
+     * for admin pops. Each row includes `source`: "user" | "admin".
+     *
+     * Query: per_page (default 10, max 50), cursor (ISO8601 of last item created_at).
+     */
+    public function mixedFeeds(Request $request)
+    {
+        $perPage = max(1, min((int) $request->get('per_page', 10), 50));
+        $cursor  = $request->get('cursor');
+        $userId  = Auth::id();
+
+        $user = User::with(['friends', 'family'])->find($userId);
+        if (!$user) {
+            return ResponseHelper::sendResponse([], 'User not found.', false, 401);
+        }
+
+        $friendIds = $user->friends->pluck('user_id')->toArray();
+        $familyIds = $user->family->pluck('user_id')->toArray();
+
+        // Over-fetch each side so merge still fills a full page when one side is sparse.
+        $fetchLimit = $perPage;
+
+        $userQuery = Feed::with(['user', 'shareUser', 'parentFeed'])
+            ->where(function ($q) {
+                $q->whereNull('is_deleted')
+                    ->orWhere('is_deleted', false)
+                    ->orWhere('is_deleted', 0);
+            })
+            ->where(function ($q) use ($userId, $friendIds, $familyIds) {
+                $q->where('user_id', $userId)
+                    ->orWhereIn('user_type', [
+                        'public', 'Public', 'all', 'All', 'channel', 'Channel',
+                    ])
+                    ->orWhere(fn ($sq) => $sq->whereIn('user_id', $friendIds)->whereIn('user_type', ['friends', 'friends & family']))
+                    ->orWhere(fn ($sq) => $sq->whereIn('user_id', $familyIds)->whereIn('user_type', ['family', 'friends & family']));
+            })
+            ->orderBy('created_at', 'desc');
+
+        $userProvince = $user->province ?? null;
+        if ($userProvince === 'Bakûr') {
+            $userProvince = 'Bakur';
+        }
+        if ($userProvince === 'Başûr') {
+            $userProvince = 'Basur';
+        }
+
+        $shareTargets = array_values(array_filter([
+            'all-users',
+            $user->user_type ?? null,
+        ]));
+
+        $adminQuery = PopFeeds::with(['user', 'sosPopups'])
+            ->where(function ($q) {
+                $q->where('status', 1)->orWhereNull('status');
+            })
+            ->whereIn('share_option', $shareTargets)
+            ->where(function ($q) use ($userProvince) {
+                $q->whereNull('allowed_provinces');
+                if ($userProvince) {
+                    $q->orWhere('allowed_provinces', $userProvince);
+                }
+            })
+            ->orderBy('created_at', 'desc');
+
+        if ($cursor) {
+            try {
+                $cursorAt = Carbon::parse($cursor);
+                $userQuery->where('created_at', '<', $cursorAt);
+                $adminQuery->where('created_at', '<', $cursorAt);
+            } catch (Exception $e) {
+                return ResponseHelper::sendResponse([], 'Invalid cursor', false, 422);
+            }
+        }
+
+        $userRows = $userQuery->limit($fetchLimit)->get()->map(function ($feed) {
+            $row = $feed->toArray();
+            $row['source'] = 'user';
+            $row['id'] = (string) ($feed->getKey() ?? ($row['_id'] ?? $row['id'] ?? ''));
+            $row['sort_at'] = optional($feed->created_at)->toISOString()
+                ?? (string) ($feed->created_at ?? '');
+            return $row;
+        });
+
+        $adminRows = $adminQuery->limit($fetchLimit)->get()->map(function ($pop) {
+            $row = $pop->toArray();
+            $row['source'] = 'admin';
+            $row['id'] = (string) ($pop->getKey() ?? ($row['_id'] ?? $row['id'] ?? ''));
+            $row['sort_at'] = optional($pop->created_at)->toISOString()
+                ?? (string) ($pop->created_at ?? '');
+            return $row;
+        });
+
+        $merged = $userRows->concat($adminRows)
+            ->sortByDesc(function ($row) {
+                try {
+                    return Carbon::parse($row['sort_at'] ?? null)->timestamp;
+                } catch (Exception $e) {
+                    return 0;
+                }
+            })
+            ->values();
+
+        $page = $merged->take($perPage)->values();
+        $last = $page->last();
+        $nextCursor = $last['sort_at'] ?? null;
+        $hasMore = $page->count() === $perPage;
+
+        // Drop internal sort helper from response.
+        $feeds = $page->map(function ($row) {
+            unset($row['sort_at']);
+            return $row;
+        })->values();
+
+        return ResponseHelper::sendResponse([
+            'feeds' => $feeds,
+            'pagination' => [
+                'per_page'    => $perPage,
+                'next_cursor' => $hasMore ? $nextCursor : null,
+                'has_more'    => $hasMore,
+            ],
+        ], 'Mixed feeds fetched successfully');
+    }
+
     public function public_index(Request $request)
     {
         if (!empty($request->user_id)) {
