@@ -452,7 +452,7 @@ class UsersController extends Controller
 
         $title = $request->title;
         $description = $request->body;
-        $projectId = env('FCM_PROJECT_ID');
+        $projectId = config('services.fcm.project_id');
 
         $credentialsFilePath = Storage::path('json/services.json');
         $client = new GoogleClient();
@@ -512,7 +512,7 @@ class UsersController extends Controller
             return response()->json(['message' => 'User does not have a device token'], 400);
         }
 
-        $projectId = env('FCM_PROJECT_ID');
+        $projectId = config('services.fcm.project_id');
 
         $credentialsFilePath = Storage::path('json/services.json');
         $client = new GoogleClient();

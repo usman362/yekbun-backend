@@ -108,7 +108,7 @@ class NotificationHelper
         }
 
         try {
-            $projectId = env('FCM_PROJECT_ID');
+            $projectId = config('services.fcm.project_id');
             $credentialsFilePath = storage_path('app/json/services.json');
 
             if (!$projectId || !file_exists($credentialsFilePath)) {

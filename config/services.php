@@ -42,4 +42,13 @@ return [
         'region'       => env('BUNNY_REGION', 'de'),
     ],
 
+    /*
+    | Firebase Cloud Messaging (mobile push).
+    | Must live in config — after `php artisan config:cache`, env() is null
+    | outside config files, which previously skipped every FCM push.
+    */
+    'fcm' => [
+        'project_id' => env('FCM_PROJECT_ID'),
+    ],
+
 ];
