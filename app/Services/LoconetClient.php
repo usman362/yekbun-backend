@@ -8,24 +8,32 @@ use Throwable;
 /**
  * LoCoNet provider client — probes configured project endpoints.
  * URLs/cert come from admin integration snapshot, with env fallbacks.
+ *
+ * Auth style (Agora-like): X-App-Id + X-Project-Secret on server-side calls.
  */
 class LoconetClient
 {
     public function defaults(): array
     {
-        $project = (string) config('services.loconet.project_id', 'yekbun-prod-01');
-        $apiBase = rtrim((string) config('services.loconet.api_base', 'https://api.loconet.io/v1'), '/');
+        $project = (string) config('services.loconet.project_id', '');
+        $slug = (string) config('services.loconet.project_slug', $project);
+        $apiBase = rtrim((string) config('services.loconet.api_base', ''), '/');
+
+        $rest = ($apiBase !== '' && $slug !== '') ? "{$apiBase}/projects/{$slug}" : '';
+        $token = $rest !== '' ? "{$rest}/auth/token" : '';
 
         return [
             'projectId' => $project,
+            'projectSlug' => $slug,
+            'appId' => (string) config('services.loconet.app_id', ''),
             'apiBase' => $apiBase,
-            'rest' => "{$apiBase}/projects/{$project}",
-            'socket' => (string) config('services.loconet.socket_url', "wss://realtime.loconet.io/socket/{$project}"),
-            'token' => "{$apiBase}/projects/{$project}/auth/token",
+            'rest' => $rest,
+            'socket' => (string) config('services.loconet.socket_url', ''),
+            'token' => $token,
             'webhook' => (string) config('services.loconet.webhook_url', 'https://api.appdash.yekbun.org/api/webhooks/loconet'),
-            'media' => (string) config('services.loconet.media_url', "https://media.loconet.io/v1/upload/{$project}"),
-            'webrtc' => (string) config('services.loconet.webrtc_url', "wss://rtc.loconet.io/signal/{$project}"),
-            'health' => (string) config('services.loconet.health_url', "{$apiBase}/health"),
+            'media' => (string) config('services.loconet.media_url', ''),
+            'webrtc' => (string) config('services.loconet.webrtc_url', ''),
+            'health' => (string) config('services.loconet.health_url', ''),
             'certificate' => (string) config('services.loconet.certificate', ''),
         ];
     }
@@ -50,24 +58,39 @@ class LoconetClient
             return $fallback;
         };
 
-        $cert = (string) ($integration['primaryCert'] ?? $integration['apiKey'] ?? $d['certificate']);
+        $cert = (string) ($integration['primaryCert'] ?? $integration['projectSecret'] ?? $integration['apiKey'] ?? $d['certificate']);
         if ($cert === '' || str_starts_with($cert, '•')) {
             $cert = $d['certificate'];
         }
 
         $projectId = (string) ($integration['projectId'] ?? $integration['project_id'] ?? $d['projectId']);
+        $slug = (string) ($integration['projectSlug'] ?? $integration['project_slug'] ?? $d['projectSlug']);
+        if ($slug === '') {
+            $slug = $projectId;
+        }
+        $appId = (string) ($integration['appId'] ?? $integration['app_id'] ?? $d['appId']);
+
+        // Rebuild REST/token from slug when endpoints not explicitly set.
+        $restDefault = $d['rest'];
+        $tokenDefault = $d['token'];
+        if ($slug !== '' && $d['apiBase'] !== '') {
+            $restDefault = rtrim($d['apiBase'], '/') . '/projects/' . $slug;
+            $tokenDefault = $restDefault . '/auth/token';
+        }
 
         return [
             'projectId' => $projectId !== '' ? $projectId : $d['projectId'],
+            'projectSlug' => $slug,
+            'appId' => $appId,
             'apiBase' => (string) ($integration['apiBase'] ?? $d['apiBase']),
             'certificate' => $cert,
             'environment' => (string) ($integration['environment'] ?? 'Live'),
             'authMode' => (string) ($integration['authMode'] ?? 'secure'),
             'enabled' => (bool) ($integration['enabled'] ?? $integration['connected'] ?? false),
             'urls' => [
-                'rest' => $url('rest', $d['rest']),
+                'rest' => $url('rest', $restDefault),
                 'socket' => $url('socket', $d['socket']),
-                'token' => $url('token', $d['token']),
+                'token' => $url('token', $tokenDefault),
                 'webhook' => $url('webhook', $d['webhook']),
                 'media' => $url('media', $d['media']),
                 'webrtc' => $url('webrtc', $d['webrtc']),
@@ -79,7 +102,7 @@ class LoconetClient
     /**
      * @return array{ok:bool,status:string,http_code:int|null,latency_ms:int,message:string}
      */
-    public function probe(string $url, ?string $certificate = null): array
+    public function probe(string $url, ?string $certificate = null, ?string $appId = null): array
     {
         $url = trim($url);
         if ($url === '') {
@@ -96,77 +119,117 @@ class LoconetClient
             return $this->probeWebsocketHost($url);
         }
 
-        return $this->probeHttp($url, $certificate);
+        return $this->probeHttp($url, $certificate, $appId);
     }
 
     /**
-     * @return array{ok:bool,status:string,http_code:int|null,latency_ms:int,message:string,results:array}
+     * @return array{ok:bool,status:string,http_code:int|null,latency_ms:int,message:string,results:array,config:array}
      */
     public function probeAll(array $integration = []): array
     {
         $cfg = $this->resolve($integration);
-        $keys = ['health', 'rest', 'token', 'socket', 'webrtc', 'media', 'webhook'];
+        // Prefer token + rest first — health may not exist on all LoCoNet hosts.
+        $keys = ['token', 'rest', 'health', 'socket', 'webrtc', 'media', 'webhook'];
         $results = [];
-        $allOk = true;
+        $anyOk = false;
         $maxLatency = 0;
 
         foreach ($keys as $key) {
-            $probe = $this->probe($cfg['urls'][$key], $cfg['certificate']);
+            $target = $cfg['urls'][$key] ?? '';
+            if ($target === '') {
+                $results[$key] = [
+                    'ok' => false,
+                    'status' => 'offline',
+                    'http_code' => null,
+                    'latency_ms' => 0,
+                    'message' => 'Not configured',
+                ];
+                continue;
+            }
+            $probe = $this->probe($target, $cfg['certificate'], $cfg['appId']);
             $results[$key] = $probe;
-            if (!$probe['ok']) {
-                $allOk = false;
+            if ($probe['ok']) {
+                $anyOk = true;
             }
             $maxLatency = max($maxLatency, (int) $probe['latency_ms']);
         }
 
+        // Connection OK if REST or token is reachable (401 with valid host still counts as wired).
+        $coreOk = (bool) (($results['token']['ok'] ?? false) || ($results['rest']['ok'] ?? false));
+
         return [
-            'ok' => $allOk,
-            'status' => $allOk ? 'operational' : 'degraded',
+            'ok' => $coreOk,
+            'status' => $coreOk ? 'operational' : ($anyOk ? 'degraded' : 'offline'),
             'http_code' => null,
             'latency_ms' => $maxLatency,
-            'message' => $allOk ? 'All reachable endpoints responded' : 'One or more endpoints failed',
+            'message' => $coreOk
+                ? 'LoCoNet project endpoints reachable'
+                : 'Could not reach LoCoNet REST/token endpoints',
             'results' => $results,
             'config' => [
                 'projectId' => $cfg['projectId'],
+                'appId' => $cfg['appId'],
                 'has_certificate' => $cfg['certificate'] !== '',
             ],
         ];
     }
 
-    private function probeHttp(string $url, ?string $certificate): array
+    private function probeHttp(string $url, ?string $certificate, ?string $appId): array
     {
         $started = microtime(true);
         try {
-            $req = Http::timeout(8)
-                ->connectTimeout(5)
-                ->acceptJson()
-                ->withHeaders(['User-Agent' => 'YekBun-LoCoNet-Connector/1.0']);
-
+            $headers = [
+                'User-Agent' => 'YekBun-LoCoNet-Connector/1.0',
+                'Accept' => 'application/json',
+            ];
+            if ($appId) {
+                $headers['X-App-Id'] = $appId;
+            }
             if ($certificate) {
-                $req = $req->withToken($certificate)
-                    ->withHeaders(['X-LoCoNet-Certificate' => $certificate]);
+                $headers['X-Project-Secret'] = $certificate;
+                $headers['Authorization'] = 'Bearer ' . $certificate;
             }
 
-            // Prefer GET; some token endpoints only accept POST — fall back on 405.
-            $response = $req->get($url);
-            if ($response->status() === 405) {
-                $response = $req->asJson()->post($url, ['ping' => true]);
+            $req = Http::timeout(8)
+                ->connectTimeout(5)
+                ->withHeaders($headers);
+
+            $isToken = str_contains($url, '/auth');
+            if ($isToken) {
+                $response = $req->asJson()->post($url, [
+                    'ping' => true,
+                    'user_id' => 'yekbun-health-check',
+                ]);
+            } else {
+                $response = $req->get($url);
+                if ($response->status() === 405) {
+                    $response = $req->asJson()->post($url, ['ping' => true]);
+                }
             }
 
             $ms = (int) round((microtime(true) - $started) * 1000);
             $code = $response->status();
-            // 2xx/3xx/401/403 = host reachable (auth may still need valid cert)
+            $body = (string) $response->body();
             $reachable = $code > 0 && $code < 500;
-            $ok = $code >= 200 && $code < 400;
+            // 2xx = fully OK. 401 with "Invalid project credentials" means host is up
+            // but secret/app mismatch. 401 "Unauthenticated" often means wrong auth shape
+            // but still proves DNS/TLS/API gateway.
+            $ok = ($code >= 200 && $code < 400) || ($reachable && in_array($code, [401, 403], true));
+            $status = ($code >= 200 && $code < 400)
+                ? 'operational'
+                : ($reachable ? 'degraded' : 'offline');
 
-            $status = $ok ? 'operational' : ($reachable ? 'degraded' : 'offline');
+            $msg = "HTTP {$code}";
+            if ($body !== '' && strlen($body) < 200) {
+                $msg .= ' · ' . trim($body);
+            }
 
             return [
-                'ok' => $ok || ($reachable && in_array($code, [401, 403], true)),
+                'ok' => $ok,
                 'status' => $status,
                 'http_code' => $code,
                 'latency_ms' => $ms,
-                'message' => "HTTP {$code}",
+                'message' => $msg,
             ];
         } catch (Throwable $e) {
             $ms = (int) round((microtime(true) - $started) * 1000);

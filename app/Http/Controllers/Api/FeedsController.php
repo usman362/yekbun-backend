@@ -105,12 +105,13 @@ class FeedsController extends Controller
             return ResponseHelper::sendResponse([], 'User not found.', false, 401);
         }
 
-        $friendIds = $user->friends->pluck('user_id')->toArray();
-        $familyIds = $user->family->pluck('user_id')->toArray();
+        $friendIds = $user->friends ? $user->friends->pluck('user_id')->filter()->values()->toArray() : [];
+        $familyIds = $user->family ? $user->family->pluck('user_id')->filter()->values()->toArray() : [];
 
         // Over-fetch each side so merge still fills a full page when one side is sparse.
-        $fetchLimit = $perPage;
+        $fetchLimit = max($perPage * 3, 30);
 
+        // Same privacy rules as GET /feeds (index).
         $userQuery = Feed::with(['user', 'shareUser', 'parentFeed'])
             ->where(function ($q) {
                 $q->whereNull('is_deleted')
@@ -121,12 +122,19 @@ class FeedsController extends Controller
                 $q->where('user_id', $userId)
                     ->orWhereIn('user_type', [
                         'public', 'Public', 'all', 'All', 'channel', 'Channel',
-                    ])
-                    ->orWhere(fn ($sq) => $sq->whereIn('user_id', $friendIds)->whereIn('user_type', ['friends', 'friends & family']))
-                    ->orWhere(fn ($sq) => $sq->whereIn('user_id', $familyIds)->whereIn('user_type', ['family', 'friends & family']));
+                    ]);
+                if (!empty($friendIds)) {
+                    $q->orWhere(fn ($sq) => $sq->whereIn('user_id', $friendIds)->whereIn('user_type', ['friends', 'friends & family']));
+                }
+                if (!empty($familyIds)) {
+                    $q->orWhere(fn ($sq) => $sq->whereIn('user_id', $familyIds)->whereIn('user_type', ['family', 'friends & family']));
+                }
             })
             ->orderBy('created_at', 'desc');
 
+        // Same audience rules as GET /admin-activity/get-feeds (getpopFeeds).
+        // Do NOT filter by status here — legacy pop_feeds use mixed status shapes
+        // (1 / true / "1" / missing) and getpopFeeds never gated on status.
         $userProvince = $user->province ?? null;
         if ($userProvince === 'Bakûr') {
             $userProvince = 'Bakur';
@@ -135,18 +143,21 @@ class FeedsController extends Controller
             $userProvince = 'Basur';
         }
 
-        $shareTargets = array_values(array_filter([
-            'all-users',
-            $user->user_type ?? null,
-        ]));
+        $shareTargets = ['all-users', 'all_users', 'All Users', 'all'];
+        $ut = $user->user_type ?? null;
+        if (is_string($ut) && $ut !== '') {
+            $shareTargets[] = $ut;
+            $shareTargets[] = strtolower($ut);
+            $shareTargets[] = ucfirst(strtolower($ut));
+        }
+        $shareTargets = array_values(array_unique($shareTargets));
 
         $adminQuery = PopFeeds::with(['user', 'sosPopups'])
-            ->where(function ($q) {
-                $q->where('status', 1)->orWhereNull('status');
-            })
             ->whereIn('share_option', $shareTargets)
             ->where(function ($q) use ($userProvince) {
-                $q->whereNull('allowed_provinces');
+                // Missing / empty province = visible to everyone (legacy rows).
+                $q->whereNull('allowed_provinces')
+                    ->orWhere('allowed_provinces', '');
                 if ($userProvince) {
                     $q->orWhere('allowed_provinces', $userProvince);
                 }
@@ -166,6 +177,7 @@ class FeedsController extends Controller
         $userRows = $userQuery->limit($fetchLimit)->get()->map(function ($feed) {
             $row = $feed->toArray();
             $row['source'] = 'user';
+            $row['feed_kind'] = 'user_feed';
             $row['id'] = (string) ($feed->getKey() ?? ($row['_id'] ?? $row['id'] ?? ''));
             $row['sort_at'] = optional($feed->created_at)->toISOString()
                 ?? (string) ($feed->created_at ?? '');
@@ -175,6 +187,7 @@ class FeedsController extends Controller
         $adminRows = $adminQuery->limit($fetchLimit)->get()->map(function ($pop) {
             $row = $pop->toArray();
             $row['source'] = 'admin';
+            $row['feed_kind'] = 'admin_pop';
             $row['id'] = (string) ($pop->getKey() ?? ($row['_id'] ?? $row['id'] ?? ''));
             $row['sort_at'] = optional($pop->created_at)->toISOString()
                 ?? (string) ($pop->created_at ?? '');
@@ -194,9 +207,8 @@ class FeedsController extends Controller
         $page = $merged->take($perPage)->values();
         $last = $page->last();
         $nextCursor = $last['sort_at'] ?? null;
-        $hasMore = $page->count() === $perPage;
+        $hasMore = $merged->count() > $perPage;
 
-        // Drop internal sort helper from response.
         $feeds = $page->map(function ($row) {
             unset($row['sort_at']);
             return $row;
@@ -208,6 +220,10 @@ class FeedsController extends Controller
                 'per_page'    => $perPage,
                 'next_cursor' => $hasMore ? $nextCursor : null,
                 'has_more'    => $hasMore,
+            ],
+            'meta' => [
+                'user_count'  => $userRows->count(),
+                'admin_count' => $adminRows->count(),
             ],
         ], 'Mixed feeds fetched successfully');
     }

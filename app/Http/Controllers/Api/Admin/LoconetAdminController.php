@@ -68,6 +68,12 @@ class LoconetAdminController extends Controller
         if (empty($integration['projectId'])) {
             $integration['projectId'] = $resolved['projectId'];
         }
+        if (empty($integration['projectSlug'])) {
+            $integration['projectSlug'] = $resolved['projectSlug'];
+        }
+        if (empty($integration['appId'])) {
+            $integration['appId'] = $resolved['appId'];
+        }
         if (empty($integration['apiBase'])) {
             $integration['apiBase'] = $resolved['apiBase'];
         }
@@ -220,6 +226,12 @@ class LoconetAdminController extends Controller
             $merged['projectId'] = $patch['projectId'];
             $row->project_id = $patch['projectId'];
         }
+        if (isset($patch['projectSlug']) && is_string($patch['projectSlug']) && $patch['projectSlug'] !== '') {
+            $merged['projectSlug'] = $patch['projectSlug'];
+        }
+        if (isset($patch['appId']) && is_string($patch['appId'])) {
+            $merged['appId'] = $patch['appId'];
+        }
         if (array_key_exists('enabled', $patch)) {
             $merged['enabled'] = (bool) $patch['enabled'];
             $merged['connected'] = (bool) $patch['enabled'];
@@ -310,7 +322,7 @@ class LoconetAdminController extends Controller
 
         $overrideUrl = trim((string) $request->input('url', ''));
         $url = $overrideUrl !== '' ? $overrideUrl : ($cfg['urls'][$key] ?? '');
-        $probe = $client->probe($url, $cfg['certificate']);
+        $probe = $client->probe($url, $cfg['certificate'], $cfg['appId']);
 
         $endpoints = is_array($integration['endpoints'] ?? null) ? $integration['endpoints'] : [];
         if ($overrideUrl !== '') {

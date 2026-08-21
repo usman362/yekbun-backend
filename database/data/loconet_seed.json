@@ -1,5 +1,5 @@
 {
-  "project_id": "yekbun-prod-01",
+  "project_id": "6a8746ced353b07b950c8ed3",
   "services": [
     {
       "name": "LoCoNet API",
@@ -1513,25 +1513,27 @@
     "reviewPolicy": "Reported messages only"
   },
   "integration": {
-    "projectId": "yekbun-prod-01",
-    "apiBase": "https://api.loconet.io/v1",
+    "projectId": "6a8746ced353b07b950c8ed3",
+    "projectSlug": "test-for-yekbun",
+    "appId": "90594379366c5753b83eda90fe788376",
+    "apiBase": "https://servicebieter.de/api/v1",
     "apiKey": "",
     "apiSecret": "",
     "webhookSecret": "",
     "region": "eu-central",
-    "environment": "live",
+    "environment": "sandbox",
     "authMode": "secure",
     "enabled": false,
     "connected": false,
     "primaryCert": "",
     "endpoints": {
-      "rest": { "url": "https://api.loconet.io/v1/projects/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
-      "socket": { "url": "wss://realtime.loconet.io/socket/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
-      "token": { "url": "https://api.loconet.io/v1/projects/yekbun-prod-01/auth/token", "status": "grey", "checked": "—", "latency": "—" },
+      "rest": { "url": "https://servicebieter.de/api/v1/projects/test-for-yekbun", "status": "grey", "checked": "—", "latency": "—" },
+      "socket": { "url": "", "status": "grey", "checked": "—", "latency": "—" },
+      "token": { "url": "https://servicebieter.de/api/v1/projects/test-for-yekbun/auth/token", "status": "grey", "checked": "—", "latency": "—" },
       "webhook": { "url": "https://api.appdash.yekbun.org/api/webhooks/loconet", "status": "grey", "checked": "—", "latency": "—" },
-      "media": { "url": "https://media.loconet.io/v1/upload/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
-      "webrtc": { "url": "wss://rtc.loconet.io/signal/yekbun-prod-01", "status": "grey", "checked": "—", "latency": "—" },
-      "health": { "url": "https://api.loconet.io/v1/health", "status": "grey", "checked": "—", "latency": "—" }
+      "media": { "url": "", "status": "grey", "checked": "—", "latency": "—" },
+      "webrtc": { "url": "", "status": "grey", "checked": "—", "latency": "—" },
+      "health": { "url": "", "status": "grey", "checked": "—", "latency": "—" }
     },
     "webhooks": {
       "chatEvents": true,
